@@ -9,24 +9,27 @@ type ApiResponse struct {
 }
 
 func Success(c fiber.Ctx, data interface{}) error {
-	return c.JSON(ApiResponse{
-		Code: 0,
-		Msg:  "success",
+	result := CodeSuccess.Result()
+	return c.Status(result.HTTPStatus).JSON(ApiResponse{
+		Code: result.Code,
+		Msg:  result.Msg,
 		Data: data,
 	})
 }
 
-func Error(c fiber.Ctx, code int, msg string) error {
-	return c.JSON(ApiResponse{
-		Code: code,
-		Msg:  msg,
+func ErrorCode(c fiber.Ctx, code ResultCode) error {
+	result := code.Result()
+	return c.Status(result.HTTPStatus).JSON(ApiResponse{
+		Code: result.Code,
+		Msg:  result.Msg,
 		Data: nil,
 	})
 }
 
-func ErrorWithStatus(c fiber.Ctx, httpStatus int, code int, msg string) error {
-	return c.Status(httpStatus).JSON(ApiResponse{
-		Code: code,
+func ErrorCodeWithMsg(c fiber.Ctx, code ResultCode, msg string) error {
+	result := code.Result()
+	return c.Status(result.HTTPStatus).JSON(ApiResponse{
+		Code: result.Code,
 		Msg:  msg,
 		Data: nil,
 	})
