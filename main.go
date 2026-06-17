@@ -2,7 +2,7 @@ package main
 
 import (
 	"log"
-	"nomail-api/handles"
+	"nomail-api/handle/auth"
 	"nomail-api/handle/health"
 	"nomail-api/webhook"
 
@@ -16,6 +16,12 @@ func main() {
 	app.Get("/health", health.Handler)
 
 	app.Get("/webhook/:provider", webhookHandler.Handle)
+	api := app.Group("/api")
+	authGroup := api.Group("/auth")
+
+	authGroup.Post("/register", auth.RegisterHandler)
+	authGroup.Post("/login", auth.LoginHandler)
+	authGroup.Post("/refresh-token", auth.GetRefreshTokenHandler)
 
 	log.Fatal(app.Listen(":3000"))
 }
