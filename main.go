@@ -7,6 +7,8 @@ import (
 	"nomail-api/handle/health"
 	webhookHandler "nomail-api/handle/webhook"
 	"nomail-api/infra/db"
+	"nomail-api/middleware"
+	"nomail-api/models/response"
 	"nomail-api/webhook"
 
 	"github.com/gofiber/fiber/v3"
@@ -37,6 +39,11 @@ func main() {
 	authGroup.Post("/login", authHandler.Login)
 	authGroup.Post("/refresh-token", authHandler.RefreshToken)
 	authGroup.Post("/logout", authHandler.Logout)
+
+	protected := api.Group("", middleware.Auth(appConfig))
+	protected.Post("/test", func(c fiber.Ctx) error {
+		return response.Success(c, nil)
+	})
 
 	log.Fatal(app.Listen(":3000"))
 }
