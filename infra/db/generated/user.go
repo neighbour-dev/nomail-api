@@ -16,6 +16,7 @@ var User = struct {
 	DeletedAt     field.Field[gorm.DeletedAt]
 	Username      field.String
 	PasswordHash  field.String
+	Email         field.String
 	RefreshTokens field.Slice[tables.RefreshToken]
 	Nonce         field.String
 }{
@@ -25,6 +26,7 @@ var User = struct {
 	DeletedAt:     field.Field[gorm.DeletedAt]{}.WithColumn("deleted_at"),
 	Username:      field.String{}.WithColumn("username"),
 	PasswordHash:  field.String{}.WithColumn("password_hash"),
+	Email:         field.String{}.WithColumn("email"),
 	RefreshTokens: field.Slice[tables.RefreshToken]{}.WithName("RefreshTokens"),
 	Nonce:         field.String{}.WithColumn("nonce"),
 }
