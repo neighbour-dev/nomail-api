@@ -36,6 +36,7 @@ func main() {
 	authGroup.Post("/register", authHandler.Register)
 	authGroup.Post("/login", authHandler.Login)
 	authGroup.Post("/refresh-token", authHandler.RefreshToken)
+	authGroup.Post("/logout", authHandler.Logout)
 
 	log.Fatal(app.Listen(":3000"))
 }
