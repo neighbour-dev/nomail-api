@@ -1,14 +1,37 @@
 package util
 
 import (
+	"errors"
 	"reflect"
 	"strings"
 
+	"github.com/go-playground/locales/en"
+	ut "github.com/go-playground/universal-translator"
 	"github.com/go-playground/validator/v10"
+	enTranslations "github.com/go-playground/validator/v10/translations/en"
 	"github.com/gofiber/fiber/v3"
 )
 
-var validate = validator.New()
+var (
+	validate = validator.New()
+	trans    ut.Translator
+)
+
+func init() {
+	english := en.New()
+	uni := ut.New(english, english)
+	trans, _ = uni.GetTranslator("en")
+
+	validate.RegisterTagNameFunc(func(field reflect.StructField) string {
+		name := strings.SplitN(field.Tag.Get("json"), ",", 2)[0]
+		if name == "-" {
+			return ""
+		}
+		return name
+	})
+
+	_ = enTranslations.RegisterDefaultTranslations(validate, trans)
+}
 
 func BindAndValidate[T any](c fiber.Ctx) (T, error) {
 	var req T
@@ -18,10 +41,19 @@ func BindAndValidate[T any](c fiber.Ctx) (T, error) {
 
 	trimStringFields(&req)
 	if err := validate.Struct(req); err != nil {
-		return req, err
+		return req, translateValidationError(err)
 	}
 
 	return req, nil
+}
+
+func translateValidationError(err error) error {
+	var validationErrors validator.ValidationErrors
+	if !errors.As(err, &validationErrors) || len(validationErrors) == 0 {
+		return err
+	}
+
+	return errors.New(validationErrors[0].Translate(trans))
 }
 
 func trimStringFields(v any) {

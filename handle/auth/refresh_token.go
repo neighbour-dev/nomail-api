@@ -18,7 +18,7 @@ type refreshTokenRequest struct {
 func (h *Handler) RefreshToken(c fiber.Ctx) error {
 	req, err := util.BindAndValidate[refreshTokenRequest](c)
 	if err != nil {
-		return response.ErrorCode(c, response.CodeInvalidRequest)
+		return response.ErrorCodeWithMsg(c, response.CodeInvalidRequest, err.Error())
 	}
 
 	oldRefreshToken, err := h.refreshTokens.GetValidByHash(util.HashToken(req.RefreshToken))

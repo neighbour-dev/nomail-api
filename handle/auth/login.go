@@ -35,7 +35,7 @@ type tokenResponse struct {
 func (h *Handler) Login(c fiber.Ctx) error {
 	req, err := util.BindAndValidate[loginRequest](c)
 	if err != nil {
-		return response.ErrorCode(c, response.CodeInvalidRequest)
+		return response.ErrorCodeWithMsg(c, response.CodeInvalidRequest, err.Error())
 	}
 
 	user, err := h.users.GetByUsername(req.Username)

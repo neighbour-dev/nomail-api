@@ -24,7 +24,7 @@ func (h *Handler) Register(c fiber.Ctx) error {
 	req, err := util.BindAndValidate[registerRequest](c)
 
 	if err != nil {
-		return response.ErrorCode(c, response.CodeInvalidRequest)
+		return response.ErrorCodeWithMsg(c, response.CodeInvalidRequest, err.Error())
 	}
 
 	if _, err := h.users.GetByUsername(req.Username); err == nil {
