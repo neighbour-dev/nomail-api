@@ -13,14 +13,15 @@ import (
 )
 
 const (
-	accessTokenTTL  = 2 * time.Hour
-	refreshTokenTTL = 7 * 24 * time.Hour
+	accessTokenTTL   = 2 * time.Hour
+	refreshTokenTTL  = 7 * 24 * time.Hour
+	maxActiveDevices = 3
 )
 
 type loginRequest struct {
 	Username   string `json:"username" validate:"required,max=64"`
 	Password   string `json:"password" validate:"required"`
-	DeviceID   string `json:"deviceId" validate:"omitempty,max=128"`
+	DeviceID   string `json:"deviceId" validate:"required,max=128"`
 	DeviceName string `json:"deviceName" validate:"omitempty,max=128"`
 }
 
@@ -57,7 +58,7 @@ func (h *Handler) Login(c fiber.Ctx) error {
 	}
 	refreshTokenExpiresAt := time.Now().Add(refreshTokenTTL)
 
-	if err := h.refreshTokens.Create(&tables.RefreshToken{
+	if err := h.refreshTokens.CreateForLogin(&tables.RefreshToken{
 		UserID:     user.ID,
 		TokenHash:  util.HashToken(refreshToken),
 		ExpiresAt:  refreshTokenExpiresAt,
@@ -65,7 +66,7 @@ func (h *Handler) Login(c fiber.Ctx) error {
 		DeviceName: req.DeviceName,
 		IPAddress:  c.IP(),
 		UserAgent:  c.Get("User-Agent"),
-	}); err != nil {
+	}, maxActiveDevices); err != nil {
 		return response.ErrorCodeWithMsg(c, response.CodeInternalError, "failed to create refresh token")
 	}
 
