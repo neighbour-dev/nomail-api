@@ -44,6 +44,7 @@ func main() {
 	protected.Post("/test", func(c fiber.Ctx) error {
 		return response.Success(c, nil)
 	})
+	protected.Get("/auth/devices", authHandler.Devices)
 
 	log.Fatal(app.Listen(":3000"))
 }

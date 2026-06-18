@@ -12,6 +12,16 @@ type RefreshTokenRepo struct {
 	db *gorm.DB
 }
 
+type ActiveDevice struct {
+	DeviceID   string
+	DeviceName string
+	IPAddress  string
+	UserAgent  string
+	ExpiresAt  time.Time
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
+}
+
 // NewRefreshTokenRepo 创建 refresh token 持久化仓储。
 func NewRefreshTokenRepo(db *gorm.DB) *RefreshTokenRepo {
 	return &RefreshTokenRepo{db: db}
@@ -64,6 +74,21 @@ func (r *RefreshTokenRepo) GetValidByHash(tokenHash string) (tables.RefreshToken
 		generated.RefreshToken.RevokedAt.IsNull(),
 	).First(&refreshToken).Error
 	return refreshToken, err
+}
+
+// ListActiveDevices 返回用户当前仍有效的登录设备。
+func (r *RefreshTokenRepo) ListActiveDevices(userID uint) ([]ActiveDevice, error) {
+	var devices []ActiveDevice
+	err := r.db.Model(&tables.RefreshToken{}).
+		Select("device_id, device_name, ip_address, user_agent, expires_at, created_at, updated_at").
+		Where(
+			generated.RefreshToken.UserID.Eq(userID),
+			generated.RefreshToken.ExpiresAt.Gt(time.Now()),
+			generated.RefreshToken.RevokedAt.IsNull(),
+		).
+		Order("updated_at DESC").
+		Find(&devices).Error
+	return devices, err
 }
 
 // Revoke 将 refresh token 标记为已撤销，防止再次使用。
