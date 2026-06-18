@@ -31,7 +31,7 @@ func main() {
 	api := app.Group("/api")
 	authGroup := api.Group("/auth")
 
-	authHandler := auth.NewHandler(dbClient)
+	authHandler := auth.NewHandler(dbClient, appConfig)
 
 	authGroup.Post("/register", authHandler.Register)
 	authGroup.Post("/login", authHandler.Login)

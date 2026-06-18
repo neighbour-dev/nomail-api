@@ -50,9 +50,11 @@ func (h *Handler) Login(c fiber.Ctx) error {
 		return response.ErrorCodeWithMsg(c, response.CodeUnauthorized, "invalid username or password")
 	}
 
-	accessToken := util.RandomUserToken()
 	refreshToken := util.RandomUserToken()
-	accessTokenExpiresAt := time.Now().Add(accessTokenTTL)
+	accessToken, accessTokenExpiresAt, err := util.GenerateAccessToken(user.ID, h.appConfig.JwtSecret, h.appConfig.JwtIssuer, accessTokenTTL)
+	if err != nil {
+		return response.ErrorCodeWithMsg(c, response.CodeInternalError, "failed to generate access token")
+	}
 	refreshTokenExpiresAt := time.Now().Add(refreshTokenTTL)
 
 	if err := h.refreshTokens.Create(&tables.RefreshToken{
