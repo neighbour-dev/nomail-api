@@ -40,7 +40,7 @@ func Init(config config.AppConfig) *gorm.DB {
 	sqlDB.SetConnMaxLifetime(time.Hour) // 单个连接最大存活时间
 
 	// 自动建表
-	err = db.AutoMigrate(&tables.User{}, &tables.RefreshToken{})
+	err = db.AutoMigrate(&tables.User{}, &tables.RefreshToken{}, &tables.WebhookConfig{})
 	if err != nil {
 		log.Fatal("表创建失败", err.Error())
 	}
