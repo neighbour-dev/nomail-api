@@ -13,6 +13,7 @@ import (
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/joho/godotenv"
+	"gorm.io/gorm"
 )
 
 func main() {
@@ -26,25 +27,36 @@ func main() {
 	dbClient := db.Init(appConfig)
 
 	app := fiber.New()
+	registerRoutes(app, dbClient, appConfig)
 
-	app.Post("/webhook/:provider", webhookHandler.NewWebHookHandler(new(webhook.Init())).Handle)
-	app.Get("/health", health.Handler)
+	log.Fatal(app.Listen(":3000"))
+}
 
-	api := app.Group("/api")
-	authGroup := api.Group("/auth")
+func registerRoutes(app *fiber.App, dbClient *gorm.DB, appConfig config.AppConfig) {
 
 	authHandler := auth.NewHandler(dbClient, appConfig)
 
-	authGroup.Post("/register", authHandler.Register)
-	authGroup.Post("/login", authHandler.Login)
-	authGroup.Post("/refresh-token", authHandler.RefreshToken)
-	authGroup.Post("/logout", authHandler.Logout)
+	app.Route("/api", func(api fiber.Router) {
+		api.Post("/webhook/:provider", webhookHandler.NewWebHookHandler(new(webhook.Init())).Handle)
 
-	protected := api.Group("", middleware.Auth(appConfig))
-	protected.Post("/test", func(c fiber.Ctx) error {
-		return response.Success(c, nil)
+		api.Get("/health", health.NewHandler(dbClient).Handle)
+
+		api.Post("/test", func(c fiber.Ctx) error {
+			return response.Success(c, nil)
+		})
+
+		api.Route("/auth", func(authRouter fiber.Router) {
+			authRouter.Post("/register", authHandler.Register)
+			authRouter.Post("/login", authHandler.Login)
+			authRouter.Post("/refresh-token", authHandler.RefreshToken)
+			authRouter.Post("/logout", authHandler.Logout)
+
+			authRouter.Group("", middleware.Auth(appConfig))
+			authRouter.Get("/devices", authHandler.Devices)
+
+		})
+
+		api.Use(middleware.Auth(appConfig))
+
 	})
-	protected.Get("/auth/devices", authHandler.Devices)
-
-	log.Fatal(app.Listen(":3000"))
 }
