@@ -9,7 +9,7 @@ import (
 type GithubParser struct{}
 
 func (p *GithubParser) Provider() string {
-	return "github"
+	return TypeGeneric
 }
 
 func (p *GithubParser) Verify(r fiber.Ctx, body []byte) error {

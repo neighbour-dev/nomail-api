@@ -9,7 +9,7 @@ import (
 type FeishuParser struct{}
 
 func (p *FeishuParser) Provider() string {
-	return "feishu"
+	return TypeFeiShu
 }
 
 func (p *FeishuParser) Verify(r fiber.Ctx, body []byte) error {
