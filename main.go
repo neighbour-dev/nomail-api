@@ -10,8 +10,10 @@ import (
 	"nomail-api/middleware"
 	"nomail-api/models/response"
 	"nomail-api/webhook"
+	"time"
 
 	"github.com/gofiber/fiber/v3"
+	"github.com/gofiber/fiber/v3/middleware/limiter"
 	"github.com/joho/godotenv"
 	"gorm.io/gorm"
 )
@@ -39,7 +41,10 @@ func registerRoutes(app *fiber.App, dbClient *gorm.DB, appConfig config.AppConfi
 	app.Route("/api", func(api fiber.Router) {
 		api.Post("/webhook/:provider", webhookHandler.NewWebHookHandler(new(webhook.Init())).Handle)
 
-		api.Get("/health", health.NewHandler(dbClient).Handle)
+		api.Get("/health", limiter.New(limiter.Config{
+			Max:        1,
+			Expiration: 2 * time.Second,
+		}), health.NewHandler(dbClient).Handle)
 
 		api.Post("/test", func(c fiber.Ctx) error {
 			return response.Success(c, nil)
