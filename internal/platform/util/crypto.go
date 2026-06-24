@@ -6,8 +6,16 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"io"
 )
+
+func ValidateAESGCMKey(base64Key string) error {
+	if _, err := newAESGCM(base64Key); err != nil {
+		return fmt.Errorf("invalid AES-GCM encryption key: %w", err)
+	}
+	return nil
+}
 
 func EncryptAESGCMString(plaintext string, base64Key string) (string, error) {
 	gcm, err := newAESGCM(base64Key)
