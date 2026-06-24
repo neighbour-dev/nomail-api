@@ -1,8 +1,8 @@
 package parser
 
 const (
-	TypeGithub  = "GITHUB"
-	TypeGitlab  = "GITLAB"
-	TypeGeneric = "GENERIC"
-	TypeFeiShu  = "FEISHU"
+	TypeGithub  = "github"
+	TypeGitlab  = "gitlab"
+	TypeGeneric = "generic"
+	TypeFeiShu  = "feishu"
 )

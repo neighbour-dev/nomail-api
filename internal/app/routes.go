@@ -16,11 +16,13 @@ import (
 
 func RegisterRoutes(app *fiber.App, dbClient *gorm.DB, appConfig config.AppConfig) {
 	authHandler := auth.NewHandler(dbClient, appConfig)
-	webhookHandler := webhook.NewHandler(webhook.Init())
+	webhookHandler := webhook.NewHandler(webhook.Init(), dbClient, appConfig)
 	healthHandler := health.NewHandler(dbClient)
 
 	app.Route("/api", func(api fiber.Router) {
-		api.Post("/webhook/:provider", webhookHandler.Handle)
+		webhookProtected := api.Group("/webhook", middleware.Auth(appConfig))
+		webhookProtected.Post("/configs", webhookHandler.Create)
+		api.Post("/webhook/:key", webhookHandler.Handle)
 
 		api.Get("/health", limiter.New(limiter.Config{
 			Max:        1,
