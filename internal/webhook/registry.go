@@ -1,5 +1,7 @@
 package webhook
 
+import "strings"
+
 type Registry struct {
 	parsers map[string]Parser
 }
@@ -9,10 +11,14 @@ func NewRegistry() *Registry {
 }
 
 func (r *Registry) Register(parser Parser) {
-	r.parsers[parser.Provider()] = parser
+	r.parsers[NormalizeProvider(parser.Provider())] = parser
 }
 
 func (r *Registry) Get(provider string) (Parser, bool) {
-	p, ok := r.parsers[provider]
+	p, ok := r.parsers[NormalizeProvider(provider)]
 	return p, ok
+}
+
+func NormalizeProvider(provider string) string {
+	return strings.ToLower(strings.TrimSpace(provider))
 }

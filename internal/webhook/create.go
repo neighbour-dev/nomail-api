@@ -39,7 +39,8 @@ func (h *Handler) Create(c fiber.Ctx) error {
 		return response.ErrorCodeWithMsg(c, response.CodeInvalidRequest, err.Error())
 	}
 
-	if _, ok := h.registry.Get(req.Provider); !ok {
+	provider := NormalizeProvider(req.Provider)
+	if _, ok := h.registry.Get(provider); !ok {
 		return response.ErrorCodeWithMsg(c, response.CodeInvalidRequest, "unsupported provider")
 	}
 
@@ -55,7 +56,7 @@ func (h *Handler) Create(c fiber.Ctx) error {
 		UserID:          userID,
 		Name:            req.Name,
 		Key:             util.RandomToken(16),
-		Provider:        req.Provider,
+		Provider:        provider,
 		Source:          req.Source,
 		EncryptedSecret: encryptedSecret,
 		Enabled:         true,
