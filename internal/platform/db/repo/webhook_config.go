@@ -27,3 +27,16 @@ func (r *WebhookConfigRepo) GetByKey(key string) (tables.WebhookConfig, error) {
 	).First(&config).Error
 	return config, err
 }
+
+func (r *WebhookConfigRepo) GetByIDAndUserID(id uint, userID uint) (tables.WebhookConfig, error) {
+	var config tables.WebhookConfig
+	err := r.db.Where(
+		generated.WebhookConfig.ID.Eq(id),
+		generated.WebhookConfig.UserID.Eq(userID),
+	).First(&config).Error
+	return config, err
+}
+
+func (r *WebhookConfigRepo) UpdateEnabled(config *tables.WebhookConfig, enabled bool) error {
+	return r.db.Model(config).Update(generated.WebhookConfig.Enabled.Column().Name, enabled).Error
+}
