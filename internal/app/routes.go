@@ -5,7 +5,6 @@ import (
 	"nomail-api/internal/auth"
 	"nomail-api/internal/health"
 	"nomail-api/internal/platform/middleware"
-	"nomail-api/internal/platform/response"
 	"nomail-api/internal/webhook"
 	"time"
 
@@ -36,10 +35,6 @@ func RegisterRoutes(app *fiber.App, dbClient *gorm.DB, appConfig config.AppConfi
 			Max:        1,
 			Expiration: 2 * time.Second,
 		}), healthHandler.Handle)
-
-		api.Post("/test", func(c fiber.Ctx) error {
-			return response.Success(c, nil)
-		})
 
 		api.Route("/auth", func(authRouter fiber.Router) {
 			authRouter.Post("/register", authHandler.Register)
