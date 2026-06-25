@@ -42,8 +42,8 @@ func RegisterRoutes(app *fiber.App, dbClient *gorm.DB, appConfig config.AppConfi
 			authRouter.Post("/refresh-token", authHandler.RefreshToken)
 			authRouter.Post("/logout", authHandler.Logout)
 
-			authProtected := authRouter.Group("", middleware.Auth(appConfig))
-			authProtected.Get("/devices", authHandler.Devices)
+			authRouter = authRouter.Use(middleware.Auth(appConfig))
+			authRouter.Get("/devices", authHandler.Devices)
 		})
 	})
 }
