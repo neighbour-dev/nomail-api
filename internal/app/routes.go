@@ -20,13 +20,16 @@ func RegisterRoutes(app *fiber.App, dbClient *gorm.DB, appConfig config.AppConfi
 	healthHandler := health.NewHandler(dbClient)
 
 	app.Route("/api", func(api fiber.Router) {
-		webhookProtected := api.Group("/webhook", middleware.Auth(appConfig))
-		webhookProtected.Get("/configs", webhookHandler.ListConfigs)
-		webhookProtected.Post("/configs", webhookHandler.Create)
-		webhookProtected.Get("/configs/:id", webhookHandler.GetConfig)
-		webhookProtected.Patch("/configs/:id", webhookHandler.UpdateConfig)
-		webhookProtected.Patch("/configs/:id/enabled", webhookHandler.UpdateEnabled)
-		webhookProtected.Delete("/configs/:id", webhookHandler.DeleteConfig)
+		api.Route("/webhook", func(webhookRouter fiber.Router) {
+			webhookRouter.Use(middleware.Auth(appConfig))
+			webhookRouter.Get("/configs", webhookHandler.ListConfigs)
+			webhookRouter.Post("/configs", webhookHandler.Create)
+			webhookRouter.Get("/configs/:id", webhookHandler.GetConfig)
+			webhookRouter.Patch("/configs/:id", webhookHandler.UpdateConfig)
+			webhookRouter.Patch("/configs/:id/enabled", webhookHandler.UpdateEnabled)
+			webhookRouter.Delete("/configs/:id", webhookHandler.DeleteConfig)
+		})
+
 		api.Post("/webhook/:key", webhookHandler.Handle)
 
 		api.Get("/health", limiter.New(limiter.Config{
