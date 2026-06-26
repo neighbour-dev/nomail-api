@@ -13,8 +13,6 @@ type User struct {
 	Email        string `gorm:"uniqueIndex;size:255"`
 
 	RefreshTokens []RefreshToken `gorm:"foreignKey:UserID"`
-
-	Nonce string `gorm:"uniqueIndex;not null;size:64"`
 }
 
 type RefreshToken struct {

@@ -18,7 +18,6 @@ var User = struct {
 	PasswordHash  field.String
 	Email         field.String
 	RefreshTokens field.Slice[tables.RefreshToken]
-	Nonce         field.String
 }{
 	ID:            field.Number[uint]{}.WithColumn("id"),
 	CreatedAt:     field.Time{}.WithColumn("created_at"),
@@ -28,7 +27,6 @@ var User = struct {
 	PasswordHash:  field.String{}.WithColumn("password_hash"),
 	Email:         field.String{}.WithColumn("email"),
 	RefreshTokens: field.Slice[tables.RefreshToken]{}.WithName("RefreshTokens"),
-	Nonce:         field.String{}.WithColumn("nonce"),
 }
 
 var RefreshToken = struct {

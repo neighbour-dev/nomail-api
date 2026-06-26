@@ -41,7 +41,6 @@ func (h *Handler) Register(c fiber.Ctx) error {
 	user := tables.User{
 		Username:     req.Username,
 		PasswordHash: passwordHash,
-		Nonce:        util.RandomToken(32),
 	}
 	if err := h.users.Create(&user); err != nil {
 		return response.ErrorCodeWithMsg(c, response.CodeInternalError, "failed to create user")
