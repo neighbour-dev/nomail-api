@@ -21,6 +21,8 @@ type AppConfig struct {
 	JwtIssuer string
 	// secret encryption
 	SecretEncryptionKey string
+	// server
+	Port string
 }
 
 func FromEnv() AppConfig {
@@ -40,5 +42,6 @@ func FromEnv() AppConfig {
 		RedisDb:             os.Getenv("REDIS_DB"),
 		RedisPrefix:         os.Getenv("REDIS_PREFIX"),
 		SecretEncryptionKey: os.Getenv("SECRET_ENCRYPTION_KEY"),
+		Port:                os.Getenv("PORT"),
 	}
 }

@@ -28,5 +28,5 @@ func main() {
 	app := fiber.New()
 	appModule.RegisterRoutes(app, dbClient, appConfig)
 
-	log.Fatal(app.Listen(":3000"))
+	log.Fatal(app.Listen(":" + appConfig.Port))
 }
