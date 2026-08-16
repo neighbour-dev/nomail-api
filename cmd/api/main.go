@@ -4,6 +4,7 @@ import (
 	"log"
 	"nomail-api/config"
 	appModule "nomail-api/internal/app"
+	"nomail-api/internal/auth"
 	"nomail-api/internal/platform/db"
 	"nomail-api/internal/platform/util"
 
@@ -24,6 +25,9 @@ func main() {
 	}
 
 	dbClient := db.Init(appConfig)
+	if err := auth.EnsureInitialUser(dbClient, appConfig); err != nil {
+		log.Fatal(err)
+	}
 
 	app := fiber.New()
 	appModule.RegisterRoutes(app, dbClient, appConfig)

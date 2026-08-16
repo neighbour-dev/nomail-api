@@ -37,13 +37,14 @@ func RegisterRoutes(app *fiber.App, dbClient *gorm.DB, appConfig config.AppConfi
 		}), healthHandler.Handle)
 
 		api.Route("/auth", func(authRouter fiber.Router) {
-			authRouter.Post("/register", authHandler.Register)
 			authRouter.Post("/login", authHandler.Login)
 			authRouter.Post("/refresh-token", authHandler.RefreshToken)
 			authRouter.Post("/logout", authHandler.Logout)
 
 			authRouter = authRouter.Use(middleware.Auth(appConfig))
 			authRouter.Get("/devices", authHandler.Devices)
+			authRouter.Get("/account", authHandler.GetAccount)
+			authRouter.Patch("/account", authHandler.UpdateAccount)
 		})
 	})
 }

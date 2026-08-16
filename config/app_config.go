@@ -23,6 +23,9 @@ type AppConfig struct {
 	SecretEncryptionKey string
 	// server
 	Port string
+	// initial single-user account
+	InitialUsername string
+	InitialPassword string
 }
 
 func FromEnv() AppConfig {
@@ -43,5 +46,7 @@ func FromEnv() AppConfig {
 		RedisPrefix:         os.Getenv("REDIS_PREFIX"),
 		SecretEncryptionKey: os.Getenv("SECRET_ENCRYPTION_KEY"),
 		Port:                os.Getenv("PORT"),
+		InitialUsername:     os.Getenv("INITIAL_USERNAME"),
+		InitialPassword:     os.Getenv("INITIAL_PASSWORD"),
 	}
 }

@@ -13,6 +13,11 @@ type Handler struct {
 	appConfig     config.AppConfig
 }
 
+type userResponse struct {
+	ID       uint   `json:"id"`
+	Username string `json:"username"`
+}
+
 func NewHandler(db *gorm.DB, appConfig config.AppConfig) *Handler {
 	return &Handler{
 		users:         repo.NewUserRepo(db),

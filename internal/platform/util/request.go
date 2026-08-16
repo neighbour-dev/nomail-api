@@ -39,12 +39,19 @@ func BindAndValidate[T any](c fiber.Ctx) (T, error) {
 		return req, err
 	}
 
-	trimStringFields(&req)
-	if err := validate.Struct(req); err != nil {
-		return req, translateValidationError(err)
+	if err := Validate(&req); err != nil {
+		return req, err
 	}
 
 	return req, nil
+}
+
+func Validate(value any) error {
+	trimStringFields(value)
+	if err := validate.Struct(value); err != nil {
+		return translateValidationError(err)
+	}
+	return nil
 }
 
 func translateValidationError(err error) error {
