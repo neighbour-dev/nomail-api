@@ -41,5 +41,5 @@ func (h *Handler) Handle(c fiber.Ctx) error {
 		return response.Success(c, status)
 	}
 
-	return c.JSON(status)
+	return response.Success(c, status)
 }
