@@ -3,11 +3,15 @@ package model
 import "time"
 
 type Message struct {
-	Provider string    `json:"provider"`
-	ID       string    `json:"id"`
-	Type     string    `json:"type"`
-	Time     time.Time `json:"time"`
-	Content  string    `json:"content"`
-
-	Data any `json:"data"`
+	Provider   string    `json:"provider"`
+	ExternalID string    `json:"externalId"`
+	EventType  string    `json:"eventType"`
+	Time       time.Time `json:"time"`
+	Title      string    `json:"title"`
+	Content    string    `json:"content"`
+	Source     string    `json:"source"`
+	Level      string    `json:"level"`
+	URL        string    `json:"url"`
+	Challenge  string    `json:"challenge"`
+	Data       any       `json:"data"`
 }

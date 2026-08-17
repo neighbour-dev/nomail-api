@@ -7,5 +7,6 @@ func Init() Registry {
 	registry := NewRegistry()
 	registry.Register(&parser.GithubParser{})
 	registry.Register(&parser.FeishuParser{})
+	registry.Register(&parser.GenericParser{})
 	return *registry
 }
