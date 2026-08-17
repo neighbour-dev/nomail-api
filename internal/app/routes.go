@@ -4,6 +4,7 @@ import (
 	"nomail-api/config"
 	"nomail-api/internal/auth"
 	"nomail-api/internal/health"
+	"nomail-api/internal/message"
 	"nomail-api/internal/platform/middleware"
 	"nomail-api/internal/webhook"
 	"time"
@@ -17,6 +18,7 @@ func RegisterRoutes(app *fiber.App, dbClient *gorm.DB, appConfig config.AppConfi
 	authHandler := auth.NewHandler(dbClient, appConfig)
 	webhookHandler := webhook.NewHandler(webhook.Init(), dbClient, appConfig)
 	healthHandler := health.NewHandler(dbClient)
+	messageHandler := message.NewHandler(dbClient)
 
 	app.Route("/api", func(api fiber.Router) {
 		api.Route("/webhook", func(webhookRouter fiber.Router) {
@@ -35,6 +37,17 @@ func RegisterRoutes(app *fiber.App, dbClient *gorm.DB, appConfig config.AppConfi
 			Max:        1,
 			Expiration: 2 * time.Second,
 		}), healthHandler.Handle)
+
+		api.Route("/messages", func(messageRouter fiber.Router) {
+			messageRouter.Use(middleware.Auth(appConfig))
+			messageRouter.Get("/", messageHandler.List)
+			messageRouter.Get("/unread-count", messageHandler.UnreadCount)
+			messageRouter.Post("/batch", messageHandler.Batch)
+			messageRouter.Get("/:id/raw", messageHandler.Raw)
+			messageRouter.Get("/:id", messageHandler.Get)
+			messageRouter.Patch("/:id", messageHandler.Update)
+			messageRouter.Delete("/:id", messageHandler.Delete)
+		})
 
 		api.Route("/auth", func(authRouter fiber.Router) {
 			authRouter.Post("/login", authHandler.Login)
