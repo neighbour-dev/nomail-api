@@ -14,6 +14,7 @@ var NotifyMessage = struct {
 	UpdatedAt       field.Time
 	DeletedAt       field.Field[gorm.DeletedAt]
 	WebhookConfigID field.Number[uint]
+	ExternalID      field.String
 	Source          field.String
 	Title           field.String
 	Content         field.String
@@ -31,6 +32,7 @@ var NotifyMessage = struct {
 	UpdatedAt:       field.Time{}.WithColumn("updated_at"),
 	DeletedAt:       field.Field[gorm.DeletedAt]{}.WithColumn("deleted_at"),
 	WebhookConfigID: field.Number[uint]{}.WithColumn("webhook_config_id"),
+	ExternalID:      field.String{}.WithColumn("external_id"),
 	Source:          field.String{}.WithColumn("source"),
 	Title:           field.String{}.WithColumn("title"),
 	Content:         field.String{}.WithColumn("content"),

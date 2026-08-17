@@ -13,7 +13,8 @@ type NotifyMessage struct {
 	UpdatedAt time.Time      `gorm:"not null"`
 	DeletedAt gorm.DeletedAt `gorm:"index"`
 
-	WebhookConfigID uint `gorm:"not null;index"`
+	WebhookConfigID uint    `gorm:"not null;index;uniqueIndex:idx_notify_message_config_external,priority:1"`
+	ExternalID      *string `gorm:"size:255;uniqueIndex:idx_notify_message_config_external,priority:2"`
 
 	Source string `gorm:"size:100;index"`
 

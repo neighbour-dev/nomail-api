@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type NotifyMessageRepo struct {
@@ -24,6 +25,32 @@ type NotifyMessageFilter struct {
 
 func NewNotifyMessageRepo(db *gorm.DB) *NotifyMessageRepo {
 	return &NotifyMessageRepo{db: db}
+}
+
+func (r *NotifyMessageRepo) Create(message *tables.NotifyMessage) (bool, error) {
+	if message.ExternalID == nil {
+		return true, r.db.Create(message).Error
+	}
+
+	result := r.db.Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "webhook_config_id"}, {Name: "external_id"}},
+		DoNothing: true,
+	}).Create(message)
+	if result.Error != nil || result.RowsAffected > 0 {
+		return result.RowsAffected > 0, result.Error
+	}
+
+	var existing tables.NotifyMessage
+	err := r.db.Unscoped().Where(
+		"webhook_config_id = ? AND external_id = ?",
+		message.WebhookConfigID,
+		*message.ExternalID,
+	).First(&existing).Error
+	if err != nil {
+		return false, err
+	}
+	*message = existing
+	return false, nil
 }
 
 func (r *NotifyMessageRepo) ListByUserID(userID uint, filter NotifyMessageFilter, offset, limit int) ([]tables.NotifyMessage, int64, error) {
