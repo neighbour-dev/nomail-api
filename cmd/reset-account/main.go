@@ -13,12 +13,12 @@ import (
 
 type resetAccountParams struct {
 	Username string `json:"username" validate:"omitempty,max=64"`
-	Password string `json:"password" validate:"required,min=8"`
+	Password string `json:"password" validate:"required"`
 }
 
 func main() {
 	username := flag.String("username", "", "new username; keep the current username when omitted")
-	password := flag.String("password", "", "new password (minimum 8 characters)")
+	password := flag.String("password", "", "new password (minimum 8 characters with letters and numbers)")
 	flag.Parse()
 
 	params := resetAccountParams{
@@ -26,6 +26,9 @@ func main() {
 		Password: *password,
 	}
 	if err := util.Validate(&params); err != nil {
+		log.Fatal("invalid account parameters: ", err)
+	}
+	if err := util.ValidatePassword(params.Password); err != nil {
 		log.Fatal("invalid account parameters: ", err)
 	}
 

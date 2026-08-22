@@ -14,7 +14,6 @@ type Handler struct {
 type Status struct {
 	Status string `json:"status"`
 	DB     string `json:"db"`
-	Redis  string `json:"redis"`
 }
 
 func NewHandler(db *gorm.DB) *Handler {
@@ -25,7 +24,6 @@ func (h *Handler) Handle(c fiber.Ctx) error {
 	status := Status{
 		Status: "ok",
 		DB:     "ok",
-		Redis:  "unknown",
 	}
 
 	sqlDB, err := h.db.DB()

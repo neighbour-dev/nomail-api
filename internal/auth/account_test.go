@@ -25,9 +25,8 @@ func TestUpdateAccountRequestValidation(t *testing.T) {
 			request: updateAccountRequest{CurrentPassword: "current-password", NewPassword: "new-password"},
 		},
 		{
-			name:    "rejects short password",
+			name:    "defers password strength to policy validation",
 			request: updateAccountRequest{CurrentPassword: "current-password", NewPassword: "short"},
-			wantErr: true,
 		},
 	}
 

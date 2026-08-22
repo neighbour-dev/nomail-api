@@ -14,7 +14,7 @@ import (
 type updateAccountRequest struct {
 	CurrentPassword string `json:"currentPassword" validate:"required"`
 	Username        string `json:"username" validate:"required_without=NewPassword,omitempty,max=64"`
-	NewPassword     string `json:"newPassword" validate:"required_without=Username,omitempty,min=8"`
+	NewPassword     string `json:"newPassword" validate:"required_without=Username,omitempty"`
 }
 
 func (h *Handler) GetAccount(c fiber.Ctx) error {
@@ -68,6 +68,9 @@ func (h *Handler) UpdateAccount(c fiber.Ctx) error {
 
 	var passwordHash *string
 	if req.NewPassword != "" {
+		if err := util.ValidatePassword(req.NewPassword); err != nil {
+			return response.ErrorCodeWithMsg(c, response.CodeInvalidRequest, err.Error())
+		}
 		hash, err := util.HashPassword(req.NewPassword)
 		if err != nil {
 			return response.ErrorCodeWithMsg(c, response.CodeInternalError, "failed to hash password")

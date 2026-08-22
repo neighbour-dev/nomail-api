@@ -7,7 +7,7 @@ is empty, configure the initial account in `.env`:
 
 ```dotenv
 INITIAL_USERNAME=admin
-INITIAL_PASSWORD=change-me-now
+INITIAL_PASSWORD=change-me-now1
 ```
 
 The password must contain at least 8 characters. After the account is created,

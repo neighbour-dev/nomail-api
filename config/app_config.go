@@ -9,13 +9,6 @@ type AppConfig struct {
 	DbUsername string
 	DbPassword string
 	DbDatabase string
-	// redis
-	RedisHost   string
-	RedisPort   string
-	RedisUser   string
-	RedisPass   string
-	RedisDb     string
-	RedisPrefix string
 	// jwt
 	JwtSecret string
 	JwtIssuer string
@@ -38,12 +31,6 @@ func FromEnv() AppConfig {
 		DbDatabase:          os.Getenv("DB_DATABASE"),
 		JwtSecret:           os.Getenv("JWT_SECRET"),
 		JwtIssuer:           os.Getenv("JWT_ISSUER"),
-		RedisHost:           os.Getenv("REDIS_HOST"),
-		RedisPort:           os.Getenv("REDIS_PORT"),
-		RedisUser:           os.Getenv("REDIS_USERNAME"),
-		RedisPass:           os.Getenv("REDIS_PASSWORD"),
-		RedisDb:             os.Getenv("REDIS_DB"),
-		RedisPrefix:         os.Getenv("REDIS_PREFIX"),
 		SecretEncryptionKey: os.Getenv("SECRET_ENCRYPTION_KEY"),
 		Port:                os.Getenv("PORT"),
 		InitialUsername:     os.Getenv("INITIAL_USERNAME"),

@@ -1,0 +1,8 @@
+.env
+app.sqlite
+.DS_Store
+.idea/
+/api
+/main
+/nomail-api
+/nomail-api-*

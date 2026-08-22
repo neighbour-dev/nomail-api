@@ -12,7 +12,7 @@ import (
 
 type initialUserParams struct {
 	Username string `json:"initialUsername" validate:"required,max=64"`
-	Password string `json:"initialPassword" validate:"required,min=8"`
+	Password string `json:"initialPassword" validate:"required"`
 }
 
 func EnsureInitialUser(db *gorm.DB, appConfig config.AppConfig) error {
@@ -30,6 +30,9 @@ func EnsureInitialUser(db *gorm.DB, appConfig config.AppConfig) error {
 		Password: appConfig.InitialPassword,
 	}
 	if err := util.Validate(&params); err != nil {
+		return fmt.Errorf("invalid initial account configuration: %w", err)
+	}
+	if err := util.ValidatePassword(params.Password); err != nil {
 		return fmt.Errorf("invalid initial account configuration: %w", err)
 	}
 
