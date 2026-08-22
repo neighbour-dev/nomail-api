@@ -40,15 +40,12 @@ func TestDeleteDeviceParamsValidation(t *testing.T) {
 func TestBuildDeviceResponses(t *testing.T) {
 	now := time.Now()
 	responses := buildDeviceResponses([]repo.LoginDevice{{
-		DeviceID:   "device-a",
-		DeviceName: "Phone",
-		IPAddress:  "127.0.0.1",
-		UserAgent:  "Nomail",
-		LoggedIn:   true,
-		ExpiresAt:  &now,
-		LoggedInAt: &now,
-		CreatedAt:  now,
-		UpdatedAt:  now,
+		DeviceID: "device-a", DeviceName: "Phone", Platform: "ios", DeviceType: "phone",
+		Manufacturer: "Apple", Model: "iPhone 15 Pro", OSVersion: "18.6",
+		AppVersion: "1.2.0", AppBuild: "102", Locale: "zh-CN", TimeZone: "Asia/Shanghai",
+		IPAddress: "127.0.0.1", UserAgent: "Nomail", LastSeenAt: &now,
+		LoggedIn: true, PushEnabled: true, ExpiresAt: &now, LoggedInAt: &now,
+		CreatedAt: now, UpdatedAt: now,
 	}})
 
 	if len(responses) != 1 {
@@ -56,6 +53,9 @@ func TestBuildDeviceResponses(t *testing.T) {
 	}
 	if responses[0].DeviceID != "device-a" || responses[0].DeviceName != "Phone" {
 		t.Fatalf("unexpected response: %+v", responses[0])
+	}
+	if responses[0].Platform != "ios" || responses[0].Model != "iPhone 15 Pro" || !responses[0].PushEnabled {
+		t.Fatalf("device metadata not mapped: %+v", responses[0])
 	}
 	if empty := buildDeviceResponses(nil); empty == nil || len(empty) != 0 {
 		t.Fatalf("empty response = %#v, want non-nil empty slice", empty)

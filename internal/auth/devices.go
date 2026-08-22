@@ -11,15 +11,26 @@ import (
 )
 
 type deviceResponse struct {
-	DeviceID   string     `json:"deviceId"`
-	DeviceName string     `json:"deviceName"`
-	IPAddress  string     `json:"ipAddress"`
-	UserAgent  string     `json:"userAgent"`
-	LoggedIn   bool       `json:"loggedIn"`
-	ExpiresAt  *time.Time `json:"expiresAt"`
-	LoggedInAt *time.Time `json:"loggedInAt"`
-	CreatedAt  time.Time  `json:"createdAt"`
-	UpdatedAt  time.Time  `json:"updatedAt"`
+	DeviceID     string     `json:"deviceId"`
+	DeviceName   string     `json:"deviceName"`
+	Platform     string     `json:"platform"`
+	DeviceType   string     `json:"deviceType"`
+	Manufacturer string     `json:"manufacturer"`
+	Model        string     `json:"model"`
+	OSVersion    string     `json:"osVersion"`
+	AppVersion   string     `json:"appVersion"`
+	AppBuild     string     `json:"appBuild"`
+	Locale       string     `json:"locale"`
+	TimeZone     string     `json:"timeZone"`
+	IPAddress    string     `json:"ipAddress"`
+	UserAgent    string     `json:"userAgent"`
+	LastSeenAt   *time.Time `json:"lastSeenAt"`
+	LoggedIn     bool       `json:"loggedIn"`
+	PushEnabled  bool       `json:"pushEnabled"`
+	ExpiresAt    *time.Time `json:"expiresAt"`
+	LoggedInAt   *time.Time `json:"loggedInAt"`
+	CreatedAt    time.Time  `json:"createdAt"`
+	UpdatedAt    time.Time  `json:"updatedAt"`
 }
 
 type deleteDeviceParams struct {
@@ -88,15 +99,26 @@ func buildDeviceResponses(devices []repo.LoginDevice) []deviceResponse {
 	items := make([]deviceResponse, 0, len(devices))
 	for _, device := range devices {
 		items = append(items, deviceResponse{
-			DeviceID:   device.DeviceID,
-			DeviceName: device.DeviceName,
-			IPAddress:  device.IPAddress,
-			UserAgent:  device.UserAgent,
-			LoggedIn:   device.LoggedIn,
-			ExpiresAt:  device.ExpiresAt,
-			LoggedInAt: device.LoggedInAt,
-			CreatedAt:  device.CreatedAt,
-			UpdatedAt:  device.UpdatedAt,
+			DeviceID:     device.DeviceID,
+			DeviceName:   device.DeviceName,
+			Platform:     device.Platform,
+			DeviceType:   device.DeviceType,
+			Manufacturer: device.Manufacturer,
+			Model:        device.Model,
+			OSVersion:    device.OSVersion,
+			AppVersion:   device.AppVersion,
+			AppBuild:     device.AppBuild,
+			Locale:       device.Locale,
+			TimeZone:     device.TimeZone,
+			IPAddress:    device.IPAddress,
+			UserAgent:    device.UserAgent,
+			LastSeenAt:   device.LastSeenAt,
+			LoggedIn:     device.LoggedIn,
+			PushEnabled:  device.PushEnabled,
+			ExpiresAt:    device.ExpiresAt,
+			LoggedInAt:   device.LoggedInAt,
+			CreatedAt:    device.CreatedAt,
+			UpdatedAt:    device.UpdatedAt,
 		})
 	}
 	return items

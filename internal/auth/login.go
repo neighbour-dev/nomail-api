@@ -19,10 +19,19 @@ const (
 )
 
 type loginRequest struct {
-	Username   string `json:"username" validate:"required,max=64"`
-	Password   string `json:"password" validate:"required"`
-	DeviceID   string `json:"deviceId" validate:"required,max=128"`
-	DeviceName string `json:"deviceName" validate:"omitempty,max=128"`
+	Username     string `json:"username" validate:"required,max=64"`
+	Password     string `json:"password" validate:"required"`
+	DeviceID     string `json:"deviceId" validate:"required,max=128"`
+	DeviceName   string `json:"deviceName" validate:"omitempty,max=128"`
+	Platform     string `json:"platform" validate:"required,oneof=ios android macos windows linux web unknown"`
+	DeviceType   string `json:"deviceType" validate:"required,oneof=phone tablet desktop web unknown"`
+	Manufacturer string `json:"manufacturer" validate:"omitempty,max=128"`
+	Model        string `json:"model" validate:"omitempty,max=128"`
+	OSVersion    string `json:"osVersion" validate:"omitempty,max=64"`
+	AppVersion   string `json:"appVersion" validate:"omitempty,max=64"`
+	AppBuild     string `json:"appBuild" validate:"omitempty,max=64"`
+	Locale       string `json:"locale" validate:"omitempty,max=32"`
+	TimeZone     string `json:"timeZone" validate:"omitempty,max=64"`
 }
 
 type tokenResponse struct {
@@ -59,11 +68,20 @@ func (h *Handler) Login(c fiber.Ctx) error {
 	}
 
 	if err := h.sessions.CreateForLogin(&tables.Device{
-		UserID:     user.ID,
-		Identifier: req.DeviceID,
-		Name:       req.DeviceName,
-		IPAddress:  c.IP(),
-		UserAgent:  c.Get("User-Agent"),
+		UserID:        user.ID,
+		Identifier:    req.DeviceID,
+		Name:          req.DeviceName,
+		Platform:      req.Platform,
+		DeviceType:    req.DeviceType,
+		Manufacturer:  req.Manufacturer,
+		HardwareModel: req.Model,
+		OSVersion:     req.OSVersion,
+		AppVersion:    req.AppVersion,
+		AppBuild:      req.AppBuild,
+		Locale:        req.Locale,
+		TimeZone:      req.TimeZone,
+		IPAddress:     c.IP(),
+		UserAgent:     c.Get("User-Agent"),
 	}, &session, maxActiveDevices); err != nil {
 		return response.ErrorCodeWithMsg(c, response.CodeInternalError, "failed to create login session")
 	}

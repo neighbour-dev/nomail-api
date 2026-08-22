@@ -16,6 +16,7 @@ const (
 	userIDLocalKey            = "user_id"
 	sessionIDLocalKey         = "session_id"
 	accessTokenExpiresAtLocal = "access_token_expires_at"
+	deviceTouchInterval       = 5 * time.Minute
 )
 
 func Auth(db *gorm.DB, appConfig config.AppConfig) fiber.Handler {
@@ -41,6 +42,9 @@ func Auth(db *gorm.DB, appConfig config.AppConfig) fiber.Handler {
 		}
 		if !active {
 			return response.ErrorCode(c, response.CodeUnauthorized)
+		}
+		if err := sessions.TouchDevice(claims.SessionID, deviceTouchInterval); err != nil {
+			return response.ErrorCode(c, response.CodeInternalError)
 		}
 
 		c.Locals(userIDLocalKey, claims.UserID)
