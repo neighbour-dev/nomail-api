@@ -6,6 +6,7 @@ import (
 	"nomail-api/internal/health"
 	"nomail-api/internal/message"
 	"nomail-api/internal/platform/middleware"
+	"nomail-api/internal/push"
 	"nomail-api/internal/realtime"
 	"nomail-api/internal/webhook"
 	"time"
@@ -21,6 +22,7 @@ func RegisterRoutes(app *fiber.App, dbClient *gorm.DB, appConfig config.AppConfi
 	webhookHandler := webhook.NewHandler(webhook.Init(), dbClient, appConfig, realtimeHub)
 	healthHandler := health.NewHandler(dbClient)
 	messageHandler := message.NewHandler(dbClient, realtimeHub)
+	pushHandler := push.NewHandler(dbClient, appConfig)
 
 	app.Route("/api", func(api fiber.Router) {
 		api.Route("/webhook/configs", func(webhookRouter fiber.Router) {
@@ -50,6 +52,13 @@ func RegisterRoutes(app *fiber.App, dbClient *gorm.DB, appConfig config.AppConfi
 			messageRouter.Get("/:id", messageHandler.Get)
 			messageRouter.Patch("/:id", messageHandler.Update)
 			messageRouter.Delete("/:id", messageHandler.Delete)
+		})
+
+		api.Route("/push/devices", func(pushRouter fiber.Router) {
+			pushRouter.Use(middleware.Auth(dbClient, appConfig))
+			pushRouter.Post("/", pushHandler.Register)
+			pushRouter.Patch("/:deviceId", pushHandler.Update)
+			pushRouter.Delete("/:deviceId", pushHandler.Delete)
 		})
 
 		api.Route("/auth", func(authRouter fiber.Router) {
