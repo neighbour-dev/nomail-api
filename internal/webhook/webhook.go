@@ -7,6 +7,7 @@ import (
 	"nomail-api/internal/platform/db/tables"
 	"nomail-api/internal/platform/response"
 	"nomail-api/internal/platform/util"
+	"nomail-api/internal/realtime"
 	"nomail-api/internal/webhook/model"
 	"strings"
 	"time"
@@ -28,14 +29,16 @@ type Handler struct {
 	registry  *Registry
 	configs   *repo.WebhookConfigRepo
 	messages  *repo.NotifyMessageRepo
+	realtime  *realtime.Hub
 	appConfig config.AppConfig
 }
 
-func NewHandler(registry Registry, db *gorm.DB, appConfig config.AppConfig) *Handler {
+func NewHandler(registry Registry, db *gorm.DB, appConfig config.AppConfig, realtimeHub *realtime.Hub) *Handler {
 	return &Handler{
 		registry:  &registry,
 		configs:   repo.NewWebhookConfigRepo(db),
 		messages:  repo.NewNotifyMessageRepo(db),
+		realtime:  realtimeHub,
 		appConfig: appConfig,
 	}
 }
@@ -87,8 +90,31 @@ func (h *Handler) Handle(c fiber.Ctx) error {
 	if err != nil {
 		return response.ErrorCodeWithMsg(c, response.CodeInternalError, "failed to save webhook message")
 	}
+	if created {
+		h.realtime.Publish(webhookConfig.UserID, realtime.Event{
+			ID:   message.ID.String(),
+			Type: "message.created",
+			Data: messageCreatedEvent{
+				ID: message.ID, Title: message.Title, Source: message.Source, Level: message.Level,
+				Status: message.Status, Pinned: message.Pinned, WebhookConfigID: message.WebhookConfigID,
+				CreatedAt: message.CreatedAt, ExpireAt: message.ExpireAt,
+			},
+		})
+	}
 
 	return response.Success(c, receiveResponse{MessageID: message.ID, Duplicate: !created})
+}
+
+type messageCreatedEvent struct {
+	ID              uuid.UUID  `json:"id"`
+	Title           string     `json:"title"`
+	Source          string     `json:"source"`
+	Level           string     `json:"level"`
+	Status          string     `json:"status"`
+	Pinned          bool       `json:"pinned"`
+	WebhookConfigID uint       `json:"webhookConfigId"`
+	CreatedAt       time.Time  `json:"createdAt"`
+	ExpireAt        *time.Time `json:"expireAt"`
 }
 
 func buildNotifyMessage(parsed model.Message, config tables.WebhookConfig, body []byte, contentType string, now time.Time) tables.NotifyMessage {

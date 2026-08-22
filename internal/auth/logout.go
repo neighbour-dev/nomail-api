@@ -15,7 +15,7 @@ func (h *Handler) Logout(c fiber.Ctx) error {
 		return response.ErrorCodeWithMsg(c, response.CodeInvalidRequest, err.Error())
 	}
 
-	refreshToken, err := h.refreshTokens.GetValidByHash(util.HashToken(req.RefreshToken))
+	session, err := h.sessions.GetValidByHash(util.HashToken(req.RefreshToken))
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return response.ErrorCode(c, response.CodeUnauthorized)
@@ -23,8 +23,8 @@ func (h *Handler) Logout(c fiber.Ctx) error {
 		return response.ErrorCodeWithMsg(c, response.CodeInternalError, "failed to get refresh token")
 	}
 
-	if err := h.refreshTokens.Revoke(refreshToken.ID); err != nil {
-		return response.ErrorCodeWithMsg(c, response.CodeInternalError, "failed to revoke refresh token")
+	if err := h.sessions.Revoke(session.ID); err != nil {
+		return response.ErrorCodeWithMsg(c, response.CodeInternalError, "failed to revoke login session")
 	}
 
 	return response.Success(c, nil)

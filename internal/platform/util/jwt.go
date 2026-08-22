@@ -9,11 +9,12 @@ import (
 )
 
 type AccessTokenClaims struct {
-	UserID uint `json:"user_id"`
+	UserID    uint `json:"user_id"`
+	SessionID uint `json:"session_id"`
 	jwt.RegisteredClaims
 }
 
-func GenerateAccessToken(userID uint, secret string, issuer string, ttl time.Duration) (string, time.Time, error) {
+func GenerateAccessToken(userID, sessionID uint, secret string, issuer string, ttl time.Duration) (string, time.Time, error) {
 	if secret == "" {
 		return "", time.Time{}, errors.New("jwt secret is required")
 	}
@@ -21,7 +22,8 @@ func GenerateAccessToken(userID uint, secret string, issuer string, ttl time.Dur
 	now := time.Now()
 	expiresAt := now.Add(ttl)
 	claims := AccessTokenClaims{
-		UserID: userID,
+		UserID:    userID,
+		SessionID: sessionID,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Subject:   strconv.FormatUint(uint64(userID), 10),
 			Issuer:    issuer,
@@ -59,6 +61,9 @@ func ParseAccessToken(tokenString string, secret string, issuer string) (*Access
 	}
 	if claims.UserID == 0 {
 		return nil, errors.New("missing user id")
+	}
+	if claims.SessionID == 0 {
+		return nil, errors.New("missing session id")
 	}
 
 	return claims, nil

@@ -8,20 +8,21 @@ import (
 )
 
 type Handler struct {
-	users         *repo.UserRepo
-	refreshTokens *repo.RefreshTokenRepo
-	appConfig     config.AppConfig
+	users     *repo.UserRepo
+	sessions  *repo.SessionRepo
+	appConfig config.AppConfig
 }
 
 type userResponse struct {
-	ID       uint   `json:"id"`
-	Username string `json:"username"`
+	ID                   uint   `json:"id"`
+	Username             string `json:"username"`
+	RequiresAccountSetup bool   `json:"requiresAccountSetup"`
 }
 
 func NewHandler(db *gorm.DB, appConfig config.AppConfig) *Handler {
 	return &Handler{
-		users:         repo.NewUserRepo(db),
-		refreshTokens: repo.NewRefreshTokenRepo(db),
-		appConfig:     appConfig,
+		users:     repo.NewUserRepo(db),
+		sessions:  repo.NewSessionRepo(db),
+		appConfig: appConfig,
 	}
 }

@@ -58,8 +58,8 @@ func (r *UserRepo) UpdateAccount(userID uint, username string, passwordHash *str
 		}
 
 		now := time.Now()
-		return tx.Model(&tables.RefreshToken{}).
-			Where("user_id = ? AND revoked_at IS NULL", userID).
+		return tx.Model(&tables.Session{}).
+			Where("device_id IN (?) AND revoked_at IS NULL", tx.Model(&tables.Device{}).Select("id").Where("user_id = ?", userID)).
 			Update("revoked_at", now).Error
 	})
 }

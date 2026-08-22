@@ -10,35 +10,32 @@ import (
 )
 
 var User = struct {
-	ID            field.Number[uint]
-	CreatedAt     field.Time
-	UpdatedAt     field.Time
-	DeletedAt     field.Field[gorm.DeletedAt]
-	Username      field.String
-	PasswordHash  field.String
-	RefreshTokens field.Slice[tables.RefreshToken]
+	ID           field.Number[uint]
+	CreatedAt    field.Time
+	UpdatedAt    field.Time
+	DeletedAt    field.Field[gorm.DeletedAt]
+	Username     field.String
+	PasswordHash field.String
+	Devices      field.Slice[tables.Device]
 }{
-	ID:            field.Number[uint]{}.WithColumn("id"),
-	CreatedAt:     field.Time{}.WithColumn("created_at"),
-	UpdatedAt:     field.Time{}.WithColumn("updated_at"),
-	DeletedAt:     field.Field[gorm.DeletedAt]{}.WithColumn("deleted_at"),
-	Username:      field.String{}.WithColumn("username"),
-	PasswordHash:  field.String{}.WithColumn("password_hash"),
-	RefreshTokens: field.Slice[tables.RefreshToken]{}.WithName("RefreshTokens"),
+	ID:           field.Number[uint]{}.WithColumn("id"),
+	CreatedAt:    field.Time{}.WithColumn("created_at"),
+	UpdatedAt:    field.Time{}.WithColumn("updated_at"),
+	DeletedAt:    field.Field[gorm.DeletedAt]{}.WithColumn("deleted_at"),
+	Username:     field.String{}.WithColumn("username"),
+	PasswordHash: field.String{}.WithColumn("password_hash"),
+	Devices:      field.Slice[tables.Device]{}.WithName("Devices"),
 }
 
-var RefreshToken = struct {
+var Device = struct {
 	ID         field.Number[uint]
 	CreatedAt  field.Time
 	UpdatedAt  field.Time
 	DeletedAt  field.Field[gorm.DeletedAt]
 	UserID     field.Number[uint]
 	User       field.Struct[tables.User]
-	TokenHash  field.String
-	ExpiresAt  field.Time
-	RevokedAt  field.Time
-	DeviceID   field.String
-	DeviceName field.String
+	Identifier field.String
+	Name       field.String
 	IPAddress  field.String
 	UserAgent  field.String
 }{
@@ -48,11 +45,32 @@ var RefreshToken = struct {
 	DeletedAt:  field.Field[gorm.DeletedAt]{}.WithColumn("deleted_at"),
 	UserID:     field.Number[uint]{}.WithColumn("user_id"),
 	User:       field.Struct[tables.User]{}.WithName("User"),
-	TokenHash:  field.String{}.WithColumn("token_hash"),
-	ExpiresAt:  field.Time{}.WithColumn("expires_at"),
-	RevokedAt:  field.Time{}.WithColumn("revoked_at"),
-	DeviceID:   field.String{}.WithColumn("device_id"),
-	DeviceName: field.String{}.WithColumn("device_name"),
+	Identifier: field.String{}.WithColumn("device_id"),
+	Name:       field.String{}.WithColumn("name"),
 	IPAddress:  field.String{}.WithColumn("ip_address"),
 	UserAgent:  field.String{}.WithColumn("user_agent"),
+}
+
+var Session = struct {
+	ID               field.Number[uint]
+	CreatedAt        field.Time
+	UpdatedAt        field.Time
+	DeletedAt        field.Field[gorm.DeletedAt]
+	DeviceID         field.Number[uint]
+	Device           field.Struct[tables.Device]
+	RefreshTokenHash field.String
+	ExpiresAt        field.Time
+	LoggedInAt       field.Time
+	RevokedAt        field.Time
+}{
+	ID:               field.Number[uint]{}.WithColumn("id"),
+	CreatedAt:        field.Time{}.WithColumn("created_at"),
+	UpdatedAt:        field.Time{}.WithColumn("updated_at"),
+	DeletedAt:        field.Field[gorm.DeletedAt]{}.WithColumn("deleted_at"),
+	DeviceID:         field.Number[uint]{}.WithColumn("device_id"),
+	Device:           field.Struct[tables.Device]{}.WithName("Device"),
+	RefreshTokenHash: field.String{}.WithColumn("refresh_token_hash"),
+	ExpiresAt:        field.Time{}.WithColumn("expires_at"),
+	LoggedInAt:       field.Time{}.WithColumn("logged_in_at"),
+	RevokedAt:        field.Time{}.WithColumn("revoked_at"),
 }

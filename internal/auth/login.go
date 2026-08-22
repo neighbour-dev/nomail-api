@@ -52,22 +52,25 @@ func (h *Handler) Login(c fiber.Ctx) error {
 	}
 
 	refreshToken := util.RandomUserToken()
-	accessToken, accessTokenExpiresAt, err := util.GenerateAccessToken(user.ID, h.appConfig.JwtSecret, h.appConfig.JwtIssuer, accessTokenTTL)
-	if err != nil {
-		return response.ErrorCodeWithMsg(c, response.CodeInternalError, "failed to generate access token")
-	}
 	refreshTokenExpiresAt := time.Now().Add(refreshTokenTTL)
+	session := tables.Session{
+		RefreshTokenHash: util.HashToken(refreshToken),
+		ExpiresAt:        refreshTokenExpiresAt,
+	}
 
-	if err := h.refreshTokens.CreateForLogin(&tables.RefreshToken{
+	if err := h.sessions.CreateForLogin(&tables.Device{
 		UserID:     user.ID,
-		TokenHash:  util.HashToken(refreshToken),
-		ExpiresAt:  refreshTokenExpiresAt,
-		DeviceID:   req.DeviceID,
-		DeviceName: req.DeviceName,
+		Identifier: req.DeviceID,
+		Name:       req.DeviceName,
 		IPAddress:  c.IP(),
 		UserAgent:  c.Get("User-Agent"),
-	}, maxActiveDevices); err != nil {
-		return response.ErrorCodeWithMsg(c, response.CodeInternalError, "failed to create refresh token")
+	}, &session, maxActiveDevices); err != nil {
+		return response.ErrorCodeWithMsg(c, response.CodeInternalError, "failed to create login session")
+	}
+
+	accessToken, accessTokenExpiresAt, err := util.GenerateAccessToken(user.ID, session.ID, h.appConfig.JwtSecret, h.appConfig.JwtIssuer, accessTokenTTL)
+	if err != nil {
+		return response.ErrorCodeWithMsg(c, response.CodeInternalError, "failed to generate access token")
 	}
 
 	return response.Success(c, tokenResponse{
@@ -76,8 +79,13 @@ func (h *Handler) Login(c fiber.Ctx) error {
 		RefreshToken:          refreshToken,
 		RefreshTokenExpiresAt: refreshTokenExpiresAt,
 		User: userResponse{
-			ID:       user.ID,
-			Username: user.Username,
+			ID:                   user.ID,
+			Username:             user.Username,
+			RequiresAccountSetup: h.requiresAccountSetup(req.Username, req.Password),
 		},
 	})
+}
+
+func (h *Handler) requiresAccountSetup(username string, password string) bool {
+	return username == h.appConfig.InitialUsername && password == h.appConfig.InitialPassword
 }

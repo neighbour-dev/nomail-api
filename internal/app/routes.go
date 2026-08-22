@@ -6,6 +6,7 @@ import (
 	"nomail-api/internal/health"
 	"nomail-api/internal/message"
 	"nomail-api/internal/platform/middleware"
+	"nomail-api/internal/realtime"
 	"nomail-api/internal/webhook"
 	"time"
 
@@ -15,20 +16,21 @@ import (
 )
 
 func RegisterRoutes(app *fiber.App, dbClient *gorm.DB, appConfig config.AppConfig) {
+	realtimeHub := realtime.NewHub()
 	authHandler := auth.NewHandler(dbClient, appConfig)
-	webhookHandler := webhook.NewHandler(webhook.Init(), dbClient, appConfig)
+	webhookHandler := webhook.NewHandler(webhook.Init(), dbClient, appConfig, realtimeHub)
 	healthHandler := health.NewHandler(dbClient)
-	messageHandler := message.NewHandler(dbClient)
+	messageHandler := message.NewHandler(dbClient, realtimeHub)
 
 	app.Route("/api", func(api fiber.Router) {
-		api.Route("/webhook", func(webhookRouter fiber.Router) {
-			webhookRouter.Use(middleware.Auth(appConfig))
-			webhookRouter.Get("/configs", webhookHandler.ListConfigs)
-			webhookRouter.Post("/configs", webhookHandler.Create)
-			webhookRouter.Get("/configs/:id", webhookHandler.GetConfig)
-			webhookRouter.Patch("/configs/:id", webhookHandler.UpdateConfig)
-			webhookRouter.Patch("/configs/:id/enabled", webhookHandler.UpdateEnabled)
-			webhookRouter.Delete("/configs/:id", webhookHandler.DeleteConfig)
+		api.Route("/webhook/configs", func(webhookRouter fiber.Router) {
+			webhookRouter.Use(middleware.Auth(dbClient, appConfig))
+			webhookRouter.Get("/", webhookHandler.ListConfigs)
+			webhookRouter.Post("/", webhookHandler.Create)
+			webhookRouter.Get("/:id", webhookHandler.GetConfig)
+			webhookRouter.Patch("/:id", webhookHandler.UpdateConfig)
+			webhookRouter.Patch("/:id/enabled", webhookHandler.UpdateEnabled)
+			webhookRouter.Delete("/:id", webhookHandler.DeleteConfig)
 		})
 
 		api.Post("/webhook/:key", webhookHandler.Handle)
@@ -39,9 +41,10 @@ func RegisterRoutes(app *fiber.App, dbClient *gorm.DB, appConfig config.AppConfi
 		}), healthHandler.Handle)
 
 		api.Route("/messages", func(messageRouter fiber.Router) {
-			messageRouter.Use(middleware.Auth(appConfig))
+			messageRouter.Use(middleware.Auth(dbClient, appConfig))
 			messageRouter.Get("/", messageHandler.List)
 			messageRouter.Get("/unread-count", messageHandler.UnreadCount)
+			messageRouter.Get("/stream", messageHandler.Stream)
 			messageRouter.Post("/batch", messageHandler.Batch)
 			messageRouter.Get("/:id/raw", messageHandler.Raw)
 			messageRouter.Get("/:id", messageHandler.Get)
@@ -54,8 +57,10 @@ func RegisterRoutes(app *fiber.App, dbClient *gorm.DB, appConfig config.AppConfi
 			authRouter.Post("/refresh-token", authHandler.RefreshToken)
 			authRouter.Post("/logout", authHandler.Logout)
 
-			authRouter = authRouter.Use(middleware.Auth(appConfig))
+			authRouter = authRouter.Use(middleware.Auth(dbClient, appConfig))
 			authRouter.Get("/devices", authHandler.Devices)
+			authRouter.Delete("/devices/:deviceId/session", authHandler.KickDevice)
+			authRouter.Delete("/devices/:deviceId", authHandler.DeleteDevice)
 			authRouter.Get("/account", authHandler.GetAccount)
 			authRouter.Patch("/account", authHandler.UpdateAccount)
 		})

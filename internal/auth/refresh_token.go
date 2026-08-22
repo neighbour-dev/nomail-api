@@ -2,7 +2,6 @@ package auth
 
 import (
 	"errors"
-	"nomail-api/internal/platform/db/tables"
 	"nomail-api/internal/platform/response"
 	"nomail-api/internal/platform/util"
 	"time"
@@ -21,35 +20,40 @@ func (h *Handler) RefreshToken(c fiber.Ctx) error {
 		return response.ErrorCodeWithMsg(c, response.CodeInvalidRequest, err.Error())
 	}
 
-	oldRefreshToken, err := h.refreshTokens.GetValidByHash(util.HashToken(req.RefreshToken))
+	oldTokenHash := util.HashToken(req.RefreshToken)
+	session, err := h.sessions.GetValidByHash(oldTokenHash)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return response.ErrorCodeWithMsg(c, response.CodeUnauthorized, "invalid refresh token")
 		}
-		return response.ErrorCodeWithMsg(c, response.CodeInternalError, "failed to get refresh token")
-	}
-
-	if err := h.refreshTokens.Revoke(oldRefreshToken.ID); err != nil {
-		return response.ErrorCodeWithMsg(c, response.CodeInternalError, "failed to revoke refresh token")
+		return response.ErrorCodeWithMsg(c, response.CodeInternalError, "failed to get login session")
 	}
 
 	refreshToken := util.RandomUserToken()
-	accessToken, accessTokenExpiresAt, err := util.GenerateAccessToken(oldRefreshToken.UserID, h.appConfig.JwtSecret, h.appConfig.JwtIssuer, accessTokenTTL)
+	refreshTokenExpiresAt := time.Now().Add(refreshTokenTTL)
+	accessToken, accessTokenExpiresAt, err := util.GenerateAccessToken(
+		session.Device.UserID,
+		session.ID,
+		h.appConfig.JwtSecret,
+		h.appConfig.JwtIssuer,
+		accessTokenTTL,
+	)
 	if err != nil {
 		return response.ErrorCodeWithMsg(c, response.CodeInternalError, "failed to generate access token")
 	}
-	refreshTokenExpiresAt := time.Now().Add(refreshTokenTTL)
 
-	if err := h.refreshTokens.Create(&tables.RefreshToken{
-		UserID:     oldRefreshToken.UserID,
-		TokenHash:  util.HashToken(refreshToken),
-		ExpiresAt:  refreshTokenExpiresAt,
-		DeviceID:   oldRefreshToken.DeviceID,
-		DeviceName: oldRefreshToken.DeviceName,
-		IPAddress:  c.IP(),
-		UserAgent:  c.Get("User-Agent"),
-	}); err != nil {
-		return response.ErrorCodeWithMsg(c, response.CodeInternalError, "failed to create refresh token")
+	if err := h.sessions.Rotate(
+		session.ID,
+		oldTokenHash,
+		util.HashToken(refreshToken),
+		refreshTokenExpiresAt,
+		c.IP(),
+		c.Get("User-Agent"),
+	); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return response.ErrorCodeWithMsg(c, response.CodeUnauthorized, "invalid refresh token")
+		}
+		return response.ErrorCodeWithMsg(c, response.CodeInternalError, "failed to rotate refresh token")
 	}
 
 	return response.Success(c, tokenResponse{
@@ -58,9 +62,8 @@ func (h *Handler) RefreshToken(c fiber.Ctx) error {
 		RefreshToken:          refreshToken,
 		RefreshTokenExpiresAt: refreshTokenExpiresAt,
 		User: userResponse{
-			ID:       oldRefreshToken.User.ID,
-			Username: oldRefreshToken.User.Username,
+			ID:       session.Device.User.ID,
+			Username: session.Device.User.Username,
 		},
 	})
-
 }
