@@ -1,0 +1,1203 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "NoMail API",
+    "version": "1.0.0",
+    "description": "NoMail 单用户通知服务 API。除登录、刷新 Token、退出登录、Webhook 接收和健康检查外，其余接口需要 Bearer JWT。"
+  },
+  "servers": [
+    {
+      "url": "/",
+      "description": "Current server"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Auth",
+      "description": "登录、会话和单用户账号管理"
+    },
+    {
+      "name": "Webhook Configs",
+      "description": "Webhook 配置管理"
+    },
+    {
+      "name": "Webhook",
+      "description": "外部 Webhook 接收"
+    },
+    {
+      "name": "Health",
+      "description": "服务健康检查"
+    }
+  ],
+  "paths": {
+    "/api/auth/login": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "登录",
+        "operationId": "login",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "登录成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponseEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/api/auth/refresh-token": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "刷新访问令牌",
+        "description": "使用有效 Refresh Token 换取新的 Access Token 和 Refresh Token，旧 Refresh Token 会被撤销。",
+        "operationId": "refreshToken",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefreshTokenRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "刷新成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponseEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/api/auth/logout": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "退出登录",
+        "description": "撤销指定 Refresh Token。",
+        "operationId": "logout",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefreshTokenRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "退出成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponseEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/api/auth/devices": {
+      "get": {
+        "tags": ["Auth"],
+        "summary": "获取所有历史登录设备",
+        "description": "返回用户所有已记录设备及每台设备当前是否仍处于登录状态。",
+        "operationId": "listDevices",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "设备列表",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceListResponseEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/api/auth/devices/{deviceId}": {
+      "delete": {
+        "tags": ["Auth"],
+        "summary": "删除设备",
+        "description": "删除设备信息及其当前登录 Session；该设备下次登录时会重新创建。",
+        "operationId": "deleteDevice",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 128
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "移除成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponseEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/api/auth/devices/{deviceId}/session": {
+      "delete": {
+        "tags": ["Auth"],
+        "summary": "踢设备下线",
+        "description": "撤销指定设备的当前登录 Session，但保留设备信息。",
+        "operationId": "kickDevice",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 128
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "下线成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponseEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/api/auth/account": {
+      "get": {
+        "tags": ["Auth"],
+        "summary": "获取当前账号",
+        "operationId": "getAccount",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "当前账号",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponseEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      },
+      "patch": {
+        "tags": ["Auth"],
+        "summary": "修改当前账号",
+        "description": "必须提供当前密码。username 和 newPassword 至少提供一项；修改密码后会撤销全部 Refresh Token。",
+        "operationId": "updateAccount",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAccountRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "修改成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponseEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/api/webhook/configs/": {
+      "get": {
+        "tags": ["Webhook Configs"],
+        "summary": "获取 Webhook 配置列表",
+        "operationId": "listWebhookConfigs",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "description": "页码，小于 1 时按 1 处理。",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "description": "每页数量，最大 100。",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Webhook 配置列表",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebhookConfigListResponseEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      },
+      "post": {
+        "tags": ["Webhook Configs"],
+        "summary": "创建 Webhook 配置",
+        "operationId": "createWebhookConfig",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateWebhookConfigRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "创建成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebhookConfigResponseEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/api/webhook/configs/{id}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/WebhookConfigId"
+        }
+      ],
+      "get": {
+        "tags": ["Webhook Configs"],
+        "summary": "获取 Webhook 配置",
+        "operationId": "getWebhookConfig",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Webhook 配置",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebhookConfigResponseEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      },
+      "patch": {
+        "tags": ["Webhook Configs"],
+        "summary": "修改 Webhook 配置",
+        "description": "仅更新非空字段；当前实现不支持通过空字符串清除字段。",
+        "operationId": "updateWebhookConfig",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateWebhookConfigRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "修改成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebhookConfigResponseEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      },
+      "delete": {
+        "tags": ["Webhook Configs"],
+        "summary": "删除 Webhook 配置",
+        "description": "执行软删除。",
+        "operationId": "deleteWebhookConfig",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "删除成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponseEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/api/webhook/configs/{id}/enabled": {
+      "patch": {
+        "tags": ["Webhook Configs"],
+        "summary": "启用或禁用 Webhook 配置",
+        "operationId": "updateWebhookConfigEnabled",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/WebhookConfigId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateWebhookEnabledRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "修改成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebhookConfigResponseEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/api/webhook/{key}": {
+      "post": {
+        "tags": ["Webhook"],
+        "summary": "接收 Webhook",
+        "description": "根据 Webhook Key 查找已启用配置，并调用对应 Provider 的验签和解析器。当前 GitHub、Feishu 解析器仍为占位实现。",
+        "operationId": "receiveWebhook",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "description": "创建 Webhook 配置时生成的 32 位小写十六进制 Key。",
+            "schema": {
+              "type": "string",
+              "minLength": 32,
+              "maxLength": 32,
+              "pattern": "^[0-9a-f]{32}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            },
+            "text/plain": {
+              "schema": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "接收成功",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "example": "ok"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/api/health": {
+      "get": {
+        "tags": ["Health"],
+        "summary": "健康检查",
+        "description": "同一客户端每 2 秒最多请求一次。响应使用统一格式，数据库异常时 HTTP 状态仍为 200，并在 data 中返回错误状态。",
+        "operationId": "health",
+        "responses": {
+          "200": {
+            "description": "服务状态",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthStatusEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "请求过于频繁"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "parameters": {
+      "WebhookConfigId": {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "description": "Webhook 配置 ID。",
+        "schema": {
+          "type": "integer",
+          "format": "int64",
+          "minimum": 1
+        }
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "请求参数错误",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "Unauthorized": {
+        "description": "未认证、Token 无效或凭据错误",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "资源不存在",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "Conflict": {
+        "description": "资源冲突",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "InternalError": {
+        "description": "服务内部错误",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "LoginRequest": {
+        "type": "object",
+        "required": ["username", "password", "deviceId"],
+        "properties": {
+          "username": {
+            "type": "string",
+            "maxLength": 64,
+            "example": "admin"
+          },
+          "password": {
+            "type": "string",
+            "format": "password",
+            "example": "change-me-now1"
+          },
+          "deviceId": {
+            "type": "string",
+            "maxLength": 128,
+            "example": "iphone-15-pro"
+          },
+          "deviceName": {
+            "type": "string",
+            "maxLength": 128,
+            "example": "iPhone 15 Pro"
+          }
+        }
+      },
+      "RefreshTokenRequest": {
+        "type": "object",
+        "required": ["refreshToken"],
+        "properties": {
+          "refreshToken": {
+            "type": "string",
+            "example": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+          }
+        }
+      },
+      "UpdateAccountRequest": {
+        "type": "object",
+        "required": ["currentPassword"],
+        "anyOf": [
+          {
+            "required": ["username"]
+          },
+          {
+            "required": ["newPassword"]
+          }
+        ],
+        "properties": {
+          "currentPassword": {
+            "type": "string",
+            "format": "password"
+          },
+          "username": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "newPassword": {
+            "type": "string",
+            "format": "password",
+            "minLength": 8,
+            "description": "至少 8 个字符，并同时包含英文字母和数字。"
+          }
+        }
+      },
+      "CreateWebhookConfigRequest": {
+        "type": "object",
+        "required": ["name", "provider"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 100,
+            "example": "GitHub"
+          },
+          "provider": {
+            "type": "string",
+            "maxLength": 32,
+            "enum": ["github", "feishu"],
+            "example": "github"
+          },
+          "source": {
+            "type": "string",
+            "maxLength": 255,
+            "example": "owner/repository"
+          },
+          "secret": {
+            "type": "string",
+            "format": "password",
+            "maxLength": 500
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 500
+          }
+        }
+      },
+      "UpdateWebhookConfigRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "provider": {
+            "type": "string",
+            "maxLength": 32,
+            "enum": ["github", "feishu"]
+          },
+          "source": {
+            "type": "string",
+            "maxLength": 255
+          },
+          "secret": {
+            "type": "string",
+            "format": "password",
+            "maxLength": 500
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 500
+          }
+        }
+      },
+      "UpdateWebhookEnabledRequest": {
+        "type": "object",
+        "required": ["enabled"],
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          }
+        }
+      },
+      "User": {
+        "type": "object",
+        "required": ["id", "username", "requiresAccountSetup"],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1
+          },
+          "username": {
+            "type": "string",
+            "example": "admin"
+          },
+          "requiresAccountSetup": {
+            "type": "boolean",
+            "description": "当前是否仍在使用部署时配置的初始账号和密码。",
+            "example": true
+          }
+        }
+      },
+      "TokenResponse": {
+        "type": "object",
+        "required": ["accessToken", "accessTokenExpiresAt", "refreshToken", "refreshTokenExpiresAt", "user"],
+        "properties": {
+          "accessToken": {
+            "type": "string"
+          },
+          "accessTokenExpiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "refreshToken": {
+            "type": "string"
+          },
+          "refreshTokenExpiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "user": {
+            "$ref": "#/components/schemas/User"
+          }
+        }
+      },
+      "Device": {
+        "type": "object",
+        "required": ["deviceId", "deviceName", "ipAddress", "userAgent", "loggedIn", "expiresAt", "loggedInAt", "createdAt", "updatedAt"],
+        "properties": {
+          "deviceId": {
+            "type": "string"
+          },
+          "deviceName": {
+            "type": "string"
+          },
+          "ipAddress": {
+            "type": "string"
+          },
+          "userAgent": {
+            "type": "string"
+          },
+          "loggedIn": {
+            "type": "boolean"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "loggedInAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "WebhookConfig": {
+        "type": "object",
+        "required": ["id", "name", "key", "provider", "source", "enabled", "description", "url"],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "name": {
+            "type": "string"
+          },
+          "key": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{32}$"
+          },
+          "provider": {
+            "type": "string",
+            "enum": ["github", "feishu"]
+          },
+          "source": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "description": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string",
+            "example": "/api/webhook/0123456789abcdef0123456789abcdef"
+          }
+        }
+      },
+      "WebhookConfigList": {
+        "type": "object",
+        "required": ["items", "total", "page", "pageSize"],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WebhookConfig"
+            }
+          },
+          "total": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "pageSize": {
+            "type": "integer"
+          }
+        }
+      },
+      "HealthStatus": {
+        "type": "object",
+        "required": ["status", "db"],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["ok", "error"]
+          },
+          "db": {
+            "type": "string",
+            "enum": ["ok", "error"]
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "required": ["code", "msg", "data"],
+        "properties": {
+          "code": {
+            "type": "integer",
+            "enum": [400, 401, 404, 409, 500]
+          },
+          "msg": {
+            "type": "string"
+          },
+          "data": {
+            "nullable": true,
+            "example": null
+          }
+        }
+      },
+      "UserResponseEnvelope": {
+        "type": "object",
+        "required": ["code", "msg", "data"],
+        "properties": {
+          "code": {
+            "type": "integer",
+            "enum": [0]
+          },
+          "msg": {
+            "type": "string",
+            "enum": ["success"]
+          },
+          "data": {
+            "$ref": "#/components/schemas/User"
+          }
+        }
+      },
+      "TokenResponseEnvelope": {
+        "type": "object",
+        "required": ["code", "msg", "data"],
+        "properties": {
+          "code": {
+            "type": "integer",
+            "enum": [0]
+          },
+          "msg": {
+            "type": "string",
+            "enum": ["success"]
+          },
+          "data": {
+            "$ref": "#/components/schemas/TokenResponse"
+          }
+        }
+      },
+      "DeviceListResponseEnvelope": {
+        "type": "object",
+        "required": ["code", "msg", "data"],
+        "properties": {
+          "code": {
+            "type": "integer",
+            "enum": [0]
+          },
+          "msg": {
+            "type": "string",
+            "enum": ["success"]
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Device"
+            }
+          }
+        }
+      },
+      "WebhookConfigResponseEnvelope": {
+        "type": "object",
+        "required": ["code", "msg", "data"],
+        "properties": {
+          "code": {
+            "type": "integer",
+            "enum": [0]
+          },
+          "msg": {
+            "type": "string",
+            "enum": ["success"]
+          },
+          "data": {
+            "$ref": "#/components/schemas/WebhookConfig"
+          }
+        }
+      },
+      "WebhookConfigListResponseEnvelope": {
+        "type": "object",
+        "required": ["code", "msg", "data"],
+        "properties": {
+          "code": {
+            "type": "integer",
+            "enum": [0]
+          },
+          "msg": {
+            "type": "string",
+            "enum": ["success"]
+          },
+          "data": {
+            "$ref": "#/components/schemas/WebhookConfigList"
+          }
+        }
+      },
+      "EmptyResponseEnvelope": {
+        "type": "object",
+        "required": ["code", "msg", "data"],
+        "properties": {
+          "code": {
+            "type": "integer",
+            "enum": [0]
+          },
+          "msg": {
+            "type": "string",
+            "enum": ["success"]
+          },
+          "data": {
+            "nullable": true,
+            "example": null
+          }
+        }
+      },
+      "HealthStatusEnvelope": {
+        "type": "object",
+        "required": ["code", "msg", "data"],
+        "properties": {
+          "code": {
+            "type": "integer",
+            "enum": [0]
+          },
+          "msg": {
+            "type": "string",
+            "enum": ["success"]
+          },
+          "data": {
+            "$ref": "#/components/schemas/HealthStatus"
+          }
+        }
+      }
+    }
+  }
+}
