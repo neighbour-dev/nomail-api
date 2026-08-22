@@ -399,21 +399,50 @@ updated_at DATETIME NOT NULL,
 FOREIGN KEY (user_id) REFERENCES user(id)
 );
 
-11.3 设备表 user_device
-关联用户，而非项目。
-CREATE TABLE user_device (
+11.3 设备表 device
+关联用户并长期保留设备元数据，登录状态由 session 表推导。
+CREATE TABLE device (
 id BIGINT PRIMARY KEY AUTO_INCREMENT,
 user_id BIGINT NOT NULL,
-platform VARCHAR(20) NOT NULL,
-device_name VARCHAR(100),
-push_token TEXT NOT NULL,
-enabled BOOLEAN DEFAULT TRUE,
-last_active_at DATETIME,
+device_id VARCHAR(128) NOT NULL,
+name VARCHAR(128),
+platform VARCHAR(32) NOT NULL,
+device_type VARCHAR(32) NOT NULL,
+manufacturer VARCHAR(128),
+model VARCHAR(128),
+os_version VARCHAR(64),
+app_version VARCHAR(64),
+app_build VARCHAR(64),
+locale VARCHAR(32),
+time_zone VARCHAR(64),
+ip_address VARCHAR(64),
+user_agent VARCHAR(255),
+last_seen_at DATETIME,
 created_at DATETIME NOT NULL,
+updated_at DATETIME NOT NULL,
+UNIQUE (user_id, device_id),
 FOREIGN KEY (user_id) REFERENCES user(id)
 );
 
-11.4 消息表 notify_message
+11.4 Push Endpoint 表 push_endpoint
+Push Token 与设备信息分离，并加密保存。
+CREATE TABLE push_endpoint (
+id BIGINT PRIMARY KEY AUTO_INCREMENT,
+device_id BIGINT NOT NULL UNIQUE,
+provider VARCHAR(32) NOT NULL,
+environment VARCHAR(32) NOT NULL,
+encrypted_token TEXT NOT NULL,
+token_hash VARCHAR(64) NOT NULL UNIQUE,
+enabled BOOLEAN DEFAULT TRUE,
+registered_at DATETIME NOT NULL,
+invalidated_at DATETIME,
+last_error VARCHAR(500),
+created_at DATETIME NOT NULL,
+updated_at DATETIME NOT NULL,
+FOREIGN KEY (device_id) REFERENCES device(id)
+);
+
+11.5 消息表 notify_message
 关联项目即可，项目已关联用户。
 CREATE TABLE notify_message (
 id BIGINT PRIMARY KEY AUTO_INCREMENT,
@@ -433,7 +462,7 @@ updated_at DATETIME NOT NULL,
 FOREIGN KEY (project_id) REFERENCES notify_project(id)
 );
 
-11.5 推送任务表 push_task（不变）
+11.6 推送任务表 push_task（不变）
 
 
 ---

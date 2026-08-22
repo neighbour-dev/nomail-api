@@ -19,6 +19,11 @@
 - `POST /api/auth/refresh-token`
 - `POST /api/auth/logout`
 - `GET /api/auth/devices`
+- `DELETE /api/auth/devices/:deviceId/session`
+- `DELETE /api/auth/devices/:deviceId`
+- `POST /api/push/devices`
+- `PATCH /api/push/devices/:deviceId`
+- `DELETE /api/push/devices/:deviceId`
 - `GET /api/auth/account`
 - `PATCH /api/auth/account`
 
@@ -228,11 +233,11 @@ Authorization: Bearer <access-token>
   -> 返回接收结果
 ```
 
-## 5. P0：Push 设备与推送
+## 5. P0：Push 发送能力
 
-当前登录设备来自 Refresh Token，只能代表登录会话，不能替代 APNs/FCM Push Token。
+Device 与登录 Session 已拆分，APNs/FCM Token 由独立 PushEndpoint 保存，并已提供注册、更新和删除接口。尚缺少实际推送任务处理能力。
 
-### 5.1 注册 Push 设备
+### 5.1 已实现：注册 Push 设备
 
 ```http
 POST /api/push/devices
@@ -251,7 +256,7 @@ Content-Type: application/json
 }
 ```
 
-### 5.2 更新 Push 设备
+### 5.2 已实现：更新 Push 设备
 
 ```http
 PATCH /api/push/devices/:deviceId
@@ -264,7 +269,7 @@ Authorization: Bearer <access-token>
 - 启用或禁用推送
 - 更新设备名称
 
-### 5.3 删除 Push 设备
+### 5.3 已实现：删除 Push 设备
 
 ```http
 DELETE /api/push/devices/:deviceId
@@ -344,7 +349,7 @@ Authorization: Bearer <access-token>
 
 ## 8. P1：设备和会话管理
 
-单设备登录会话撤销已由 `DELETE /api/auth/devices/:deviceId` 实现。Push Token 尚无对应数据模型，待推送模块实现后补充联动清理。
+单设备登录会话撤销由 `DELETE /api/auth/devices/:deviceId/session` 实现；删除设备由 `DELETE /api/auth/devices/:deviceId` 实现，并会同步删除 PushEndpoint。
 
 ### 8.1 批量移除设备
 

@@ -17,6 +17,10 @@
       "description": "登录、会话和单用户账号管理"
     },
     {
+      "name": "Push",
+      "description": "设备 Push Endpoint 管理"
+    },
+    {
       "name": "Webhook Configs",
       "description": "Webhook 配置管理"
     },
@@ -250,6 +254,143 @@
         "responses": {
           "200": {
             "description": "下线成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponseEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/api/push/devices": {
+      "post": {
+        "tags": ["Push"],
+        "summary": "注册或替换 Push Endpoint",
+        "operationId": "registerPushDevice",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterPushDeviceRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "注册成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PushEndpointResponseEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/api/push/devices/{deviceId}": {
+      "parameters": [
+        {
+          "name": "deviceId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "maxLength": 128
+          }
+        }
+      ],
+      "patch": {
+        "tags": ["Push"],
+        "summary": "更新 Push Endpoint",
+        "operationId": "updatePushDevice",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdatePushDeviceRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "更新成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PushEndpointResponseEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      },
+      "delete": {
+        "tags": ["Push"],
+        "summary": "删除 Push Endpoint",
+        "operationId": "deletePushDevice",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "删除成功",
             "content": {
               "application/json": {
                 "schema": {
@@ -777,7 +918,7 @@
     "schemas": {
       "LoginRequest": {
         "type": "object",
-        "required": ["username", "password", "deviceId"],
+        "required": ["username", "password", "deviceId", "platform", "deviceType"],
         "properties": {
           "username": {
             "type": "string",
@@ -798,6 +939,86 @@
             "type": "string",
             "maxLength": 128,
             "example": "iPhone 15 Pro"
+          },
+          "platform": {
+            "type": "string",
+            "enum": ["ios", "android", "macos", "windows", "linux", "web", "unknown"]
+          },
+          "deviceType": {
+            "type": "string",
+            "enum": ["phone", "tablet", "desktop", "web", "unknown"]
+          },
+          "manufacturer": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "model": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "osVersion": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "appVersion": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "appBuild": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "locale": {
+            "type": "string",
+            "maxLength": 32
+          },
+          "timeZone": {
+            "type": "string",
+            "maxLength": 64
+          }
+        }
+      },
+      "RegisterPushDeviceRequest": {
+        "type": "object",
+        "required": ["deviceId", "provider", "pushToken"],
+        "properties": {
+          "deviceId": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "provider": {
+            "type": "string",
+            "enum": ["apns", "fcm"]
+          },
+          "environment": {
+            "type": "string",
+            "enum": ["sandbox", "production"],
+            "default": "production"
+          },
+          "pushToken": {
+            "type": "string",
+            "maxLength": 8192
+          }
+        }
+      },
+      "UpdatePushDeviceRequest": {
+        "type": "object",
+        "minProperties": 1,
+        "properties": {
+          "provider": {
+            "type": "string",
+            "enum": ["apns", "fcm"]
+          },
+          "environment": {
+            "type": "string",
+            "enum": ["sandbox", "production"]
+          },
+          "pushToken": {
+            "type": "string",
+            "maxLength": 8192
+          },
+          "enabled": {
+            "type": "boolean"
           }
         }
       },
@@ -951,12 +1172,39 @@
       },
       "Device": {
         "type": "object",
-        "required": ["deviceId", "deviceName", "ipAddress", "userAgent", "loggedIn", "expiresAt", "loggedInAt", "createdAt", "updatedAt"],
+        "required": ["deviceId", "deviceName", "platform", "deviceType", "manufacturer", "model", "osVersion", "appVersion", "appBuild", "locale", "timeZone", "ipAddress", "userAgent", "lastSeenAt", "loggedIn", "pushEnabled", "expiresAt", "loggedInAt", "createdAt", "updatedAt"],
         "properties": {
           "deviceId": {
             "type": "string"
           },
           "deviceName": {
+            "type": "string"
+          },
+          "platform": {
+            "type": "string"
+          },
+          "deviceType": {
+            "type": "string"
+          },
+          "manufacturer": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "osVersion": {
+            "type": "string"
+          },
+          "appVersion": {
+            "type": "string"
+          },
+          "appBuild": {
+            "type": "string"
+          },
+          "locale": {
+            "type": "string"
+          },
+          "timeZone": {
             "type": "string"
           },
           "ipAddress": {
@@ -965,7 +1213,15 @@
           "userAgent": {
             "type": "string"
           },
+          "lastSeenAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
           "loggedIn": {
+            "type": "boolean"
+          },
+          "pushEnabled": {
             "type": "boolean"
           },
           "expiresAt": {
@@ -985,6 +1241,38 @@
           "updatedAt": {
             "type": "string",
             "format": "date-time"
+          }
+        }
+      },
+      "PushEndpoint": {
+        "type": "object",
+        "required": ["deviceId", "provider", "environment", "enabled", "registeredAt", "invalidatedAt", "lastError"],
+        "properties": {
+          "deviceId": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string",
+            "enum": ["apns", "fcm"]
+          },
+          "environment": {
+            "type": "string",
+            "enum": ["sandbox", "production"]
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "registeredAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "invalidatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "lastError": {
+            "type": "string"
           }
         }
       },
@@ -1126,6 +1414,23 @@
             "items": {
               "$ref": "#/components/schemas/Device"
             }
+          }
+        }
+      },
+      "PushEndpointResponseEnvelope": {
+        "type": "object",
+        "required": ["code", "msg", "data"],
+        "properties": {
+          "code": {
+            "type": "integer",
+            "enum": [0]
+          },
+          "msg": {
+            "type": "string",
+            "enum": ["success"]
+          },
+          "data": {
+            "$ref": "#/components/schemas/PushEndpoint"
           }
         }
       },
