@@ -7,7 +7,7 @@
 可以使用项目内置命令生成：
 
 ```bash
-go run ./cmd/gen-secret-key
+cargo run --bin gen-secret-key
 ```
 
 输出示例：

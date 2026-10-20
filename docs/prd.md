@@ -1,5 +1,7 @@
 PRD
 ---
+> 历史产品规划：本文中的技术栈和功能状态不代表当前实现。服务端现已迁移到 Rust + Actix Web + SeaORM；当前范围见 README 和 docs/rust-migration.md。
+
 1. 产品概述
 
 1.1 产品名称

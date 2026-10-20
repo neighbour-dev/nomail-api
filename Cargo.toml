@@ -1,0 +1,36 @@
+[package]
+name = "nomail-api"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.99"
+default-run = "nomail-api"
+
+[dependencies]
+actix-web = "4"
+aes-gcm = "0.10"
+async-stream = "0.3"
+base64 = "0.22"
+bcrypt = "0.17"
+chrono = { version = "0.4", features = ["serde"] }
+clap = { version = "4", features = ["derive"] }
+dotenvy = "0.15"
+hex = "0.4"
+hmac = "0.12"
+jsonwebtoken = { version = "10", features = ["rust_crypto"] }
+rand = "0.8"
+sea-orm = { version = "1.1", default-features = false, features = ["sqlx-postgres", "runtime-tokio-rustls", "macros", "with-chrono", "with-uuid"] }
+sea-orm-migration = { version = "1.1", default-features = false, features = ["sqlx-postgres", "runtime-tokio-rustls"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+subtle = "2"
+tokio = { version = "1", features = ["sync", "time", "macros", "rt-multi-thread"] }
+tracing = "0.1"
+tracing-actix-web = "0.7"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+url = "2"
+uuid = { version = "1", features = ["v7", "serde"] }
+
+[profile.release]
+lto = "thin"
+strip = true

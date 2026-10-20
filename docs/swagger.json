@@ -13,6 +13,10 @@
   ],
   "tags": [
     {
+      "name": "Messages",
+      "description": "消息查询、状态管理与 SSE 实时事件"
+    },
+    {
       "name": "Auth",
       "description": "登录、会话和单用户账号管理"
     },
@@ -759,7 +763,7 @@
       "post": {
         "tags": ["Webhook"],
         "summary": "接收 Webhook",
-        "description": "根据 Webhook Key 查找已启用配置，并调用对应 Provider 的验签和解析器。当前 GitHub、Feishu 解析器仍为占位实现。",
+        "description": "根据 Webhook Key 查找已启用配置，验证签名，解析 GitHub/Feishu/Generic 消息并幂等入库。飞书 challenge 请求直接返回 challenge。",
         "operationId": "receiveWebhook",
         "parameters": [
           {
@@ -795,10 +799,9 @@
           "200": {
             "description": "接收成功",
             "content": {
-              "text/plain": {
+              "application/json": {
                 "schema": {
-                  "type": "string",
-                  "example": "ok"
+                  "$ref": "#/components/schemas/WebhookReceiveEnvelope"
                 }
               }
             }
@@ -815,6 +818,105 @@
           "500": {
             "$ref": "#/components/responses/InternalError"
           }
+        }
+      }
+    },
+    "/api/messages": {
+      "get": {
+        "tags": ["Messages"],
+        "summary": "消息列表",
+        "operationId": "listMessages",
+        "security": [{"BearerAuth": []}],
+        "parameters": [
+          {"name":"page","in":"query","schema":{"type":"integer","minimum":1,"default":1}},
+          {"name":"pageSize","in":"query","schema":{"type":"integer","minimum":1,"maximum":100,"default":20}},
+          {"name":"query","in":"query","schema":{"type":"string"}},
+          {"name":"status","in":"query","schema":{"type":"string","enum":["read","unread"]}},
+          {"name":"level","in":"query","schema":{"type":"string"}},
+          {"name":"webhookConfigId","in":"query","schema":{"type":"integer","format":"int64","minimum":1}},
+          {"name":"pinned","in":"query","schema":{"type":"boolean"}},
+          {"name":"from","in":"query","schema":{"type":"string","format":"date-time"}},
+          {"name":"to","in":"query","schema":{"type":"string","format":"date-time"}}
+        ],
+        "responses": {
+          "200":{"description":"分页消息列表","content":{"application/json":{"schema":{"$ref":"#/components/schemas/MessageListEnvelope"}}}},
+          "400":{"$ref":"#/components/responses/BadRequest"},
+          "401":{"$ref":"#/components/responses/Unauthorized"},
+          "500":{"$ref":"#/components/responses/InternalError"}
+        }
+      }
+    },
+    "/api/messages/unread-count": {
+      "get": {
+        "tags":["Messages"],"summary":"未读消息数量","operationId":"unreadCount",
+        "security":[{"BearerAuth":[]}],
+        "responses":{
+          "200":{"description":"data.count 为未读消息数量","content":{"application/json":{"schema":{"$ref":"#/components/schemas/MessageCountEnvelope"}}}},
+          "401":{"$ref":"#/components/responses/Unauthorized"}
+        }
+      }
+    },
+    "/api/messages/stream": {
+      "get": {
+        "tags":["Messages"],"summary":"SSE 实时事件","operationId":"streamMessages",
+        "description":"事件类型 ready、message.created、auth.expired；20 秒注释心跳。Token 过期后关闭连接。无事件重放。",
+        "security":[{"BearerAuth":[]}],
+        "responses":{
+          "200":{"description":"SSE 流","content":{"text/event-stream":{"schema":{"type":"string"}}}},
+          "401":{"$ref":"#/components/responses/Unauthorized"}
+        }
+      }
+    },
+    "/api/messages/batch": {
+      "post": {
+        "tags":["Messages"],"summary":"批量修改消息","operationId":"batchMessages",
+        "security":[{"BearerAuth":[]}],
+        "requestBody":{"required":true,"content":{"application/json":{"schema":{
+          "type":"object","required":["ids","action"],"properties":{
+            "ids":{"type":"array","minItems":1,"maxItems":100,"items":{"type":"string","format":"uuid"}},
+            "action":{"type":"string","enum":["mark_read","mark_unread","pin","unpin","delete"]}
+          }
+        }}}},
+        "responses":{
+          "200":{"description":"data.affected 为实际修改数量；忽略不属于当前账号的消息","content":{"application/json":{"schema":{"$ref":"#/components/schemas/MessageAffectedEnvelope"}}}},
+          "400":{"$ref":"#/components/responses/BadRequest"},"401":{"$ref":"#/components/responses/Unauthorized"}
+        }
+      }
+    },
+    "/api/messages/{id}": {
+      "parameters":[{"$ref":"#/components/parameters/MessageId"}],
+      "get": {
+        "tags":["Messages"],"summary":"消息详情","operationId":"getMessage","security":[{"BearerAuth":[]}],
+        "responses":{
+          "200":{"description":"消息详情；读取不会自动标记已读","content":{"application/json":{"schema":{"$ref":"#/components/schemas/MessageDetailEnvelope"}}}},
+          "400":{"$ref":"#/components/responses/BadRequest"},"401":{"$ref":"#/components/responses/Unauthorized"},"404":{"$ref":"#/components/responses/NotFound"}
+        }
+      },
+      "patch": {
+        "tags":["Messages"],"summary":"修改已读或保留状态","operationId":"updateMessage","security":[{"BearerAuth":[]}],
+        "requestBody":{"required":true,"content":{"application/json":{"schema":{
+          "type":"object","minProperties":1,"properties":{"status":{"type":"string","enum":["read","unread"]},"pinned":{"type":"boolean"}}
+        }}}},
+        "responses":{
+          "200":{"description":"更新后的消息详情","content":{"application/json":{"schema":{"$ref":"#/components/schemas/MessageDetailEnvelope"}}}},
+          "400":{"$ref":"#/components/responses/BadRequest"},"401":{"$ref":"#/components/responses/Unauthorized"},"404":{"$ref":"#/components/responses/NotFound"}
+        }
+      },
+      "delete": {
+        "tags":["Messages"],"summary":"软删除消息","operationId":"deleteMessage","security":[{"BearerAuth":[]}],
+        "responses":{
+          "200":{"description":"删除成功","content":{"application/json":{"schema":{"$ref":"#/components/schemas/EmptyResponseEnvelope"}}}},
+          "400":{"$ref":"#/components/responses/BadRequest"},"401":{"$ref":"#/components/responses/Unauthorized"},"404":{"$ref":"#/components/responses/NotFound"}
+        }
+      }
+    },
+    "/api/messages/{id}/raw": {
+      "parameters":[{"$ref":"#/components/parameters/MessageId"}],
+      "get": {
+        "tags":["Messages"],"summary":"原始 Webhook Payload","operationId":"rawMessage","security":[{"BearerAuth":[]}],
+        "responses":{
+          "200":{"description":"按接收时的 Content-Type 原样返回，不使用响应信封","content":{"*/*":{"schema":{"type":"string"}}}},
+          "400":{"$ref":"#/components/responses/BadRequest"},"401":{"$ref":"#/components/responses/Unauthorized"},"404":{"$ref":"#/components/responses/NotFound"}
         }
       }
     },
@@ -851,6 +953,9 @@
       }
     },
     "parameters": {
+      "MessageId": {
+        "name":"id","in":"path","required":true,"schema":{"type":"string","format":"uuid"}
+      },
       "WebhookConfigId": {
         "name": "id",
         "in": "path",
@@ -916,6 +1021,51 @@
       }
     },
     "schemas": {
+      "WebhookReceiveEnvelope": {
+        "type":"object","properties":{
+          "code":{"type":"integer","example":0},"msg":{"type":"string","example":"success"},
+          "data":{"type":"object","properties":{"messageId":{"type":"string","format":"uuid"},"duplicate":{"type":"boolean"}}}
+        }
+      },
+      "MessageItem": {
+        "type":"object","properties":{
+          "id":{"type":"string","format":"uuid"},"title":{"type":"string"},"summary":{"type":"string"},
+          "source":{"type":"string"},"level":{"type":"string","enum":["normal","success","warning","critical"]},
+          "status":{"type":"string","enum":["read","unread"]},"pinned":{"type":"boolean"},
+          "webhookConfigId":{"type":"integer","format":"int64"},"createdAt":{"type":"string","format":"date-time"},
+          "expireAt":{"type":"string","format":"date-time","nullable":true}
+        }
+      },
+      "MessageListEnvelope": {
+        "type":"object","properties":{
+          "code":{"type":"integer","example":0},"msg":{"type":"string","example":"success"},
+          "data":{"type":"object","properties":{
+            "items":{"type":"array","items":{"$ref":"#/components/schemas/MessageItem"}},
+            "total":{"type":"integer","format":"int64"},"page":{"type":"integer"},"pageSize":{"type":"integer"}
+          }}
+        }
+      },
+      "MessageDetailEnvelope": {
+        "type":"object","properties":{
+          "code":{"type":"integer","example":0},"msg":{"type":"string","example":"success"},
+          "data":{"type":"object","properties":{
+            "id":{"type":"string","format":"uuid"},"title":{"type":"string"},"content":{"type":"string"},
+            "source":{"type":"string"},"level":{"type":"string"},"status":{"type":"string"},"pinned":{"type":"boolean"},
+            "webhookConfig":{"type":"object","properties":{"id":{"type":"integer","format":"int64"},"name":{"type":"string"},"provider":{"type":"string"}}},
+            "createdAt":{"type":"string","format":"date-time"},"updatedAt":{"type":"string","format":"date-time"},
+            "expireAt":{"type":"string","format":"date-time","nullable":true},"readAt":{"type":"string","format":"date-time","nullable":true},
+            "url":{"type":"string"},"hasRawPayload":{"type":"boolean"},"rawContentType":{"type":"string"}
+          }}
+        }
+      },
+      "MessageCountEnvelope": {
+        "type":"object","properties":{"code":{"type":"integer","example":0},"msg":{"type":"string","example":"success"},
+          "data":{"type":"object","properties":{"count":{"type":"integer","format":"int64"}}}}
+      },
+      "MessageAffectedEnvelope": {
+        "type":"object","properties":{"code":{"type":"integer","example":0},"msg":{"type":"string","example":"success"},
+          "data":{"type":"object","properties":{"affected":{"type":"integer","format":"int64"}}}}
+      },
       "LoginRequest": {
         "type": "object",
         "required": ["username", "password", "deviceId", "platform", "deviceType"],

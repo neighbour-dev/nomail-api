@@ -16,3 +16,6 @@ nomail-api-*
 
 *.log
 coverage.out
+
+target
+tests

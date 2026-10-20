@@ -6,3 +6,4 @@ app.sqlite
 /main
 /nomail-api
 /nomail-api-*
+/target/
