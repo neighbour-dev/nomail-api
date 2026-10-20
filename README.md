@@ -52,6 +52,52 @@ docker run --rm --env-file .env -p 3000:3000 nomail-api:rust
 现有 `compose.yml` 可继续使用，数据库由外部提供；容器中的 `DB_HOST` 不能指向容器自身的 localhost。
 镜像附带 `reset-account`、`gen-secret-key`，可通过 `docker exec` 调用。
 
+### GHCR 私有镜像
+
+Gitea Actions 的 `.gitea/workflows/docker.yml` 仅构建 `linux/amd64` 镜像并推送到（Runner 需为 AMD64，无需 QEMU）：
+
+```text
+ghcr.io/<github-account-or-organization>/nomail-api:<tag>
+```
+
+在 **Gitea 仓库 Settings → Actions → Secrets** 中设置：
+
+| Secret | 内容 |
+|---|---|
+| `GHCR_USERNAME` | 用于登录 GHCR 的 GitHub 用户名，不是 Gitea 用户名 |
+| `GHCR_TOKEN` | GitHub Personal Access Token **classic**，至少包含 `write:packages` |
+
+默认推送到 `GHCR_USERNAME` 对应的个人命名空间。如果要推送到 GitHub 组织，在 **Actions → Variables** 中设置 `GHCR_NAMESPACE`，并确保该用户有权向组织发布 Package。CI 会将命名空间转为小写。
+Gitea 的内置 Token 不能用于登录 GHCR；组织要求 SSO 时，还需为 GitHub Token 授权。
+
+推送 `main` 发布 `latest` 和 SHA 标签；推送 `v*` 版本标签发布对应的语义化版本标签和 SHA 标签。
+构建层缓存保存到同一 GHCR Package 的 `buildcache` 标签，供后续 CI 构建复用；该标签不是可部署的应用镜像。首次构建没有远程缓存是正常情况。
+工作流启用 `mode=min` 构建来源证明（provenance），不再禁用相关元数据。远程缓存保存构建层，但不会导出 Dockerfile 中 `RUN --mount=type=cache` 的 Cargo 缓存目录。
+**GHCR 首次创建的 Package 默认私有**。首次发布后进入 GitHub 账号/组织的 Packages 页面确认可见性为 **Private**；若同名 Package 原已公开，本工作流不会自动将其改为私有。
+源码无需迁移到 GitHub，也无需公开。
+
+部署服务器使用单独的 GitHub Token（classic，仅需 `read:packages`，且所属用户有镜像读取权限）：
+
+```bash
+docker login ghcr.io --username YOUR_GITHUB_USERNAME
+# 在密码提示中输入只读 Token，不是 GitHub 登录密码。
+```
+
+在 `compose.yml` 中直接填写镜像地址，将 `your-github-username` 替换为 CI 使用的小写 GitHub 用户名或组织名：
+
+```yaml
+image: ghcr.io/your-github-username/nomail-api:latest
+```
+
+```bash
+docker compose pull
+docker compose up -d
+```
+
+镜像标签在 `compose.yml` 中直接指定为 `latest`；如需固定版本，修改该文件的 `image` 标签即可。
+
+不要把 Token 写入 `.env`、Compose 或版本库。生产服务器建议配置 Docker credential helper 安全保存登录凭据。
+
 ## 代码导航
 
 ```text

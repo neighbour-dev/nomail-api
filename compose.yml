@@ -1,0 +1,17 @@
+services:
+  nomail-api:
+    # Replace your-github-username with the lowercase account or organization used by CI.
+    image: ghcr.io/your-github-username/nomail-api:latest
+    container_name: nomail-api
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "${PORT:-3000}:${PORT:-3000}"
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 10s
