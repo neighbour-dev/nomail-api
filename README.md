@@ -54,7 +54,7 @@ docker run --rm --env-file .env -p 3000:3000 nomail-api:rust
 
 ### GHCR 私有镜像
 
-Gitea Actions 的 `.gitea/workflows/docker.yml` 仅构建 `linux/amd64` 镜像并推送到（Runner 需为 AMD64，无需 QEMU）：
+Gitea Actions 的 `.gitea/workflows/ci.yml` 在普通检查和数据库集成测试均成功后，仅构建 `linux/amd64` 镜像并推送到（Runner 需为 AMD64，无需 QEMU）：
 
 ```text
 ghcr.io/<github-account-or-organization>/nomail-api:<tag>
@@ -127,10 +127,13 @@ cargo test --locked --all-targets
 cargo build --locked --release --bins
 ```
 
-CI 分为两个独立 Job：
+CI 统一放在 `.gitea/workflows/ci.yml`，按以下依赖关系运行：
 
 - `test`：格式检查、Clippy、默认测试和发布构建，不依赖数据库。
 - `integration`：自动启动临时 PostgreSQL 17，验证数据库连接后运行集成测试。任务明确运行在容器内，通过服务名 `postgres:5432` 访问数据库，不使用 `localhost`，也不占用宿主机的 5432 端口。
+- `docker`：通过 `needs: [test, integration]` 等待上述两个 Job 均成功后才构建、推送镜像。仅 `main` 分支推送、`v*` 标签推送或手动触发时执行；PR 和其他分支推送只运行检查和测试。
+
+`test` 和 `integration` 可以并行运行；任意一项失败都会阻止镜像发布。原独立的 `docker.yml` 已合并移除，避免镜像发布绕过测试。
 
 Gitea Runner 必须能够访问 Docker，并允许任务容器与服务容器在同一网络通信。此 Job 使用 `node:22-bookworm` 以支持 Checkout Action，并安装 Rust 工具链和 PostgreSQL 客户端。数据库使用独立的测试凭据、不配置持久化卷，任务结束后由 Runner 清理服务容器，无需提前部署 PostgreSQL，也不会连接生产数据库。
 
