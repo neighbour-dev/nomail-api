@@ -127,7 +127,14 @@ cargo test --locked --all-targets
 cargo build --locked --release --bins
 ```
 
-集成测试必须使用**独立的测试数据库**（需要创建 Schema 权限）。每次测试创建随机 Schema，成功后删除；失败时可留下 Schema 用于排查。
+CI 分为两个独立 Job：
+
+- `test`：格式检查、Clippy、默认测试和发布构建，不依赖数据库。
+- `integration`：自动启动临时 PostgreSQL 17，验证数据库连接后运行集成测试。任务明确运行在容器内，通过服务名 `postgres:5432` 访问数据库，不使用 `localhost`，也不占用宿主机的 5432 端口。
+
+Gitea Runner 必须能够访问 Docker，并允许任务容器与服务容器在同一网络通信。此 Job 使用 `node:22-bookworm` 以支持 Checkout Action，并安装 Rust 工具链和 PostgreSQL 客户端。数据库使用独立的测试凭据、不配置持久化卷，任务结束后由 Runner 清理服务容器，无需提前部署 PostgreSQL，也不会连接生产数据库。
+
+本地执行 `cargo test --locked --all-targets` 仍会跳过数据库集成测试。需要手动运行时，必须使用**独立的测试数据库**（需要创建 Schema 权限）。每次测试创建随机 Schema，成功后删除；失败时可留下 Schema 用于排查。
 不要指向生产数据库。
 
 ```bash
