@@ -44,6 +44,8 @@ cargo run --bin reset-account -- --username admin --password new-password1
 
 ## Docker
 
+镜像使用 Alpine Linux；构建阶段同样使用 Alpine 的 musl 工具链，运行阶段保留 CA 证书、时区数据和非 root 用户。健康检查使用内置 `wget`，无需安装 curl。
+
 ```bash
 docker build -t nomail-api:rust .
 docker run --rm --env-file .env -p 3000:3000 nomail-api:rust
