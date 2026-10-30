@@ -50,6 +50,18 @@ impl fmt::Display for ApiError {
     }
 }
 impl std::error::Error for ApiError {}
+impl From<nomail_core::webhook::WebhookError> for ApiError {
+    fn from(error: nomail_core::webhook::WebhookError) -> Self {
+        use nomail_core::webhook::WebhookError;
+        match error {
+            WebhookError::Unauthorized => Self::unauthorized(),
+            WebhookError::InvalidConfiguration(_) => Self::internal(error),
+            WebhookError::InvalidPayload(_) | WebhookError::Unsupported(_) => {
+                Self::bad(error.to_string())
+            }
+        }
+    }
+}
 impl ResponseError for ApiError {
     fn status_code(&self) -> StatusCode {
         self.status

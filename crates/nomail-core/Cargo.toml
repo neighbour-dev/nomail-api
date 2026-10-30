@@ -1,0 +1,18 @@
+[package]
+name = "nomail-core"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.99"
+description = "Runtime-independent NoMail webhook protocols and built-in message mappings"
+
+[dependencies]
+aes = "0.8"
+base64 = "0.22"
+cbc = { version = "0.1", features = ["alloc"] }
+hex = "0.4"
+hmac = "0.12"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_urlencoded = "0.7"
+sha2 = "0.10"
+subtle = "2"

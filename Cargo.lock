@@ -428,6 +428,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "block-padding"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a8894febbff9f758034a5b8e12d87918f56dfc64a8e1fe757d65e29041538d93"
+dependencies = [
+ "generic-array",
+]
+
+[[package]]
 name = "blowfish"
 version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -483,6 +492,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "86566c496f2f47d9b8147a4c8b02ffdb69c919fe0c2b2e7195d22cbba0e635c9"
 dependencies = [
  "bytes",
+]
+
+[[package]]
+name = "cbc"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "26b52a9543ae338f279b96b0b9fed9c8093744685043739079ce85cd58f289a6"
+dependencies = [
+ "cipher",
 ]
 
 [[package]]
@@ -1504,6 +1522,7 @@ version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "879f10e63c20629ecabbb64a8010319738c66a5cd0c29b02d63d272b03751d01"
 dependencies = [
+ "block-padding",
  "generic-array",
 ]
 
@@ -1731,19 +1750,35 @@ dependencies = [
  "hex",
  "hmac",
  "jsonwebtoken",
+ "nomail-core",
  "rand 0.8.8",
  "sea-orm",
  "sea-orm-migration",
  "serde",
  "serde_json",
  "sha2",
- "subtle",
  "tokio",
  "tracing",
  "tracing-actix-web",
  "tracing-subscriber",
  "url",
  "uuid",
+]
+
+[[package]]
+name = "nomail-core"
+version = "0.1.0"
+dependencies = [
+ "aes",
+ "base64",
+ "cbc",
+ "hex",
+ "hmac",
+ "serde",
+ "serde_json",
+ "serde_urlencoded",
+ "sha2",
+ "subtle",
 ]
 
 [[package]]

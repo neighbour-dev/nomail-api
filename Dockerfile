@@ -3,6 +3,7 @@ FROM rust:1.99-alpine3.23 AS builder
 RUN apk add --no-cache build-base
 WORKDIR /src
 COPY Cargo.toml Cargo.lock ./
+COPY crates ./crates
 COPY src ./src
 COPY migration ./migration
 RUN --mount=type=cache,target=/usr/local/cargo/registry \

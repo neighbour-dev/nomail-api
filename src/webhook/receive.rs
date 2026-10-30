@@ -7,6 +7,7 @@ use crate::{
 };
 use actix_web::{HttpRequest, HttpResponse, web};
 use chrono::{Duration, Utc};
+use nomail_core::webhook::ReceiveOutcome;
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, Set, sea_query::OnConflict};
 use serde_json::json;
 use uuid::Uuid;
@@ -30,15 +31,31 @@ pub async fn handle(
         Some(secret) => crypto::decrypt(secret, &state.config.encryption_key)?,
         None => String::new(),
     };
-    parser::verify(provider, req.headers(), &body, &secret)?;
-    let parsed = parser::parse(provider, req.headers(), &body)?;
-    if !parsed.challenge.is_empty() {
-        return Ok(HttpResponse::Ok().json(json!({"challenge": parsed.challenge})));
-    }
     let now = Utc::now();
-    let level = parser::normalize_level(&parsed.level);
+    let event = match parser::receive(provider, req.headers(), &body, &secret, now.timestamp())? {
+        ReceiveOutcome::Event(event) => event,
+        ReceiveOutcome::Respond(response) => {
+            let status = actix_web::http::StatusCode::from_u16(response.status)
+                .map_err(ApiError::internal)?;
+            return Ok(HttpResponse::build(status)
+                .content_type(response.content_type)
+                .body(response.body));
+        }
+        ReceiveOutcome::Ignored { .. } => return Ok(success(json!({"ignored": true}))),
+    };
+    let parsed = event.to_message();
+    let level = parsed.level.as_str();
     let expires = now + Duration::days(parser::retention_days(level));
-    let external: String = parsed.external_id.trim().chars().take(255).collect();
+    let external: String = event
+        .metadata()
+        .deduplication_key
+        .as_ref()
+        .map(|key| key.value.as_str())
+        .unwrap_or("")
+        .trim()
+        .chars()
+        .take(255)
+        .collect();
     let external = if external.is_empty() {
         None
     } else {
@@ -51,7 +68,7 @@ pub async fn handle(
     } else {
         title
     };
-    let source = if parsed.source.trim().is_empty() {
+    let source = if parsed.source.as_deref().unwrap_or("").trim().is_empty() {
         config
             .source
             .as_deref()
@@ -59,7 +76,7 @@ pub async fn handle(
             .unwrap_or(provider)
             .trim()
     } else {
-        parsed.source.trim()
+        parsed.source.as_deref().unwrap_or("").trim()
     };
     let source: String = source.chars().take(100).collect();
     let content_type: String = req
@@ -83,7 +100,7 @@ pub async fn handle(
         content: Set(Some(parsed.content.trim().into())),
         level: Set(level.into()),
         status: Set("unread".into()),
-        url: Set(Some(parsed.url.trim().into())),
+        url: Set(Some(parsed.url.as_deref().unwrap_or("").trim().into())),
         raw_payload: Set(Some(String::from_utf8_lossy(&body).into_owned())),
         content_type: Set(Some(content_type)),
         pinned: Set(Some(false)),

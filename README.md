@@ -2,6 +2,17 @@
 
 单用户、自托管通知收件箱服务端，使用 **Rust + Actix Web + SeaORM + PostgreSQL**。
 
+## Workspace 与共享内核
+
+- 根 crate `nomail-api`：保留现有服务端入口、HTTP API、数据库、账号、消息和广播实现。
+- `crates/nomail-core`：独立、无运行时依赖的 Webhook 认证/解密/解析与内置消息映射，支持编译到 WASM。详见 [Core 使用说明](crates/nomail-core/README.md)。
+
+业务请求输出 `PlatformEvent`，再通过 `event.to_message()` 生成统一收件箱消息；验证/Ping 返回独立的控制结果。服务端 `src/webhook/parser.rs` 仅承担请求头、配置和错误适配，不再维护一套解析/映射规则。
+
+Core 覆盖 Generic、GitHub、GitLab、Stripe、Slack、飞书、Telegram、Shopify 的协议信封；**当前 HTTP API 仍仅开放 Generic / GitHub / 飞书**。其他平台需要先补充服务端配置与凭据模型。尚未创建 Workers 应用，也未实现 D1、Durable Objects 或 Queues 适配。
+
+**飞书兼容性注意：**旧服务端只有一个 `secret` 字段，当前适配将它同时作为验证 Token 和 Encrypt Key，普通事件必须提供签名，不再因签名缺失回退为固定 Token；带时间戳签名会检查前后 300 秒。只有 Token 的明文普通事件端点，以及 Token/Encrypt Key 不同的加密验证端点，需要后续扩展服务端配置后才能正确接入。Core 本身已支持独立配置两种凭据。GitHub Ping 作为控制请求处理，不再生成收件箱消息；GitHub 去重只使用投递 ID，不回退资源 ID。
+
 ## 启动
 
 需要 Rust 1.99+、PostgreSQL 及可用的数据库账号。
@@ -124,8 +135,10 @@ tests/api.rs         PostgreSQL HTTP 集成测试
 
 ```bash
 cargo fmt --all --check
-cargo clippy --locked --all-targets -- -D warnings
-cargo test --locked --all-targets
+cargo clippy --locked --workspace --all-targets -- -D warnings
+cargo test --locked --workspace --all-targets
+cargo test --locked -p nomail-core --doc
+cargo check --locked -p nomail-core --target wasm32-unknown-unknown
 cargo build --locked --release --bins
 ```
 
