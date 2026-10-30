@@ -40,12 +40,27 @@ fn events_interactions_and_slash_commands() {
             .unwrap(),
         );
         assert!(matches!(
-            (&parsed, kind),
-            (PlatformEvent::Slack(SlackEvent::EventsApi(_)), 0)
-                | (PlatformEvent::Slack(SlackEvent::Interaction(_)), 1)
-                | (PlatformEvent::Slack(SlackEvent::SlashCommand(_)), 2)
+            (&parsed.data, kind),
+            (PlatformData::Slack(SlackEvent::EventsApi(_)), 0)
+                | (PlatformData::Slack(SlackEvent::Interaction(_)), 1)
+                | (PlatformData::Slack(SlackEvent::SlashCommand(_)), 2)
         ));
         assert!(!parsed.to_message().content.is_empty());
+        match kind {
+            0 => assert_eq!(parsed.raw.as_json().unwrap()["event"]["text"], "hello"),
+            1 => assert_eq!(
+                parsed.raw.as_json().unwrap()["actions"][0]["value"],
+                "approve"
+            ),
+            2 => {
+                let EventContent::Form(fields) = &parsed.raw else {
+                    panic!()
+                };
+                assert!(fields.contains(&("command".into(), "/example".into())));
+                assert!(!parsed.raw.to_readable_string().contains("%2F"));
+            }
+            _ => unreachable!(),
+        }
         if kind == 0 {
             assert_eq!(
                 parsed.metadata().deduplication_key.as_ref().unwrap().value,

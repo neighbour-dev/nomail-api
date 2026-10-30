@@ -79,15 +79,9 @@ pub async fn handle(
         parsed.source.as_deref().unwrap_or("").trim()
     };
     let source: String = source.chars().take(100).collect();
-    let content_type: String = req
-        .headers()
-        .get("Content-Type")
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("")
-        .trim()
-        .chars()
-        .take(100)
-        .collect();
+    // Store decoded human-readable platform content, not the signed HTTP body.
+    // The media type must describe this representation (e.g. JSON after form decoding).
+    let content_type = event.raw.media_type().to_owned();
     let active = message::ActiveModel {
         id: Set(id),
         created_at: Set(now),
@@ -101,7 +95,7 @@ pub async fn handle(
         level: Set(level.into()),
         status: Set("unread".into()),
         url: Set(Some(parsed.url.as_deref().unwrap_or("").trim().into())),
-        raw_payload: Set(Some(String::from_utf8_lossy(&body).into_owned())),
+        raw_payload: Set(Some(event.raw.to_readable_string())),
         content_type: Set(Some(content_type)),
         pinned: Set(Some(false)),
         expire_at: Set(Some(expires)),

@@ -69,23 +69,19 @@ pub(super) fn required(value: String, message: &'static str) -> Result<String, W
     optional(value).ok_or(WebhookError::InvalidPayload(message))
 }
 
-pub(super) fn data(
-    payload: Value,
+pub(super) fn metadata(
     event_type: String,
     version: Option<String>,
     scope: &str,
     id: String,
-) -> PlatformPayload {
-    PlatformPayload {
-        metadata: EventMetadata {
-            event_type,
-            version,
-            deduplication_key: optional(id).map(|value| DeduplicationKey {
-                scope: scope.into(),
-                value,
-            }),
-        },
-        payload,
+) -> EventMetadata {
+    EventMetadata {
+        event_type,
+        version,
+        deduplication_key: optional(id).map(|value| DeduplicationKey {
+            scope: scope.into(),
+            value,
+        }),
     }
 }
 
@@ -116,8 +112,4 @@ pub(super) fn message(
         level: MessageLevel::from_label(level),
         url: optional(url),
     }
-}
-
-pub(super) fn summary(data: &PlatformPayload) -> String {
-    data.payload.to_string()
 }

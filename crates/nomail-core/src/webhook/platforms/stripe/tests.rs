@@ -26,7 +26,7 @@ fn snapshot_thin_and_rotating_signatures() {
             .unwrap(),
         );
         assert_eq!(
-            matches!(parsed, PlatformEvent::Stripe(StripeEvent::Thin(_))),
+            matches!(parsed.data, PlatformData::Stripe(StripeEvent::Thin(_))),
             is_thin
         );
         if is_thin {

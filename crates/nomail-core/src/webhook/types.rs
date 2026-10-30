@@ -151,22 +151,80 @@ pub struct EventMetadata {
     pub deduplication_key: Option<DeduplicationKey>,
 }
 
-/// Platform data is retained, including fields unknown to current built-in mappings.
-/// These are protocol envelopes, not claims to implement every upstream event schema.
+/// Complete human-readable platform content after transport decoding/decryption,
+/// before semantic modeling or message mapping. Not the bytes used for signatures.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct PlatformPayload {
-    pub metadata: EventMetadata,
-    pub payload: Value,
+#[serde(tag = "format", content = "value", rename_all = "lowercase")]
+pub enum EventContent {
+    Json(Value),
+    Text(String),
+    Form(Vec<(String, String)>),
+}
+
+impl EventContent {
+    pub fn as_json(&self) -> Option<&Value> {
+        match self {
+            Self::Json(value) => Some(value),
+            _ => None,
+        }
+    }
+
+    pub fn as_text(&self) -> Option<&str> {
+        match self {
+            Self::Text(value) => Some(value),
+            _ => None,
+        }
+    }
+
+    /// A readable representation, not a reconstruction of the HTTP request.
+    pub fn to_readable_string(&self) -> String {
+        match self {
+            Self::Json(value) => format!("{value:#}"),
+            _ => self.to_string(),
+        }
+    }
+
+    /// Media type of to_readable_string(), not the inbound request's Content-Type.
+    pub const fn media_type(&self) -> &'static str {
+        match self {
+            Self::Json(_) => "application/json",
+            Self::Text(_) | Self::Form(_) => "text/plain",
+        }
+    }
+}
+
+impl fmt::Display for EventContent {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Json(value) => write!(f, "{value}"),
+            Self::Text(value) => f.write_str(value),
+            Self::Form(fields) => {
+                for (index, (key, value)) in fields.iter().enumerate() {
+                    if index != 0 {
+                        f.write_str("\n")?;
+                    }
+                    write!(f, "{key}: {value}")?;
+                }
+                Ok(())
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ReceiveOutcome {
-    Event(PlatformEvent),
+    Event(Box<PlatformEvent>),
     /// Control requests only; ordinary events must be durably accepted before ACK.
     Respond(ProtocolResponse),
     Ignored {
         reason: &'static str,
     },
+}
+
+impl From<PlatformEvent> for ReceiveOutcome {
+    fn from(event: PlatformEvent) -> Self {
+        Self::Event(Box::new(event))
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

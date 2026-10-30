@@ -913,9 +913,9 @@
     "/api/messages/{id}/raw": {
       "parameters":[{"$ref":"#/components/parameters/MessageId"}],
       "get": {
-        "tags":["Messages"],"summary":"原始 Webhook Payload","operationId":"rawMessage","security":[{"BearerAuth":[]}],
+        "tags":["Messages"],"summary":"可读原始 Webhook 内容","operationId":"rawMessage","security":[{"BearerAuth":[]}],
         "responses":{
-          "200":{"description":"按接收时的 Content-Type 原样返回，不使用响应信封","content":{"*/*":{"schema":{"type":"string"}}}},
+          "200":{"description":"返回解密、解码后且未经消息映射的平台原始内容，不使用响应信封。Content-Type 描述可读表示：JSON、普通文本或逐行展示的表单字段。不是验签用的 HTTP Body，也不能用于精确请求回放；历史消息保留旧存储内容与格式。","content":{"*/*":{"schema":{"type":"string"}}}},
           "400":{"$ref":"#/components/responses/BadRequest"},"401":{"$ref":"#/components/responses/Unauthorized"},"404":{"$ref":"#/components/responses/NotFound"}
         }
       }

@@ -2,16 +2,38 @@
 #[cfg(test)]
 mod tests;
 use crate::webhook::{
-    Authentication, EventMetadata, IncomingMessage, PlatformEvent, PlatformPayload, ReceiveOutcome,
-    WebhookConfig, WebhookError, WebhookRequest, crypto, support::*,
+    Authentication, EventContent, EventMetadata, IncomingMessage, PlatformData, PlatformEvent,
+    ReceiveOutcome, WebhookConfig, WebhookError, WebhookRequest, crypto, support::*,
 };
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum StripeEvent {
-    Snapshot(PlatformPayload),
+    Snapshot(StripeSnapshot),
     /// No API request is performed. Mapping provides a metadata-only summary.
-    Thin(PlatformPayload),
+    Thin(StripeThinNotification),
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct StripeSnapshot {
+    pub object_id: Option<String>,
+    pub object_type: Option<String>,
+    pub created: Option<i64>,
+    pub livemode: Option<bool>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct StripeThinNotification {
+    pub created: Option<String>,
+    pub related_object: Option<StripeRelatedObject>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct StripeRelatedObject {
+    pub id: Option<String>,
+    pub object_type: Option<String>,
+    /// API resource path, not a user-facing URL or an instruction to fetch it.
+    pub url: Option<String>,
 }
 
 pub(in crate::webhook) fn receive(
@@ -38,12 +60,32 @@ pub(in crate::webhook) fn receive(
             ));
         }
     };
-    let data = data(payload, event_type, version, "stripe:event", id);
-    Ok(ReceiveOutcome::Event(PlatformEvent::Stripe(if thin {
-        StripeEvent::Thin(data)
+    let event = if thin {
+        StripeEvent::Thin(StripeThinNotification {
+            created: payload["created"].as_str().map(str::to_owned),
+            related_object: payload
+                .get("related_object")
+                .filter(|value| value.is_object())
+                .map(|value| StripeRelatedObject {
+                    id: optional(text(value, &["id"])),
+                    object_type: optional(text(value, &["type"])),
+                    url: optional(text(value, &["url"])),
+                }),
+        })
     } else {
-        StripeEvent::Snapshot(data)
-    })))
+        StripeEvent::Snapshot(StripeSnapshot {
+            object_id: optional(text(&payload, &["data", "object", "id"])),
+            object_type: optional(text(&payload, &["data", "object", "object"])),
+            created: payload["created"].as_i64(),
+            livemode: payload["livemode"].as_bool(),
+        })
+    };
+    Ok(PlatformEvent {
+        metadata: metadata(event_type, version, "stripe:event", id),
+        data: PlatformData::Stripe(event),
+        raw: EventContent::Json(payload),
+    }
+    .into())
 }
 
 fn verify_signature(
@@ -82,19 +124,8 @@ fn verify_signature(
 }
 
 impl StripeEvent {
-    fn data(&self) -> &PlatformPayload {
-        match self {
-            Self::Snapshot(data) | Self::Thin(data) => data,
-        }
-    }
-
-    pub fn metadata(&self) -> &EventMetadata {
-        &self.data().metadata
-    }
-
-    pub fn to_message(&self) -> IncomingMessage {
-        let data = self.data();
-        let kind = &data.metadata.event_type;
+    pub fn to_message(&self, metadata: &EventMetadata, raw: &EventContent) -> IncomingMessage {
+        let kind = &metadata.event_type;
         let level = if kind.ends_with(".failed") || kind.ends_with("_failed") {
             "critical"
         } else if kind.ends_with(".succeeded") {
@@ -105,11 +136,13 @@ impl StripeEvent {
         let content = if matches!(self, Self::Thin(_)) {
             format!(
                 "Stripe event {} (thin notification; details not fetched): {}",
-                text(&data.payload, &["id"]),
-                summary(data)
+                raw.as_json()
+                    .map(|value| text(value, &["id"]))
+                    .unwrap_or_default(),
+                raw
             )
         } else {
-            summary(data)
+            raw.to_string()
         };
         // related_object.url may be an API-relative path, not a user-facing link.
         message(

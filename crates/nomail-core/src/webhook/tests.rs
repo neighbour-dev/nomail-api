@@ -60,3 +60,58 @@ fn normalized_levels_are_stable() {
         assert_eq!(MessageLevel::from_label(label), expected);
     }
 }
+
+#[test]
+fn readable_content_has_explicit_format_and_is_serializable() {
+    let contents = [
+        EventContent::Json(serde_json::json!({"text":"你好","unknown":[1,2]})),
+        EventContent::Text(" untouched text\n".into()),
+        EventContent::Form(vec![
+            ("command".into(), "/notify".into()),
+            ("tag".into(), "a".into()),
+            ("tag".into(), "b".into()),
+        ]),
+    ];
+    for content in contents {
+        let encoded = serde_json::to_value(&content).unwrap();
+        let decoded: EventContent = serde_json::from_value(encoded).unwrap();
+        assert_eq!(decoded, content);
+        assert_eq!(decoded.to_readable_string(), content.to_readable_string());
+    }
+    let json = EventContent::Json(serde_json::json!({"text":"你好"}));
+    assert!(json.to_readable_string().contains("你好"));
+    assert_eq!(json.media_type(), "application/json");
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&json.to_readable_string()).unwrap(),
+        *json.as_json().unwrap()
+    );
+}
+
+#[test]
+fn event_envelope_roundtrips_without_losing_unknown_content() {
+    let h = headers(&[
+        ("X-GitHub-Event", "issues"),
+        ("X-GitHub-Delivery", "delivery-1"),
+    ]);
+    let parsed = event(
+        receive_with(
+            Provider::Github,
+            Authentication::None,
+            &h,
+            br#"{"action":"opened","issue":{"title":"Issue"},"unknown":{"keep":true}}"#,
+        )
+        .unwrap(),
+    );
+    let before = parsed.clone();
+    let message = parsed.to_message();
+    assert_eq!(parsed, before);
+    let decoded: PlatformEvent =
+        serde_json::from_str(&serde_json::to_string(&parsed).unwrap()).unwrap();
+    assert_eq!(decoded, parsed);
+    assert_eq!(decoded.to_message(), message);
+    assert_eq!(
+        decoded.metadata.deduplication_key.as_ref().unwrap().value,
+        "delivery-1"
+    );
+    assert_eq!(decoded.raw.as_json().unwrap()["unknown"]["keep"], true);
+}

@@ -9,7 +9,7 @@ pub mod stripe;
 pub mod telegram;
 
 pub use feishu::FeishuEvent;
-pub use generic::{GenericDefaults, GenericEvent, GenericPayload};
+pub use generic::{GenericEvent, GenericJsonEvent, GenericTextEvent};
 pub use github::GithubEvent;
 pub use gitlab::GitlabEvent;
 pub use shopify::ShopifyEvent;
@@ -17,12 +17,12 @@ pub use slack::SlackEvent;
 pub use stripe::StripeEvent;
 pub use telegram::TelegramEvent;
 
-use super::{EventMetadata, IncomingMessage};
+use super::{EventContent, EventMetadata, IncomingMessage, Provider};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "provider", content = "event", rename_all = "lowercase")]
-pub enum PlatformEvent {
+pub enum PlatformData {
     Generic(GenericEvent),
     Github(GithubEvent),
     Gitlab(GitlabEvent),
@@ -33,32 +33,45 @@ pub enum PlatformEvent {
     Shopify(ShopifyEvent),
 }
 
+/// A received business event: common processing information, platform semantics,
+/// and complete decoded content. It contains neither HTTP headers nor wire bytes.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PlatformEvent {
+    pub metadata: EventMetadata,
+    pub data: PlatformData,
+    pub raw: EventContent,
+}
+
 impl PlatformEvent {
     pub fn metadata(&self) -> &EventMetadata {
-        match self {
-            Self::Generic(event) => event.metadata(),
-            Self::Github(event) => event.metadata(),
-            Self::Gitlab(event) => event.metadata(),
-            Self::Stripe(event) => event.metadata(),
-            Self::Slack(event) => event.metadata(),
-            Self::Feishu(event) => event.metadata(),
-            Self::Telegram(event) => event.metadata(),
-            Self::Shopify(event) => event.metadata(),
+        &self.metadata
+    }
+
+    pub const fn provider(&self) -> Provider {
+        match &self.data {
+            PlatformData::Generic(_) => Provider::Generic,
+            PlatformData::Github(_) => Provider::Github,
+            PlatformData::Gitlab(_) => Provider::Gitlab,
+            PlatformData::Stripe(_) => Provider::Stripe,
+            PlatformData::Slack(_) => Provider::Slack,
+            PlatformData::Feishu(_) => Provider::Feishu,
+            PlatformData::Telegram(_) => Provider::Telegram,
+            PlatformData::Shopify(_) => Provider::Shopify,
         }
     }
 
     /// Apply built-in inbox mappings without network or storage access.
     /// Database limits, retention, IDs and tenant ownership are not mapping concerns.
     pub fn to_message(&self) -> IncomingMessage {
-        match self {
-            Self::Generic(event) => event.to_message(),
-            Self::Github(event) => event.to_message(),
-            Self::Gitlab(event) => event.to_message(),
-            Self::Stripe(event) => event.to_message(),
-            Self::Slack(event) => event.to_message(),
-            Self::Feishu(event) => event.to_message(),
-            Self::Telegram(event) => event.to_message(),
-            Self::Shopify(event) => event.to_message(),
+        match &self.data {
+            PlatformData::Generic(event) => event.to_message(&self.metadata, &self.raw),
+            PlatformData::Github(event) => event.to_message(&self.metadata, &self.raw),
+            PlatformData::Gitlab(event) => event.to_message(&self.metadata, &self.raw),
+            PlatformData::Stripe(event) => event.to_message(&self.metadata, &self.raw),
+            PlatformData::Slack(event) => event.to_message(&self.metadata, &self.raw),
+            PlatformData::Feishu(event) => event.to_message(&self.metadata, &self.raw),
+            PlatformData::Telegram(event) => event.to_message(&self.metadata, &self.raw),
+            PlatformData::Shopify(event) => event.to_message(&self.metadata, &self.raw),
         }
     }
 }

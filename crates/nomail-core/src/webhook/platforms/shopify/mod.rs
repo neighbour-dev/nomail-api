@@ -2,18 +2,18 @@
 #[cfg(test)]
 mod tests;
 use crate::webhook::{
-    Authentication, EventMetadata, IncomingMessage, PlatformEvent, PlatformPayload, ReceiveOutcome,
-    WebhookConfig, WebhookError, WebhookRequest, crypto, support::*,
+    Authentication, EventContent, EventMetadata, IncomingMessage, PlatformData, PlatformEvent,
+    ReceiveOutcome, WebhookConfig, WebhookError, WebhookRequest, crypto, support::*,
 };
 use base64::{Engine, engine::general_purpose::STANDARD};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ShopifyEvent {
-    pub data: PlatformPayload,
     pub shop_domain: String,
     /// An operation identifier is distinct from the delivery deduplication key.
     pub operation_id: Option<String>,
+    pub resource_id: Option<String>,
 }
 
 pub(in crate::webhook) fn receive(
@@ -40,33 +40,33 @@ pub(in crate::webhook) fn receive(
         "missing Shopify shop domain",
     )?;
     let version = optional(request.header("x-shopify-api-version"));
-    Ok(ReceiveOutcome::Event(PlatformEvent::Shopify(
-        ShopifyEvent {
-            data: data(
-                payload,
-                topic,
-                version,
-                &format!("shopify:{shop_domain}:delivery"),
-                request.header("x-shopify-webhook-id").into(),
-            ),
-            shop_domain,
-            operation_id: optional(request.header("x-shopify-event-id")),
-        },
-    )))
+    let event = ShopifyEvent {
+        resource_id: optional(text(&payload, &["id"])),
+        shop_domain: shop_domain.clone(),
+        operation_id: optional(request.header("x-shopify-event-id")),
+    };
+    Ok(PlatformEvent {
+        metadata: metadata(
+            topic,
+            version,
+            &format!("shopify:{shop_domain}:delivery"),
+            request.header("x-shopify-webhook-id").into(),
+        ),
+        data: PlatformData::Shopify(event),
+        raw: EventContent::Json(payload),
+    }
+    .into())
 }
 
 impl ShopifyEvent {
-    pub fn metadata(&self) -> &EventMetadata {
-        &self.data.metadata
-    }
-
-    pub fn to_message(&self) -> IncomingMessage {
+    pub fn to_message(&self, metadata: &EventMetadata, raw: &EventContent) -> IncomingMessage {
+        let payload = raw.as_json().unwrap_or(&serde_json::Value::Null);
         message(
-            format!("Shopify {}", self.data.metadata.event_type),
+            format!("Shopify {}", metadata.event_type),
             first(&[
-                text(&self.data.payload, &["title"]),
-                text(&self.data.payload, &["name"]),
-                summary(&self.data),
+                text(payload, &["title"]),
+                text(payload, &["name"]),
+                raw.to_string(),
             ]),
             self.shop_domain.clone(),
             "normal",

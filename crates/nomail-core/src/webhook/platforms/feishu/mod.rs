@@ -2,8 +2,8 @@
 #[cfg(test)]
 mod tests;
 use crate::webhook::{
-    Authentication, EventMetadata, IncomingMessage, PlatformEvent, PlatformPayload, ReceiveOutcome,
-    WebhookConfig, WebhookError, WebhookRequest, crypto, support::*,
+    Authentication, EventContent, EventMetadata, IncomingMessage, PlatformData, PlatformEvent,
+    ReceiveOutcome, WebhookConfig, WebhookError, WebhookRequest, crypto, support::*,
 };
 use aes::cipher::{BlockDecryptMut, KeyIvInit, block_padding::Pkcs7};
 use base64::{Engine, engine::general_purpose::STANDARD};
@@ -13,8 +13,28 @@ use sha2::{Digest, Sha256};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum FeishuEvent {
-    V2(PlatformPayload),
-    Legacy(PlatformPayload),
+    V2(FeishuV2Event),
+    Legacy(FeishuLegacyEvent),
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct FeishuV2Event {
+    pub app_id: Option<String>,
+    pub tenant_key: Option<String>,
+    pub message: Option<FeishuMessage>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct FeishuMessage {
+    pub message_id: Option<String>,
+    pub message_type: Option<String>,
+    /// Feishu's original content string; text messages contain nested JSON here.
+    pub content: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct FeishuLegacyEvent {
+    pub uuid: Option<String>,
 }
 
 pub(in crate::webhook) fn receive(
@@ -85,19 +105,30 @@ pub(in crate::webhook) fn receive(
         text(&payload, &["header", "event_id"]),
         text(&payload, &["uuid"]),
     ]);
-    let data = data(
-        payload,
-        event_type,
-        optional(schema.clone()),
-        "feishu:event",
-        id,
-    );
     let event = match schema.as_str() {
-        "2.0" => FeishuEvent::V2(data),
-        "" => FeishuEvent::Legacy(data),
+        "2.0" => FeishuEvent::V2(FeishuV2Event {
+            app_id: optional(text(&payload, &["header", "app_id"])),
+            tenant_key: optional(text(&payload, &["header", "tenant_key"])),
+            message: payload["event"]
+                .get("message")
+                .filter(|value| value.is_object())
+                .map(|value| FeishuMessage {
+                    message_id: optional(text(value, &["message_id"])),
+                    message_type: optional(text(value, &["message_type"])),
+                    content: optional(text(value, &["content"])),
+                }),
+        }),
+        "" => FeishuEvent::Legacy(FeishuLegacyEvent {
+            uuid: optional(text(&payload, &["uuid"])),
+        }),
         _ => return Err(WebhookError::Unsupported("unsupported Feishu schema")),
     };
-    Ok(ReceiveOutcome::Event(PlatformEvent::Feishu(event)))
+    Ok(PlatformEvent {
+        metadata: metadata(event_type, optional(schema), "feishu:event", id),
+        data: PlatformData::Feishu(event),
+        raw: EventContent::Json(payload),
+    }
+    .into())
 }
 
 fn decode(body: &[u8], encrypt_key: Option<&str>) -> Result<Value, WebhookError> {
@@ -158,21 +189,19 @@ fn first_header<'a>(request: &'a WebhookRequest<'_>, name: &str, alternate: &str
 }
 
 impl FeishuEvent {
-    fn data(&self) -> &PlatformPayload {
-        match self {
-            Self::V2(data) | Self::Legacy(data) => data,
-        }
-    }
-
-    pub fn metadata(&self) -> &EventMetadata {
-        &self.data().metadata
-    }
-
-    pub fn to_message(&self) -> IncomingMessage {
-        let data = self.data();
-        let p = &data.payload;
-        let raw_content = text(p, &["event", "message", "content"]);
-        let content = if text(p, &["event", "message", "message_type"]) == "text" {
+    pub fn to_message(&self, metadata: &EventMetadata, raw: &EventContent) -> IncomingMessage {
+        let p = raw.as_json().unwrap_or(&Value::Null);
+        let message_fields = match self {
+            Self::V2(event) => event.message.as_ref(),
+            Self::Legacy(_) => None,
+        };
+        let raw_content = message_fields
+            .and_then(|message| message.content.clone())
+            .unwrap_or_else(|| text(p, &["event", "message", "content"]));
+        let message_type = message_fields
+            .and_then(|message| message.message_type.clone())
+            .unwrap_or_else(|| text(p, &["event", "message", "message_type"]));
+        let content = if message_type == "text" {
             serde_json::from_str::<Value>(&raw_content)
                 .ok()
                 .map(|value| text(&value, &["text"]))
@@ -182,7 +211,7 @@ impl FeishuEvent {
             raw_content
         };
         message(
-            first(&[text(p, &["title"]), data.metadata.event_type.clone()]),
+            first(&[text(p, &["title"]), metadata.event_type.clone()]),
             first(&[
                 text(p, &["content"]),
                 content,

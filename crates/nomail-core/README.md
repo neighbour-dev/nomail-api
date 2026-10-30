@@ -15,7 +15,7 @@ src/webhook/
 ├── tests.rs               # 跨平台公共契约测试
 ├── test_support.rs        # 共用测试工具，不放平台样例
 └── platforms/
-    ├── mod.rs             # PlatformEvent、类型重导出、方法转发
+    ├── mod.rs             # PlatformEvent 信封、PlatformData 枚举、映射分发
     ├── generic/
     ├── github/
     │   ├── mod.rs         # GitHub 事件类型、验签、解析、内置映射
@@ -30,7 +30,30 @@ src/webhook/
 
 每个平台目录均包含 `mod.rs` 和 `tests.rs`，修改一个平台只需进入对应目录。认证策略校验由平台自己负责；外层 `Authentication` 仅保留现有配置枚举，不集中实现各平台认证。没有 Parser trait，也不要求各平台采用相同的内部流程。
 
-平台事件自身提供 `metadata()` 与 `to_message()`；`PlatformEvent` 的同名方法仅转发，不包含平台业务规则。原有 `nomail_core::webhook::GithubEvent` 等公开路径继续可用，也可按 `nomail_core::webhook::platforms::github::GithubEvent` 定位。
+`PlatformEvent` 是统一事件信封，`PlatformData` 枚举承载平台专有模型。平台模型的 `to_message(metadata, raw)` 执行本平台内置映射，外部直接使用 `event.to_message()`。`nomail_core::webhook::GithubEvent` 等公开路径仍可用，也可按 `nomail_core::webhook::platforms::github::GithubEvent` 定位。
+
+## 事件模型与可读原始内容
+
+```text
+WebhookRequest（签名用的原始字节）+ 可信配置
+  → 验证、解密、解码、平台解析
+  → ReceiveOutcome
+      ├── Event(Box<PlatformEvent>)
+      │     ├── metadata：事件类型、版本、带作用域的去重标识
+      │     ├── data：PlatformData，各平台有意义的专有字段
+      │     └── raw：EventContent，人类可读的平台完整原始内容
+      │           → to_message() → IncomingMessage
+      ├── Respond：验证 / Ping
+      └── Ignored：无需生成业务事件
+```
+
+`raw` 的“原始”指未经消息映射的平台业务内容，不是 HTTP Body 字节：GitHub 表单取解码后的 `payload` JSON；飞书取解密后的事件 JSON；Slack 交互取内层 JSON，Slash Command 保留已解码表单字段；普通文本保留 UTF-8 文本（包含原来的空白）。`EventContent` 显式区分 `Json`、`Text`、`Form`，未知字段留在 raw，不随平台模型裁剪。
+
+`raw.to_readable_string()` 对 JSON 格式化显示，对表单逐行展示已解码字段；`media_type()` 描述该可读表示。解析会改变 JSON 空白、字段顺序、表单编码等，**raw 不能用于重新验签或精确 HTTP 回放**。签名仍只使用 `WebhookRequest.body`。Core 不保留整套 HTTP 头或密文字节，不实现传输报文归档。
+
+平台模型只提取已支持的关键语义：例如 GitHub 的仓库和 action、Stripe 的资源引用、飞书的消息类型、Slack 的交互 action、Telegram 的聊天和消息标识。它不是另一份完整 JSON 副本。完整结构在 raw；映射可同时使用语义模型与 raw，不隐式调用外部 API。
+
+Generic 明确是 **NoMail 自定义协议**，不是任意平台自动识别器。`GenericEvent::Json` 表达 JSON 字段，`GenericEvent::Text` 表达 `X-NoMail-*` 请求头输入；没有 `GenericDefaults`。JSON 分支不继承文本分支的请求头。非 UTF-8 文本现在显式拒绝，不用有损替换伪装成可读原文。
 
 ## 使用
 
@@ -51,7 +74,8 @@ match receive(&config, &WebhookRequest { headers: &headers, body })? {
         assert_eq!(message.title, "Backup");
         let key = &event.metadata().deduplication_key;
         // 适配层用 message + key 原子入库，成功后再返回平台要求的 ACK。
-        // event 保留平台 Payload，便于详情展示或后续自定义映射。
+        assert_eq!(event.raw.as_json().unwrap()["id"], "evt-1");
+        // event.data 用于平台展示/交互，event.raw 保留可读完整内容。
     }
     ReceiveOutcome::Respond(response) => {
         // 验证/Ping 等控制请求；转换 status、content_type、body 后直接返回。
@@ -64,7 +88,7 @@ match receive(&config, &WebhookRequest { headers: &headers, body })? {
 # Ok::<(), nomail_core::webhook::WebhookError>(())
 ```
 
-`receive()` 是安全接入入口，将配置对应的认证、必要的解密/解码和解析放在同一流程中，避免调用方忘记验签。输出业务请求时是 `ReceiveOutcome::Event(PlatformEvent)`；控制请求不伪装成消息。
+`receive()` 是安全接入入口，将配置对应的认证、必要的解密/解码和解析放在同一流程中，避免调用方忘记验签。输出业务请求时是 `ReceiveOutcome::Event(Box<PlatformEvent>)`（Box 避免放大控制结果的枚举大小）；控制请求不伪装成消息。
 
 `to_message()` 采用 Rust 命名规范，对应概念上的 `toMessage`。它是纯函数，使用内置规则生成 `IncomingMessage`，不生成数据库主键、不设置用户/租户、不执行保留策略、不调用外部 API。平台原始事件与收件箱消息是两种不同模型。
 
@@ -72,7 +96,7 @@ match receive(&config, &WebhookRequest { headers: &headers, body })? {
 
 | 平台 | 接收能力 | 内置映射 |
 |---|---|---|
-| Generic | HMAC-SHA256 或显式无认证；JSON/文本 | title/content/message/body、消息级别、文本请求头默认值 |
+| Generic | HMAC-SHA256 或显式无认证；JSON/UTF-8 文本 | JSON 字段与文本请求头分别建模，再映射消息 |
 | GitHub | 原始 JSON/表单 Body HMAC；事件头；Ping | Issues、PR、评论、Push、Workflow Run 摘要 |
 | GitLab | 固定 Token 或 Standard Webhooks 签名；轮换签名；时间窗口 | MR/评论摘要；自定义模板保留并使用 JSON 回退 |
 | Stripe | 原始 Body + 时间戳签名；多个 v1 签名；Snapshot/Thin | 事件摘要；Thin 明确标记未获取详情 |
@@ -81,7 +105,7 @@ match receive(&config, &WebhookRequest { headers: &headers, body })? {
 | Telegram | 固定 Secret Token；Update 类型分流 | 文本、caption、按钮 data，非文本使用 JSON 回退 |
 | Shopify | Base64 HMAC；主题、API 版本、店铺、投递与事件 ID | title/name 摘要，裁剪字段使用 JSON 回退 |
 
-事件结构采用平台专属类型和必要的子类型（例如 `StripeEvent::Snapshot/Thin`、`SlackEvent::EventsApi/Interaction/SlashCommand`），Payload 保留 `serde_json::Value`。**当前实现的是协议信封和内置映射，不是所有上游事件的完整强类型 Schema。** 未知字段不会丢失；未知普通事件一般使用 JSON 摘要。版本保留在元数据中，并不表示已验证所有 API 版本的字段兼容性。
+事件结构采用平台专属类型和必要的子类型（例如 `StripeEvent::Snapshot/Thin`、`SlackEvent::EventsApi/Interaction/SlashCommand`），完整 JSON 保留在 `raw: EventContent::Json`。**当前只建模已支持的关键字段，不是所有上游事件的完整强类型 Schema。** 未知字段不会丢失；未知普通事件一般使用 raw 摘要。版本保留在元数据中，并不表示已验证所有 API 版本的字段兼容性。
 
 GitLab 自定义模板、Shopify 字段裁剪不要求完整资源。Stripe Thin 不会隐式补充查询；如果以后需要详情，应在适配层提供显式的异步补全步骤。交互请求只聚合为通知，不实现 Slack/Telegram 的完整交互机器人流程。
 
@@ -93,7 +117,7 @@ GitLab 自定义模板、Shopify 字段裁剪不要求完整资源。Stripe Thin
 - `WebhookConfig::now` 由调用方传入 Unix 秒；时间戳签名默认允许前后 300 秒，处理 GitLab、Stripe、Slack 和普通飞书签名事件。可调整 `timestamp_tolerance`，调用方必须使用可信时钟。
 - 飞书将 Verification Token 和 Encrypt Key 分开配置。普通事件配置 Encrypt Key 时必须有签名，并在解密前验证原始外层 Body；URL 验证走单独 Token 流程，可接收加密包装。没有普通签名的加密请求仅为识别和认证 URL 验证而解密，不可据此接受普通事件。
 - `HeaderLookup` 实现必须不区分请求头大小写，并保留重复头。提供的 `Vec<(String, String)>` 实现满足要求；轮换签名不会因覆盖同名项丢失。
-- 接收层应限制 Body 大小、请求频率、处理时长；映射输出可能包含敏感 Payload，不应无条件写日志。
+- 接收层应限制 Body 大小、请求频率、处理时长；raw 可能包含个人信息、平台 Token、临时响应地址等敏感字段，必须受访问控制和保留策略保护，不应无条件写日志或把整个事件公开给 App。可读并不意味着可公开。
 - `EventMetadata` 的去重键包含 scope/value，数据库必须再增加用户/租户及端点作用域。Telegram 端点必须绑定固定 Bot 身份；切换 Bot 时需更换端点或在存储作用域中加入 Bot 身份。
 - 没有可靠事件/投递 ID 时去重键是 `None`，不使用资源 ID 冒充事件 ID，也不自动哈希 Body。Slack Interaction/Slash Command 暂不提供推测的去重键。
 - Shopify 的操作 ID 与投递 ID 分开保留。当前去重选择投递 ID，业务是否合并同一操作由后续用例决定。

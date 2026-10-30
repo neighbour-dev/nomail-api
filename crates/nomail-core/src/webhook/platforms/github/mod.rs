@@ -2,7 +2,7 @@
 #[cfg(test)]
 mod tests;
 use crate::webhook::{
-    Authentication, EventMetadata, IncomingMessage, PlatformEvent, PlatformPayload,
+    Authentication, EventContent, EventMetadata, IncomingMessage, PlatformData, PlatformEvent,
     ProtocolResponse, ReceiveOutcome, WebhookConfig, WebhookError, WebhookRequest, crypto,
     support::*,
 };
@@ -11,8 +11,15 @@ use serde_json::Value;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct GithubEvent {
-    pub data: PlatformPayload,
     pub action: Option<String>,
+    pub repository: Option<GithubRepository>,
+    pub sender_login: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct GithubRepository {
+    pub full_name: Option<String>,
+    pub html_url: Option<String>,
 }
 
 pub(in crate::webhook) fn receive(
@@ -47,30 +54,43 @@ pub(in crate::webhook) fn receive(
             body: b"pong".to_vec(),
         }));
     }
-    Ok(ReceiveOutcome::Event(PlatformEvent::Github(GithubEvent {
+    let event = GithubEvent {
         action: optional(text(&payload, &["action"])),
-        data: data(
-            payload,
+        repository: payload
+            .get("repository")
+            .filter(|value| value.is_object())
+            .map(|value| GithubRepository {
+                full_name: optional(text(value, &["full_name"])),
+                html_url: optional(text(value, &["html_url"])),
+            }),
+        sender_login: optional(text(&payload, &["sender", "login"])),
+    };
+    Ok(PlatformEvent {
+        metadata: metadata(
             event_type,
             None,
             "github:delivery",
             request.header("x-github-delivery").into(),
         ),
-    })))
+        data: PlatformData::Github(event),
+        raw: EventContent::Json(payload),
+    }
+    .into())
 }
 
 impl GithubEvent {
-    pub fn metadata(&self) -> &EventMetadata {
-        &self.data.metadata
-    }
-
-    pub fn to_message(&self) -> IncomingMessage {
-        let p = &self.data.payload;
-        let kind = self.data.metadata.event_type.as_str();
+    pub fn to_message(&self, metadata: &EventMetadata, raw: &EventContent) -> IncomingMessage {
+        let p = raw.as_json().unwrap_or(&Value::Null);
+        let kind = metadata.event_type.as_str();
+        let repository = self
+            .repository
+            .as_ref()
+            .and_then(|repo| repo.full_name.as_deref())
+            .unwrap_or("");
         let mut title = format!("GitHub {kind}");
         for part in [
             self.action.clone().unwrap_or_default(),
-            text(p, &["repository", "full_name"]),
+            repository.to_owned(),
         ] {
             if !part.is_empty() {
                 title.push_str(&format!(": {part}"));
@@ -104,14 +124,20 @@ impl GithubEvent {
         };
         message(
             title,
-            first(&[content, summary(&self.data)]),
+            first(&[content, raw.to_string()]),
             first(&[
-                text(p, &["repository", "full_name"]),
-                text(p, &["sender", "login"]),
+                repository.to_owned(),
+                self.sender_login.clone().unwrap_or_default(),
                 "github".into(),
             ]),
             level,
-            first(&[url, text(p, &["repository", "html_url"])]),
+            first(&[
+                url,
+                self.repository
+                    .as_ref()
+                    .and_then(|repo| repo.html_url.clone())
+                    .unwrap_or_default(),
+            ]),
         )
     }
 }

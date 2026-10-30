@@ -1,32 +1,39 @@
-//! Generic webhook authentication, payload model and built-in inbox mapping.
+//! NoMail's custom Generic protocol. JSON fields and text header fields are inputs,
+//! not defaults shared with other platforms.
 #[cfg(test)]
 mod tests;
 use crate::webhook::{
-    Authentication, EventMetadata, IncomingMessage, PlatformEvent, ReceiveOutcome, WebhookConfig,
-    WebhookError, WebhookRequest, crypto, support::*,
+    Authentication, EventContent, EventMetadata, IncomingMessage, PlatformData, PlatformEvent,
+    ReceiveOutcome, WebhookConfig, WebhookError, WebhookRequest, crypto, support::*,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct GenericEvent {
-    pub metadata: EventMetadata,
-    pub payload: GenericPayload,
-    pub defaults: GenericDefaults,
+pub enum GenericEvent {
+    Json(GenericJsonEvent),
+    Text(GenericTextEvent),
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct GenericDefaults {
-    pub title: String,
-    pub source: String,
-    pub level: String,
-    pub url: String,
-}
-
+/// Fields explicitly supported by the NoMail JSON protocol. Unknown fields stay in raw.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub enum GenericPayload {
-    Json(Value),
-    Text(String),
+pub struct GenericJsonEvent {
+    pub title: Option<String>,
+    pub content: Option<String>,
+    pub message: Option<String>,
+    pub body: Option<String>,
+    pub source: Option<String>,
+    pub level: Option<String>,
+    pub url: Option<String>,
+}
+
+/// Inputs supplied through X-NoMail-* headers for a plain-text request.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct GenericTextEvent {
+    pub title: Option<String>,
+    pub source: Option<String>,
+    pub level: Option<String>,
+    pub url: Option<String>,
 }
 
 pub(in crate::webhook) fn receive(
@@ -40,73 +47,86 @@ pub(in crate::webhook) fn receive(
         }
         _ => return Err(invalid_auth()),
     }
-    let payload = match serde_json::from_slice::<Value>(request.body) {
-        Ok(value) if value.is_object() || value.is_null() => GenericPayload::Json(value),
+    let (raw, data, id, event_type) = match serde_json::from_slice::<Value>(request.body) {
+        Ok(p) if p.is_object() || p.is_null() => {
+            let fields = GenericJsonEvent {
+                title: optional(text(&p, &["title"])),
+                content: optional(text(&p, &["content"])),
+                message: optional(text(&p, &["message"])),
+                body: optional(text(&p, &["body"])),
+                source: optional(text(&p, &["source"])),
+                level: optional(text(&p, &["level"])),
+                url: optional(text(&p, &["url"])),
+            };
+            let id = first(&[
+                request.header("x-nomail-idempotency-key").into(),
+                text(&p, &["id"]),
+                text(&p, &["eventId"]),
+            ]);
+            let event_type = first(&[text(&p, &["eventType"]), text(&p, &["type"])]);
+            (
+                EventContent::Json(p),
+                GenericEvent::Json(fields),
+                id,
+                event_type,
+            )
+        }
         _ => {
-            let text = String::from_utf8_lossy(request.body).trim().to_owned();
-            if text.is_empty() {
+            let body = std::str::from_utf8(request.body)
+                .map_err(|_| WebhookError::InvalidPayload("Generic text payload must be UTF-8"))?;
+            if body.trim().is_empty() {
                 return Err(WebhookError::InvalidPayload("empty payload"));
             }
-            GenericPayload::Text(text)
+            let fields = GenericTextEvent {
+                title: optional(request.header("x-nomail-title")),
+                source: optional(request.header("x-nomail-source")),
+                level: optional(request.header("x-nomail-level")),
+                url: optional(request.header("x-nomail-url")),
+            };
+            (
+                EventContent::Text(body.to_owned()),
+                GenericEvent::Text(fields),
+                request.header("x-nomail-idempotency-key").into(),
+                String::new(),
+            )
         }
     };
-    let (id, event_type) = match &payload {
-        GenericPayload::Json(value) => (
-            first(&[
-                request.header("x-nomail-idempotency-key").into(),
-                text(value, &["id"]),
-                text(value, &["eventId"]),
-            ]),
-            first(&[text(value, &["eventType"]), text(value, &["type"])]),
-        ),
-        GenericPayload::Text(_) => (
-            request.header("x-nomail-idempotency-key").into(),
-            String::new(),
-        ),
-    };
-    Ok(ReceiveOutcome::Event(PlatformEvent::Generic(
-        GenericEvent {
-            metadata: data(Value::Null, event_type, None, "generic:event", id).metadata,
-            payload,
-            defaults: GenericDefaults {
-                title: request.header("x-nomail-title").into(),
-                source: request.header("x-nomail-source").into(),
-                level: request.header("x-nomail-level").into(),
-                url: request.header("x-nomail-url").into(),
-            },
-        },
-    )))
+    Ok(PlatformEvent {
+        metadata: metadata(event_type, None, "generic:event", id),
+        data: PlatformData::Generic(data),
+        raw,
+    }
+    .into())
 }
 
 impl GenericEvent {
-    pub fn metadata(&self) -> &EventMetadata {
-        &self.metadata
-    }
-
-    pub fn to_message(&self) -> IncomingMessage {
-        match &self.payload {
-            GenericPayload::Text(content) => message(
-                first(&[self.defaults.title.clone(), "Webhook notification".into()]),
-                content.clone(),
-                self.defaults.source.clone(),
-                &self.defaults.level,
-                self.defaults.url.clone(),
+    pub fn to_message(&self, metadata: &EventMetadata, raw: &EventContent) -> IncomingMessage {
+        match self {
+            Self::Text(fields) => message(
+                fields
+                    .title
+                    .clone()
+                    .unwrap_or_else(|| "Webhook notification".into()),
+                raw.as_text().unwrap_or("").trim().to_owned(),
+                fields.source.clone().unwrap_or_default(),
+                fields.level.as_deref().unwrap_or(""),
+                fields.url.clone().unwrap_or_default(),
             ),
-            GenericPayload::Json(payload) => message(
+            Self::Json(fields) => message(
                 first(&[
-                    text(payload, &["title"]),
-                    self.metadata.event_type.clone(),
+                    fields.title.clone().unwrap_or_default(),
+                    metadata.event_type.clone(),
                     "Webhook notification".into(),
                 ]),
                 first(&[
-                    text(payload, &["content"]),
-                    text(payload, &["message"]),
-                    text(payload, &["body"]),
-                    payload.to_string(),
+                    fields.content.clone().unwrap_or_default(),
+                    fields.message.clone().unwrap_or_default(),
+                    fields.body.clone().unwrap_or_default(),
+                    raw.to_string(),
                 ]),
-                text(payload, &["source"]),
-                &text(payload, &["level"]),
-                text(payload, &["url"]),
+                fields.source.clone().unwrap_or_default(),
+                fields.level.as_deref().unwrap_or(""),
+                fields.url.clone().unwrap_or_default(),
             ),
         }
     }

@@ -24,10 +24,19 @@ fn form_signature_covers_original_encoded_body() {
         )
         .unwrap(),
     );
-    let PlatformEvent::Github(github) = &parsed else {
+    let PlatformData::Github(github) = &parsed.data else {
         panic!()
     };
-    assert_eq!(github.to_message(), parsed.to_message());
+    assert_eq!(
+        github.to_message(&parsed.metadata, &parsed.raw),
+        parsed.to_message()
+    );
+    assert_eq!(parsed.raw.as_json(), Some(&payload));
+    assert_eq!(parsed.provider(), Provider::Github);
+    assert_eq!(
+        github.repository.as_ref().unwrap().full_name.as_deref(),
+        Some("owner/repo")
+    );
     assert_eq!(
         parsed.to_message().title,
         "GitHub issues: opened: owner/repo"
@@ -94,7 +103,9 @@ fn event_serialization_preserves_unknown_fields() {
         .unwrap(),
     );
     let encoded = serde_json::to_value(&parsed).unwrap();
-    assert_eq!(encoded["provider"], "github");
+    assert_eq!(encoded["data"]["provider"], "github");
+    assert_eq!(encoded["raw"]["format"], "json");
+    assert_eq!(encoded["raw"]["value"]["unknown"]["preserved"], true);
     let decoded: PlatformEvent = serde_json::from_value(encoded).unwrap();
     assert_eq!(decoded, parsed);
     assert_eq!(decoded.to_message(), parsed.to_message());

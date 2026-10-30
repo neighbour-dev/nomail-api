@@ -2,16 +2,18 @@
 #[cfg(test)]
 mod tests;
 use crate::webhook::{
-    Authentication, EventMetadata, IncomingMessage, PlatformEvent, PlatformPayload, ReceiveOutcome,
-    WebhookConfig, WebhookError, WebhookRequest, crypto, support::*,
+    Authentication, EventContent, EventMetadata, IncomingMessage, PlatformData, PlatformEvent,
+    ReceiveOutcome, WebhookConfig, WebhookError, WebhookRequest, crypto, support::*,
 };
 use base64::{Engine, engine::general_purpose::STANDARD};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct GitlabEvent {
-    pub data: PlatformPayload,
     pub instance: Option<String>,
+    pub object_kind: Option<String>,
+    pub project_path: Option<String>,
+    pub action: Option<String>,
 }
 
 pub(in crate::webhook) fn receive(
@@ -34,10 +36,14 @@ pub(in crate::webhook) fn receive(
         request.header("x-gitlab-event").into(),
         "missing GitLab event type",
     )?;
-    Ok(ReceiveOutcome::Event(PlatformEvent::Gitlab(GitlabEvent {
+    let event = GitlabEvent {
         instance: optional(request.header("x-gitlab-instance")),
-        data: data(
-            payload,
+        object_kind: optional(text(&payload, &["object_kind"])),
+        project_path: optional(text(&payload, &["project", "path_with_namespace"])),
+        action: optional(text(&payload, &["object_attributes", "action"])),
+    };
+    Ok(PlatformEvent {
+        metadata: metadata(
             event_type,
             None,
             "gitlab:message",
@@ -46,7 +52,10 @@ pub(in crate::webhook) fn receive(
                 request.header("idempotency-key").into(),
             ]),
         ),
-    })))
+        data: PlatformData::Gitlab(event),
+        raw: EventContent::Json(payload),
+    }
+    .into())
 }
 
 fn verify_signature(
@@ -92,21 +101,17 @@ fn verify_signature(
 }
 
 impl GitlabEvent {
-    pub fn metadata(&self) -> &EventMetadata {
-        &self.data.metadata
-    }
-
-    pub fn to_message(&self) -> IncomingMessage {
-        let p = &self.data.payload;
+    pub fn to_message(&self, metadata: &EventMetadata, raw: &EventContent) -> IncomingMessage {
+        let p = raw.as_json().unwrap_or(&serde_json::Value::Null);
         message(
-            format!("GitLab {}", self.data.metadata.event_type),
+            format!("GitLab {}", metadata.event_type),
             first(&[
                 text(p, &["object_attributes", "title"]),
                 text(p, &["object_attributes", "note"]),
-                summary(&self.data),
+                raw.to_string(),
             ]),
             first(&[
-                text(p, &["project", "path_with_namespace"]),
+                self.project_path.clone().unwrap_or_default(),
                 "gitlab".into(),
             ]),
             "normal",

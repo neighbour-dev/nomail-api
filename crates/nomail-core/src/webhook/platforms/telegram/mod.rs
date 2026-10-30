@@ -2,14 +2,17 @@
 #[cfg(test)]
 mod tests;
 use crate::webhook::{
-    Authentication, EventMetadata, IncomingMessage, PlatformEvent, PlatformPayload, ReceiveOutcome,
-    WebhookConfig, WebhookError, WebhookRequest, crypto, support::*,
+    Authentication, EventContent, EventMetadata, IncomingMessage, PlatformData, PlatformEvent,
+    ReceiveOutcome, WebhookConfig, WebhookError, WebhookRequest, crypto, support::*,
 };
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TelegramEvent {
-    pub data: PlatformPayload,
+    pub update_id: i64,
+    pub chat_id: Option<i64>,
+    pub message_id: Option<i64>,
+    pub callback_query_id: Option<String>,
 }
 
 pub(in crate::webhook) fn receive(
@@ -39,27 +42,37 @@ pub(in crate::webhook) fn receive(
     if fields.len() != 1 || id < 0 {
         return Err(WebhookError::InvalidPayload("invalid Telegram Update"));
     }
-    Ok(ReceiveOutcome::Event(PlatformEvent::Telegram(
-        TelegramEvent {
-            data: data(
-                payload,
-                fields[0].clone(),
-                None,
-                "telegram:bot-update",
-                id.to_string(),
-            ),
+    let update = &payload[&fields[0]];
+    let callback = fields[0] == "callback_query";
+    let message = if callback { &update["message"] } else { update };
+    let event = TelegramEvent {
+        update_id: id,
+        chat_id: message["chat"]["id"].as_i64(),
+        message_id: message["message_id"].as_i64(),
+        callback_query_id: if callback {
+            optional(text(update, &["id"]))
+        } else {
+            None
         },
-    )))
+    };
+    Ok(PlatformEvent {
+        metadata: metadata(
+            fields[0].clone(),
+            None,
+            "telegram:bot-update",
+            id.to_string(),
+        ),
+        data: PlatformData::Telegram(event),
+        raw: EventContent::Json(payload),
+    }
+    .into())
 }
 
 impl TelegramEvent {
-    pub fn metadata(&self) -> &EventMetadata {
-        &self.data.metadata
-    }
-
-    pub fn to_message(&self) -> IncomingMessage {
-        let kind = &self.data.metadata.event_type;
-        let update = &self.data.payload[kind];
+    pub fn to_message(&self, metadata: &EventMetadata, raw: &EventContent) -> IncomingMessage {
+        let kind = &metadata.event_type;
+        let payload = raw.as_json().unwrap_or(&serde_json::Value::Null);
+        let update = &payload[kind];
         message(
             format!("Telegram {kind}"),
             first(&[

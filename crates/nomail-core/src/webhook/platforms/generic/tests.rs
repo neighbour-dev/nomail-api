@@ -62,5 +62,41 @@ fn signed_json_and_text_mapping() {
         }
     );
     assert!(parsed.metadata().deduplication_key.is_none());
+    assert_eq!(parsed.raw.as_text(), Some(" Backup done "));
+    let PlatformData::Generic(GenericEvent::Text(fields)) = &parsed.data else {
+        panic!()
+    };
+    assert_eq!(fields.title.as_deref(), Some("Backup"));
     assert!(receive_with(Provider::Generic, Authentication::None, &h, b" ").is_err());
+}
+
+#[test]
+fn json_protocol_fields_are_not_text_header_defaults() {
+    let h = headers(&[
+        ("X-NoMail-Title", "header title"),
+        ("X-NoMail-Level", "critical"),
+    ]);
+    let body = br#"{"eventType":"backup","message":"done","unknown":{"retained":true}}"#;
+    let parsed = event(receive_with(Provider::Generic, Authentication::None, &h, body).unwrap());
+    let PlatformData::Generic(GenericEvent::Json(fields)) = &parsed.data else {
+        panic!()
+    };
+    assert_eq!(fields.message.as_deref(), Some("done"));
+    assert!(fields.title.is_none());
+    assert_eq!(parsed.to_message().title, "backup");
+    assert_eq!(parsed.to_message().level, MessageLevel::Normal);
+    assert_eq!(parsed.raw.as_json().unwrap()["unknown"]["retained"], true);
+}
+
+#[test]
+fn unreadable_text_is_rejected_instead_of_silently_corrupted() {
+    assert!(matches!(
+        receive_with(
+            Provider::Generic,
+            Authentication::None,
+            &Vec::new(),
+            &[0xff, 0xfe]
+        ),
+        Err(WebhookError::InvalidPayload(_))
+    ));
 }

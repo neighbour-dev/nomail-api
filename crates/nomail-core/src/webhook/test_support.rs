@@ -32,7 +32,7 @@ pub(super) fn receive_with(
 
 pub(super) fn event(outcome: ReceiveOutcome) -> PlatformEvent {
     match outcome {
-        ReceiveOutcome::Event(event) => event,
+        ReceiveOutcome::Event(event) => *event,
         other => panic!("expected event, got {other:?}"),
     }
 }
