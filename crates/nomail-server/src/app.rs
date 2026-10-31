@@ -135,6 +135,7 @@ mod tests {
         type AuthStore = crate::auth::repository::Store<'static>;
         type MessageStore = crate::message::repository::Store<'static>;
         type ConfigStore = crate::webhook::configs::repository::Store<'static>;
+        type IngestionStore = crate::message::repository::Store<'static>;
         type Runtime = crate::services::Runtime;
         fn services(&self) -> HttpResult<http::EnvironmentServices<Self>> {
             self.service_calls.set(self.service_calls.get() + 1);

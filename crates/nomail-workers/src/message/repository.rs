@@ -8,24 +8,6 @@ use uuid::Uuid;
 
 #[derive(Clone, Copy)]
 pub struct Store<'a>(pub &'a db::Store);
-impl IngestionStore for Store<'_> {
-    async fn receiving_config(&self, key: &str) -> IngestionResult<Option<ReceivingConfig>> {
-        self.0.rows(
-            "SELECT id,user_id,provider,source,encrypted_secret FROM webhook_configs WHERE key=? AND enabled=1 AND deleted_at IS NULL",
-            vec![json!(key)],
-        ).await.map_err(|e| IngestionError::Internal(e.to_string()))?
-            .into_iter().next().map(|row| {
-                let invalid = || IngestionError::Internal("invalid receiving configuration".into());
-                Ok(ReceivingConfig {
-                    id: row["id"].as_i64().ok_or_else(invalid)?,
-                    user_id: row["user_id"].as_i64().ok_or_else(invalid)?,
-                    provider: row["provider"].as_str().ok_or_else(invalid)?.parse().map_err(|_| invalid())?,
-                    source: row["source"].as_str().map(str::to_owned),
-                    encrypted_secret: row["encrypted_secret"].as_str().map(str::to_owned),
-                })
-            }).transpose()
-    }
-}
 const OWNED: &str = "deleted_at IS NULL AND webhook_config_id IN (SELECT id FROM webhook_configs WHERE user_id=? AND deleted_at IS NULL)";
 const DETAIL: &str = "SELECT notify_messages.*, (SELECT name FROM webhook_configs WHERE id=notify_messages.webhook_config_id) AS config_name FROM notify_messages";
 fn storage(error: db::StorageError) -> MessageError {
@@ -268,6 +250,24 @@ impl MessageStore for Store<'_> {
         values.extend([json!(user_id), json!(ids)]);
         let rows=self.0.rows(&format!("UPDATE notify_messages SET {sets} WHERE {OWNED} AND id IN (SELECT value FROM json_each(?)) RETURNING id"),values).await.map_err(storage)?;
         Ok(rows.len() as u64)
+    }
+}
+impl IngestionStore for Store<'_> {
+    async fn receiving_config(&self, key: &str) -> IngestionResult<Option<ReceivingConfig>> {
+        self.0.rows(
+            "SELECT id,user_id,provider,source,encrypted_secret FROM webhook_configs WHERE key=? AND enabled=1 AND deleted_at IS NULL",
+            vec![json!(key)],
+        ).await.map_err(|e| IngestionError::Internal(e.to_string()))?
+            .into_iter().next().map(|row| {
+                let invalid = || IngestionError::Internal("invalid receiving configuration".into());
+                Ok(ReceivingConfig {
+                    id: row["id"].as_i64().ok_or_else(invalid)?,
+                    user_id: row["user_id"].as_i64().ok_or_else(invalid)?,
+                    provider: row["provider"].as_str().ok_or_else(invalid)?.parse().map_err(|_| invalid())?,
+                    source: row["source"].as_str().map(str::to_owned),
+                    encrypted_secret: row["encrypted_secret"].as_str().map(str::to_owned),
+                })
+            }).transpose()
     }
     async fn insert_once(&self, m: &Message) -> MessageResult<InsertOutcome> {
         let key = m.metadata.deduplication_key.as_ref();

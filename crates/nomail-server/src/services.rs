@@ -13,6 +13,7 @@ impl<'a> Environment for NativeEnvironment<'a> {
     type AuthStore = auth::repository::Store<'a>;
     type MessageStore = message::repository::Store<'a>;
     type ConfigStore = webhook::configs::repository::Store<'a>;
+    type IngestionStore = message::repository::Store<'a>;
     type Runtime = Runtime;
 
     fn services(&self) -> HttpResult<EnvironmentServices<Self>> {
@@ -21,6 +22,7 @@ impl<'a> Environment for NativeEnvironment<'a> {
             auth::repository::Store(&state.db),
             message::repository::Store(&state.db),
             webhook::configs::repository::Store(&state.db),
+            message::repository::Store(&state.db),
             Runtime {
                 encryption_key: state.config.encryption_key,
             },

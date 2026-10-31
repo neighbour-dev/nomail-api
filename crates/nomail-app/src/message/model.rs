@@ -1,6 +1,8 @@
-use super::MessageAccepted;
-use crate::webhook::{EventMetadata, PlatformData, Provider};
-use chrono::{DateTime, Utc};
+use super::{DEFAULT_RETENTION_DAYS, MessageAccepted, MessageError, MessageResult};
+use crate::webhook::{
+    EventMetadata, PlatformData, PlatformEvent, Provider, service::apply_inbox_rules,
+};
+use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -44,6 +46,42 @@ pub struct Message {
     #[serde(alias = "expire_at")]
     pub expires_at: Option<DateTime<Utc>>,
     pub read_at: Option<DateTime<Utc>>,
+}
+
+impl Message {
+    /// Construct the complete inbox record without storage or runtime access.
+    /// Receipt identity/time are trusted inputs, never taken from the platform.
+    pub fn from_received_event(
+        config_id: i64,
+        event: PlatformEvent,
+        configured_source: Option<&str>,
+        id: Uuid,
+        received_at: DateTime<Utc>,
+    ) -> MessageResult<Self> {
+        let provider = event.provider();
+        let mut common = event.to_message_content();
+        apply_inbox_rules(&mut common, configured_source, provider);
+        let expires_at = received_at
+            .checked_add_signed(Duration::days(DEFAULT_RETENTION_DAYS))
+            .ok_or_else(|| MessageError::Internal("invalid message expiry".into()))?;
+        Ok(Self {
+            id,
+            webhook_config_id: config_id,
+            common,
+            provider,
+            raw_payload: event.raw.to_readable_string(),
+            content_type: event.raw.media_type().into(),
+            metadata: event.metadata,
+            platform_data: event.data,
+            received_at,
+            updated_at: received_at,
+            deleted_at: None,
+            status: "unread".into(),
+            pinned: false,
+            expires_at: Some(expires_at),
+            read_at: None,
+        })
+    }
 }
 
 /// A coherent detail read, not another business message or ORM entity.

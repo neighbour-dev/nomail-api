@@ -25,6 +25,7 @@ impl<'a> Environment for WorkersEnvironment<'a> {
     type AuthStore = auth::repository::Store<'a>;
     type MessageStore = message::repository::Store<'a>;
     type ConfigStore = webhook::configs::repository::Store<'a>;
+    type IngestionStore = message::repository::Store<'a>;
     type Runtime = Runtime;
 
     fn services(&self) -> HttpResult<EnvironmentServices<Self>> {
@@ -34,6 +35,7 @@ impl<'a> Environment for WorkersEnvironment<'a> {
             auth::repository::Store(db),
             message::repository::Store(db),
             webhook::configs::repository::Store(db),
+            message::repository::Store(db),
             Runtime {
                 encryption_key: config.encryption_key,
             },

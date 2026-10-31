@@ -3,7 +3,7 @@ mod error;
 pub use error::{IngestionError, IngestionResult};
 
 use crate::{
-    message::{Acceptance, MessageService, MessageStore},
+    message::{Acceptance, InsertOutcome, Message, MessageAccepted, MessageError, MessageResult},
     webhook::{
         self, ProtocolResponse, Provider, ReceiveOutcome, WebhookConfig, WebhookRequest, service,
     },
@@ -21,9 +21,13 @@ pub struct ReceivingConfig {
 }
 
 #[allow(async_fn_in_trait)]
-pub trait IngestionStore: MessageStore {
+pub trait IngestionStore {
     /// Only enabled, undeleted configurations are eligible for reception.
     async fn receiving_config(&self, key: &str) -> IngestionResult<Option<ReceivingConfig>>;
+    /// Atomically insert the supplied record once. No state/TTL/default decisions.
+    /// Deduplication includes configuration, scope and full key, survives soft
+    /// deletion, and treats absent keys as independent deliveries.
+    async fn insert_once(&self, message: &Message) -> MessageResult<InsertOutcome>;
 }
 pub trait IngestionRuntime {
     fn now(&self) -> DateTime<Utc>;
@@ -41,7 +45,7 @@ pub enum IngestionOutcome {
 }
 
 pub struct IngestionService<S, R> {
-    pub messages: MessageService<S>,
+    pub store: S,
     pub runtime: R,
 }
 impl<S: IngestionStore, R: IngestionRuntime> IngestionService<S, R> {
@@ -51,7 +55,6 @@ impl<S: IngestionStore, R: IngestionRuntime> IngestionService<S, R> {
         request: &WebhookRequest<'_>,
     ) -> IngestionResult<IngestionOutcome> {
         let config = self
-            .messages
             .store
             .receiving_config(key)
             .await?
@@ -79,19 +82,32 @@ impl<S: IngestionStore, R: IngestionRuntime> IngestionService<S, R> {
             ReceiveOutcome::Respond(response) => Ok(IngestionOutcome::Control(response)),
             ReceiveOutcome::Ignored { .. } => Ok(IngestionOutcome::Ignored),
             ReceiveOutcome::Event(event) => {
-                let acceptance = self
-                    .messages
-                    .accept(
-                        config.id,
-                        *event,
-                        config.source.as_deref(),
-                        self.runtime.message_id(now)?,
-                        now,
-                    )
-                    .await?;
+                let message = Message::from_received_event(
+                    config.id,
+                    *event,
+                    config.source.as_deref(),
+                    self.runtime.message_id(now)?,
+                    now,
+                )?;
+                let outcome = self.store.insert_once(&message).await?;
+                let created_event = match outcome {
+                    InsertOutcome::Duplicate(_) => None,
+                    InsertOutcome::Created(id) if id == message.id => {
+                        Some(MessageAccepted::from(&message))
+                    }
+                    InsertOutcome::Created(_) => {
+                        return Err(MessageError::Internal(
+                            "insert returned an inconsistent message id".into(),
+                        )
+                        .into());
+                    }
+                };
                 Ok(IngestionOutcome::Accepted {
                     user_id: config.user_id,
-                    acceptance,
+                    acceptance: Acceptance {
+                        outcome,
+                        created_event,
+                    },
                 })
             }
         }

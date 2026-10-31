@@ -1,9 +1,6 @@
 use super::*;
-use crate::{
-    pagination::{AffectedResponse, CountResponse, Page},
-    webhook::{PlatformEvent, service::apply_inbox_rules},
-};
-use chrono::{DateTime, Duration, Utc};
+use crate::pagination::{AffectedResponse, CountResponse, Page};
+use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
 pub struct MessageService<S> {
@@ -148,55 +145,6 @@ impl<S: MessageStore> MessageService<S> {
                 .store
                 .mutate_many_owned(user_id, &ids, &mutation)
                 .await?,
-        })
-    }
-    /// After protocol parsing/control handling, create the ONE complete NoMail
-    /// record. Id/time are supplied by the deployment, never read from upstream.
-    pub async fn accept(
-        &self,
-        config_id: i64,
-        event: PlatformEvent,
-        configured_source: Option<&str>,
-        id: Uuid,
-        received_at: DateTime<Utc>,
-    ) -> MessageResult<Acceptance> {
-        let provider = event.provider();
-        let mut common = event.to_message_content();
-        apply_inbox_rules(&mut common, configured_source, provider);
-        let expires_at = received_at
-            .checked_add_signed(Duration::days(DEFAULT_RETENTION_DAYS))
-            .ok_or_else(|| MessageError::Internal("invalid message expiry".into()))?;
-        let message = Message {
-            id,
-            webhook_config_id: config_id,
-            common,
-            provider,
-            raw_payload: event.raw.to_readable_string(),
-            content_type: event.raw.media_type().into(),
-            metadata: event.metadata,
-            platform_data: event.data,
-            received_at,
-            updated_at: received_at,
-            deleted_at: None,
-            status: "unread".into(),
-            pinned: false,
-            expires_at: Some(expires_at),
-            read_at: None,
-        };
-        let outcome = self.store.insert_once(&message).await?;
-        let created_event = if outcome.duplicate() {
-            None
-        } else {
-            if outcome.id() != id {
-                return Err(MessageError::Internal(
-                    "insert returned an inconsistent message id".into(),
-                ));
-            }
-            Some(MessageAccepted::from(&message))
-        };
-        Ok(Acceptance {
-            outcome,
-            created_event,
         })
     }
 }

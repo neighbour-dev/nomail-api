@@ -16,30 +16,6 @@ use uuid::Uuid;
 
 #[derive(Clone, Copy)]
 pub struct Store<'a>(pub &'a DatabaseConnection);
-impl IngestionStore for Store<'_> {
-    async fn receiving_config(&self, key: &str) -> IngestionResult<Option<ReceivingConfig>> {
-        webhook::Entity::find()
-            .filter(webhook::Column::Key.eq(key))
-            .filter(webhook::Column::Enabled.eq(true))
-            .filter(webhook::Column::DeletedAt.is_null())
-            .one(self.0)
-            .await
-            .map_err(|e| IngestionError::Internal(e.to_string()))?
-            .map(|row| {
-                Ok(ReceivingConfig {
-                    id: row.id,
-                    user_id: row.user_id,
-                    provider: row
-                        .provider
-                        .parse()
-                        .map_err(|_| IngestionError::Internal("invalid stored provider".into()))?,
-                    source: row.source,
-                    encrypted_secret: row.encrypted_secret,
-                })
-            })
-            .transpose()
-    }
-}
 fn storage(error: DbErr) -> MessageError {
     if matches!(
         error.sql_err(),
@@ -290,6 +266,30 @@ impl MessageStore for Store<'_> {
             .await
             .map_err(storage)?
             .rows_affected)
+    }
+}
+impl IngestionStore for Store<'_> {
+    async fn receiving_config(&self, key: &str) -> IngestionResult<Option<ReceivingConfig>> {
+        webhook::Entity::find()
+            .filter(webhook::Column::Key.eq(key))
+            .filter(webhook::Column::Enabled.eq(true))
+            .filter(webhook::Column::DeletedAt.is_null())
+            .one(self.0)
+            .await
+            .map_err(|e| IngestionError::Internal(e.to_string()))?
+            .map(|row| {
+                Ok(ReceivingConfig {
+                    id: row.id,
+                    user_id: row.user_id,
+                    provider: row
+                        .provider
+                        .parse()
+                        .map_err(|_| IngestionError::Internal("invalid stored provider".into()))?,
+                    source: row.source,
+                    encrypted_secret: row.encrypted_secret,
+                })
+            })
+            .transpose()
     }
     async fn insert_once(&self, m: &Message) -> MessageResult<InsertOutcome> {
         let key = m.metadata.deduplication_key.as_ref();

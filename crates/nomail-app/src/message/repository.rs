@@ -1,6 +1,5 @@
 use super::{
-    InsertOutcome, Message, MessageListItem, MessageQuery, MessageResult, MessageWithConfig,
-    RawContent, ReadStatus,
+    MessageListItem, MessageQuery, MessageResult, MessageWithConfig, RawContent, ReadStatus,
 };
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
@@ -75,7 +74,4 @@ pub trait MessageStore {
         ids: &[Uuid],
         mutation: &MessageMutation,
     ) -> MessageResult<u64>;
-    /// Encode the complete Message as supplied; no state/TTL/default decisions.
-    /// Unique constraint dedup includes scope and survives message soft deletion.
-    async fn insert_once(&self, message: &Message) -> MessageResult<InsertOutcome>;
 }

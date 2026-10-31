@@ -46,6 +46,10 @@ impl Store {
             config_name: self.configs.borrow()[&m.webhook_config_id].1.clone(),
         }
     }
+    fn seed(&self, config_id: i64, event: PlatformEvent, id: Uuid) {
+        let message = Message::from_received_event(config_id, event, None, id, now()).unwrap();
+        self.rows.borrow_mut().insert(id, message);
+    }
 }
 fn patch(m: &mut Message, p: &StatePatch) {
     if let Some(read) = p.read {
@@ -158,22 +162,6 @@ impl MessageStore for Store {
         }
         Ok(affected)
     }
-    async fn insert_once(&self, m: &Message) -> MessageResult<InsertOutcome> {
-        if let Some(key) = &m.metadata.deduplication_key
-            && let Some(old) = self.rows.borrow().values().find(|old| {
-                old.webhook_config_id == m.webhook_config_id
-                    && old.metadata.deduplication_key.as_ref() == Some(key)
-            })
-        {
-            return Ok(InsertOutcome::Duplicate(old.id));
-        }
-        self.writes.set(self.writes.get() + 1);
-        if self.rows.borrow().contains_key(&m.id) {
-            return Err(MessageError::Conflict("duplicate id"));
-        }
-        self.rows.borrow_mut().insert(m.id, m.clone());
-        Ok(InsertOutcome::Created(m.id))
-    }
 }
 fn now() -> DateTime<Utc> {
     DateTime::from_timestamp(1000, 0).unwrap()
@@ -195,50 +183,64 @@ fn event(id: Option<&str>, level: &str) -> PlatformEvent {
     *event
 }
 
-#[tokio::test]
-async fn complete_message_and_initial_state_have_one_source_and_only_creation_emits_an_event() {
-    let service = MessageService {
-        store: Store::new(),
-    };
+#[test]
+fn received_message_factory_preserves_platform_content_and_sets_inbox_defaults() {
     let raw = event(Some("key"), "high");
     let original = raw.clone();
     let id = Uuid::from_u128(1);
-    let result = service
-        .accept(1, raw, Some("source"), id, now())
-        .await
-        .unwrap();
-    assert!(!result.outcome.duplicate());
-    let created = result.created_event.unwrap();
+    let record = Message::from_received_event(1, raw, Some("source"), id, now()).unwrap();
+    let created = MessageAccepted::from(&record);
     assert_eq!(created.id, id);
     assert_eq!(created.level, MessageLevel::High);
     assert!(!created.pinned);
     assert_eq!(created.status, "unread");
-    let record = service.store.rows.borrow()[&id].clone();
     assert_eq!(record.common.title, "Title");
+    assert_eq!(record.common.source.as_deref(), Some("source"));
+    assert_eq!(record.webhook_config_id, 1);
+    assert_eq!(record.provider, original.provider());
     assert_eq!(record.metadata, original.metadata);
     assert_eq!(record.platform_data, original.data);
     assert_eq!(record.raw_payload, original.raw.to_readable_string());
     assert_eq!(record.received_at, now());
     assert_eq!(record.updated_at, now());
+    assert_eq!(record.content_type, original.raw.media_type());
+    assert!(record.deleted_at.is_none());
+    assert!(record.read_at.is_none());
     assert_eq!(
         record.expires_at,
         Some(now() + Duration::days(DEFAULT_RETENTION_DAYS))
     );
     assert_eq!(created.expires_at, record.expires_at);
-    service
-        .delete(7, id, now() + Duration::seconds(1))
-        .await
-        .unwrap();
-    let duplicate = service
-        .accept(1, original, None, Uuid::from_u128(2), now())
-        .await
-        .unwrap();
-    assert_eq!(duplicate.outcome.id(), id);
-    assert!(duplicate.created_event.is_none());
+}
+
+#[test]
+fn received_message_factory_rejects_an_unrepresentable_expiry() {
+    assert!(matches!(
+        Message::from_received_event(1, event(None, "normal"), None, Uuid::from_u128(1), DateTime::<Utc>::MAX_UTC),
+        Err(MessageError::Internal(message)) if message == "invalid message expiry"
+    ));
+}
+
+#[tokio::test]
+async fn deleting_an_owned_message_hides_it_without_rewriting_its_content() {
+    let service = MessageService {
+        store: Store::new(),
+    };
+    let id = Uuid::from_u128(1);
+    service.store.seed(1, event(Some("key"), "normal"), id);
+    let before = service.store.rows.borrow()[&id].clone();
+    let at = now() + Duration::seconds(1);
+    service.delete(7, id, at).await.unwrap();
     assert!(matches!(
         service.get(7, id).await,
         Err(MessageError::NotFound(_))
     ));
+    let rows = service.store.rows.borrow();
+    assert_eq!(rows[&id].deleted_at, Some(at));
+    assert_eq!(rows[&id].updated_at, at);
+    assert_eq!(rows[&id].common, before.common);
+    assert_eq!(rows[&id].metadata, before.metadata);
+    assert_eq!(rows[&id].raw_payload, before.raw_payload);
 }
 
 #[tokio::test]
@@ -247,10 +249,7 @@ async fn state_updates_are_sparse_preserve_content_and_use_one_operation_timesta
         store: Store::new(),
     };
     let id = Uuid::from_u128(1);
-    service
-        .accept(1, event(None, "urgent"), None, id, now())
-        .await
-        .unwrap();
+    service.store.seed(1, event(None, "urgent"), id);
     let before = service.store.rows.borrow()[&id].clone();
     let read_time = now() + Duration::seconds(1);
     service
@@ -341,10 +340,7 @@ async fn batch_validation_precedes_writes_and_scope_and_duplicate_semantics_are_
     let b = Uuid::from_u128(2);
     let foreign = Uuid::from_u128(3);
     for (config, id) in [(1, a), (1, b), (2, foreign)] {
-        service
-            .accept(config, event(None, "normal"), None, id, now())
-            .await
-            .unwrap();
+        service.store.seed(config, event(None, "normal"), id);
     }
     let writes = service.store.writes.get();
     for request in [
@@ -424,10 +420,7 @@ async fn expiry_is_not_an_implicit_visibility_filter_and_raw_is_a_separate_view(
     };
     for (index, level) in ["low", "normal", "high", "urgent"].into_iter().enumerate() {
         let id = Uuid::from_u128(index as u128 + 1);
-        service
-            .accept(1, event(None, level), None, id, now())
-            .await
-            .unwrap();
+        service.store.seed(1, event(None, level), id);
         assert_eq!(
             service.store.rows.borrow()[&id].expires_at,
             Some(now() + Duration::days(3))
@@ -477,11 +470,8 @@ async fn expiry_is_not_an_implicit_visibility_filter_and_raw_is_a_separate_view(
     );
 }
 
-#[tokio::test]
-async fn deduplication_keeps_full_keys_scopes_and_null_key_independence() {
-    let service = MessageService {
-        store: Store::new(),
-    };
+#[test]
+fn received_message_factory_preserves_full_deduplication_metadata() {
     let key = "x".repeat(400);
     for (index, scope) in ["first", "second"].into_iter().enumerate() {
         let mut value = event(None, "normal");
@@ -489,23 +479,25 @@ async fn deduplication_keeps_full_keys_scopes_and_null_key_independence() {
             scope: scope.into(),
             value: key.clone(),
         });
-        let accepted = service
-            .accept(1, value, None, Uuid::from_u128(index as u128 + 1), now())
-            .await
-            .unwrap();
-        assert!(!accepted.outcome.duplicate());
+        let message =
+            Message::from_received_event(1, value, None, Uuid::from_u128(index as u128 + 1), now())
+                .unwrap();
+        let stored_key = message.metadata.deduplication_key.unwrap();
+        assert_eq!(stored_key.scope, scope);
+        assert_eq!(stored_key.value, key);
     }
     for id in [3, 4] {
-        assert!(
-            !service
-                .accept(1, event(None, "normal"), None, Uuid::from_u128(id), now())
-                .await
-                .unwrap()
-                .outcome
-                .duplicate()
-        );
+        let message = Message::from_received_event(
+            1,
+            event(None, "normal"),
+            None,
+            Uuid::from_u128(id),
+            now(),
+        )
+        .unwrap();
+        assert!(message.metadata.deduplication_key.is_none());
+        assert_eq!(message.id, Uuid::from_u128(id));
     }
-    assert_eq!(service.store.rows.borrow().len(), 4);
 }
 
 #[test]
