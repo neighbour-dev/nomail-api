@@ -1,10 +1,5 @@
 //! Actix request/response adaptation. All API execution lives in nomail-app::http.
-use crate::{
-    AppState,
-    error::{ApiError, ApiResult},
-    realtime,
-    services::NativeEnvironment,
-};
+use crate::{AppState, error::ApiResult, realtime, services::NativeEnvironment};
 use actix_web::{HttpRequest, HttpResponse, ResponseError, web};
 use futures_util::StreamExt;
 use nomail_app::{
@@ -43,7 +38,7 @@ async fn execute(state: &AppState, req: HttpRequest, payload: web::Payload) -> A
     match outcome.reply {
         HttpReply::Response(response) => {
             let status = actix_web::http::StatusCode::from_u16(response.status)
-                .map_err(ApiError::internal)?;
+                .map_err(|_| ApiFailure::internal())?;
             let mut builder = HttpResponse::build(status);
             for (name, value) in response.headers {
                 builder.insert_header((name, value));

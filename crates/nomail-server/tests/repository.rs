@@ -1,6 +1,48 @@
 use std::path::Path;
 
 #[test]
+fn actix_errors_do_not_escape_the_transport_adapter() {
+    fn check(directory: &Path) {
+        for entry in std::fs::read_dir(directory).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                check(&path);
+            } else if path.extension().is_some_and(|extension| extension == "rs")
+                && !["app.rs", "error.rs", "error_tests.rs"]
+                    .contains(&path.file_name().unwrap().to_str().unwrap())
+            {
+                let source = std::fs::read_to_string(&path).unwrap();
+                for forbidden in ["ApiError", "ApiResult"] {
+                    assert!(
+                        !source.contains(forbidden),
+                        "{} uses HTTP error {forbidden} outside the adapter",
+                        path.display()
+                    );
+                }
+            }
+        }
+    }
+    let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    check(&src);
+    let adapter = std::fs::read_to_string(src.join("error.rs")).unwrap();
+    for forbidden in [
+        "DomainError",
+        "from_domain",
+        "DbErr",
+        "AuthError",
+        "MessageError",
+        "ConfigError",
+        "WebhookError",
+        "IngestionError",
+    ] {
+        assert!(
+            !adapter.contains(forbidden),
+            "Actix adapter maps {forbidden} instead of shared HTTP errors"
+        );
+    }
+}
+
+#[test]
 fn repository_has_no_go_sources_or_build_manifests() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     fn check(directory: &Path) {

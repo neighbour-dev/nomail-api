@@ -45,6 +45,8 @@ Server / Workers → nomail-app → nomail-core
 
 `HttpOutcome` 包含已编码的普通响应或 SSE 订阅指令，以及首次持久化后的实时效果。两端只写响应、建立连接和执行尽力而为的广播，不再出现 Operation 匹配、Endpoint 引用或请求 DTO 解析。`HttpError` 将安全诊断保留到平台最终日志边界，不泄露内部错误文本。
 
+Server 的 `ApiError` 仅包装共享 `HttpError` 并实现 Actix `ResponseError`，不再直接转换业务或数据库错误；状态码和公开消息策略仍由 App HTTP 层统一定义。配置加载返回 `ConfigLoadError`，数据库初始化返回分阶段的 `ConnectError`，账号维护和令牌/密码操作返回认证错误，纯加密工具保留共享工具的错误。启动与工具调用不借用 HTTP 错误；请求内部错误仅在最终响应边界记录一次安全诊断。
+
 ```sh
 cargo test --locked -p nomail-app --all-targets
 cargo test --locked -p nomail-app --features openapi --lib

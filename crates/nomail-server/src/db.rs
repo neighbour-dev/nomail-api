@@ -1,15 +1,45 @@
-use crate::{config::Config, error::ApiError, migration::Migrator};
+use crate::{config::Config, migration::Migrator};
 use sea_orm::{
     ConnectionTrait, DatabaseConnection, DatabaseTransaction, SqlxSqliteConnector, TransactionTrait,
 };
 use sea_orm_migration::MigratorTrait;
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteSynchronous};
-use std::{path::Path, time::Duration};
+use std::{fmt, path::Path, time::Duration};
 
-pub async fn connect(config: &Config) -> Result<DatabaseConnection, ApiError> {
+/// Database startup stages, separate from request-time storage/domain errors.
+pub enum ConnectError {
+    Directory(std::io::Error),
+    Connection(sqlx::Error),
+    Migration(sea_orm::DbErr),
+}
+impl fmt::Display for ConnectError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::Directory(_) => "failed to create database directory",
+            Self::Connection(_) => "failed to connect to database",
+            Self::Migration(_) => "failed to migrate database",
+        })
+    }
+}
+impl fmt::Debug for ConnectError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(self, f)
+    }
+}
+impl std::error::Error for ConnectError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(match self {
+            Self::Directory(error) => error,
+            Self::Connection(error) => error,
+            Self::Migration(error) => error,
+        })
+    }
+}
+
+pub async fn connect(config: &Config) -> Result<DatabaseConnection, ConnectError> {
     let path = Path::new(&config.database_path);
     if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
-        std::fs::create_dir_all(parent).map_err(ApiError::internal)?;
+        std::fs::create_dir_all(parent).map_err(ConnectError::Directory)?;
     }
     // Connection options are applied to EVERY connection, not just the first pool member.
     let options = SqliteConnectOptions::new()
@@ -24,9 +54,11 @@ pub async fn connect(config: &Config) -> Result<DatabaseConnection, ApiError> {
         .min_connections(1)
         .connect_with(options)
         .await
-        .map_err(ApiError::internal)?;
+        .map_err(ConnectError::Connection)?;
     let db = SqlxSqliteConnector::from_sqlx_sqlite_pool(pool);
-    Migrator::up(&db, None).await?;
+    Migrator::up(&db, None)
+        .await
+        .map_err(ConnectError::Migration)?;
     Ok(db)
 }
 
@@ -41,4 +73,25 @@ pub async fn write_transaction(
     tx.execute_unprepared("UPDATE nomail_write_lock SET id = id WHERE id = 1")
         .await?;
     Ok(tx)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::error::Error;
+
+    #[test]
+    fn startup_error_formatting_is_safe_and_retains_explicit_source_access() {
+        let error =
+            ConnectError::Migration(sea_orm::DbErr::Custom("sensitive database value".into()));
+        assert_eq!(error.to_string(), "failed to migrate database");
+        assert!(!format!("{error:?}").contains("sensitive"));
+        assert!(
+            error
+                .source()
+                .unwrap()
+                .to_string()
+                .contains("sensitive database value")
+        );
+    }
 }

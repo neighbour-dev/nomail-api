@@ -3,11 +3,11 @@ pub(crate) mod account;
 pub(crate) mod repository;
 pub(crate) mod runtime;
 
-use crate::{AppState, config::Config, error::ApiError};
+use crate::{AppState, config::Config};
 pub use account::{ensure_initial_user, reset_account};
 use chrono::{DateTime, Utc};
 pub use nomail_app::auth::{ACCESS_TTL, Claims, MAX_DEVICES, REFRESH_DAYS};
-use nomail_app::auth::{AuthConfig, AuthService};
+use nomail_app::auth::{AuthConfig, AuthResult, AuthService};
 use sea_orm::DatabaseConnection;
 
 pub(crate) fn auth_config(config: &Config) -> AuthConfig {
@@ -33,18 +33,9 @@ pub fn access_token(
     state: &AppState,
     user_id: i64,
     session_id: i64,
-) -> Result<(String, DateTime<Utc>), ApiError> {
-    Ok(nomail_app::auth::token::issue(
-        &auth_config(&state.config),
-        user_id,
-        session_id,
-        Utc::now(),
-    )?)
+) -> AuthResult<(String, DateTime<Utc>)> {
+    nomail_app::auth::token::issue(&auth_config(&state.config), user_id, session_id, Utc::now())
 }
-pub fn decode_token(token: &str, state: &AppState) -> Result<Claims, ApiError> {
-    Ok(nomail_app::auth::token::decode(
-        &auth_config(&state.config),
-        token,
-        Utc::now(),
-    )?)
+pub fn decode_token(token: &str, state: &AppState) -> AuthResult<Claims> {
+    nomail_app::auth::token::decode(&auth_config(&state.config), token, Utc::now())
 }

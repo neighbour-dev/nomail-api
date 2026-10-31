@@ -1,14 +1,15 @@
-use crate::{config::Config, error::ApiError};
+use crate::config::Config;
+use nomail_app::auth::AuthResult;
 use sea_orm::DatabaseConnection;
 
-pub async fn ensure_initial_user(db: &DatabaseConnection, config: &Config) -> Result<(), ApiError> {
-    Ok(super::service(db, config).ensure_initial_account().await?)
+pub async fn ensure_initial_user(db: &DatabaseConnection, config: &Config) -> AuthResult<()> {
+    super::service(db, config).ensure_initial_account().await
 }
 pub async fn reset_account(
     db: &DatabaseConnection,
     username: Option<String>,
     password: String,
-) -> Result<(), ApiError> {
+) -> AuthResult<()> {
     // Reset needs no token-signing configuration and remains a local-only tool.
     let config = nomail_app::auth::AuthConfig {
         jwt_secret: String::new(),
@@ -16,11 +17,11 @@ pub async fn reset_account(
         initial_username: String::new(),
         initial_password: String::new(),
     };
-    Ok(nomail_app::auth::AuthService {
+    nomail_app::auth::AuthService {
         store: super::repository::Store(db),
         runtime: super::runtime::Runtime,
         config,
     }
     .reset_account(username, &password)
-    .await?)
+    .await
 }

@@ -27,6 +27,49 @@ fn config(directory: &tempfile::TempDir) -> Config {
 }
 
 #[tokio::test]
+async fn database_startup_failures_preserve_the_stage_and_source_not_http_statuses() {
+    use std::error::Error;
+    let directory = tempfile::tempdir().unwrap();
+    let blocked = directory.path().join("blocked");
+    std::fs::write(&blocked, "not a directory").unwrap();
+    let mut config = config(&directory);
+    config.database_path = blocked.join("nomail.db").to_str().unwrap().into();
+    let error = db::connect(&config).await.err().unwrap();
+    assert!(matches!(&error, db::ConnectError::Directory(_)));
+    assert!(error.source().is_some());
+    assert_eq!(error.to_string(), "failed to create database directory");
+
+    config.database_path = directory.path().to_str().unwrap().into();
+    let error = db::connect(&config).await.err().unwrap();
+    assert!(matches!(&error, db::ConnectError::Connection(_)));
+    assert!(error.source().is_some());
+    assert_eq!(error.to_string(), "failed to connect to database");
+
+    config.database_path = directory
+        .path()
+        .join("invalid-schema.db")
+        .to_str()
+        .unwrap()
+        .into();
+    let options = sqlx::sqlite::SqliteConnectOptions::new()
+        .filename(&config.database_path)
+        .create_if_missing(true);
+    let pool = sqlx::sqlite::SqlitePoolOptions::new()
+        .connect_with(options)
+        .await
+        .unwrap();
+    sqlx::query("CREATE TABLE seaql_migrations (invalid INTEGER)")
+        .execute(&pool)
+        .await
+        .unwrap();
+    pool.close().await;
+    let error = db::connect(&config).await.err().unwrap();
+    assert!(matches!(&error, db::ConnectError::Migration(_)));
+    assert!(error.source().is_some());
+    assert_eq!(error.to_string(), "failed to migrate database");
+}
+
+#[tokio::test]
 async fn file_persistence_wal_foreign_keys_and_atomic_initialization() {
     let directory = tempfile::tempdir().unwrap();
     let config = config(&directory);

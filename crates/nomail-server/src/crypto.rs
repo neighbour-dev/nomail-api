@@ -1,8 +1,8 @@
-use crate::error::ApiError;
+use nomail_app::auth::{AuthError, AuthResult};
 use rand::{RngCore, rngs::OsRng};
 
-pub fn decode_key(value: &str) -> Result<[u8; 32], ApiError> {
-    nomail_app::security::decode_key(value).map_err(ApiError::bad)
+pub fn decode_key(value: &str) -> Result<[u8; 32], &'static str> {
+    nomail_app::security::decode_key(value)
 }
 pub fn random_token(bytes: usize) -> String {
     let mut value = vec![0; bytes];
@@ -14,31 +14,31 @@ pub fn hash_token(value: &str) -> String {
 }
 
 // Wire format shared with existing installations: Base64(nonce[12] || ciphertext || tag[16]).
-pub fn encrypt(value: &str, key: &[u8; 32]) -> Result<String, ApiError> {
+pub fn encrypt(value: &str, key: &[u8; 32]) -> Result<String, &'static str> {
     let mut nonce = [0; 12];
     OsRng.fill_bytes(&mut nonce);
-    nomail_app::security::encrypt(value, key, &nonce).map_err(ApiError::internal)
+    nomail_app::security::encrypt(value, key, &nonce)
 }
-pub fn decrypt(value: &str, key: &[u8; 32]) -> Result<String, ApiError> {
-    nomail_app::security::decrypt(value, key).map_err(ApiError::internal)
+pub fn decrypt(value: &str, key: &[u8; 32]) -> Result<String, &'static str> {
+    nomail_app::security::decrypt(value, key)
 }
-pub fn validate_password(value: &str) -> Result<(), ApiError> {
-    nomail_app::security::validate_password(value).map_err(ApiError::bad)
+pub fn validate_password(value: &str) -> Result<(), &'static str> {
+    nomail_app::security::validate_password(value)
 }
-pub async fn hash_password(value: String) -> Result<String, ApiError> {
+pub async fn hash_password(value: String) -> AuthResult<String> {
     use nomail_app::auth::AuthRuntime;
     let runtime = crate::auth::runtime::Runtime;
     let mut salt = [0; 16];
     runtime.random_bytes(&mut salt)?;
-    Ok(runtime.hash_password(&value, salt).await?)
+    runtime.hash_password(&value, salt).await
 }
-pub async fn verify_password(value: String, hash: String) -> Result<(), ApiError> {
+pub async fn verify_password(value: String, hash: String) -> AuthResult<()> {
     use nomail_app::auth::AuthRuntime;
     let valid = crate::auth::runtime::Runtime
         .verify_password(&value, &hash)
         .await?;
     if !valid {
-        return Err(ApiError::unauthorized());
+        return Err(AuthError::Unauthorized);
     }
     Ok(())
 }
