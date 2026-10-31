@@ -1,5 +1,7 @@
 # Rust 迁移说明
 
+> 历史文档：记录 Go → Rust/PostgreSQL 阶段，不再描述当前部署。当前公开版为 `nomail-server` + SQLite、`nomail-workers` + D1；没有旧数据迁移需求，也不保留 PostgreSQL 兼容。以根 README 和 Workers README 为准。
+
 ## 范围
 
 Actix Web + SeaORM 替换原服务端，保留现有 27 个路由、单用户策略和 PostgreSQL 表结构。
