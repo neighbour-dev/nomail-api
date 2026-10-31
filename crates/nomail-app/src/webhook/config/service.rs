@@ -43,13 +43,8 @@ impl ConfigPage {
         self.offset
     }
     pub fn new(page: u64, size: u64) -> ConfigResult<Self> {
-        if page == 0 || !(1..=100).contains(&size) {
-            return Err(ConfigError::InvalidInput("invalid pagination".into()));
-        }
-        let offset = (page - 1)
-            .checked_mul(size)
-            .filter(|n| *n <= i64::MAX as u64)
-            .ok_or_else(|| ConfigError::InvalidInput("page is too large".into()))?;
+        let offset = crate::pagination::checked_offset(page, size)
+            .map_err(|message| ConfigError::InvalidInput(message.into()))?;
         Ok(Self { page, size, offset })
     }
 }

@@ -58,13 +58,8 @@ impl MessageQuery {
                 "from must not be after to".into(),
             ));
         }
-        if page == 0 || !(1..=100).contains(&page_size) {
-            return Err(MessageError::InvalidInput("invalid pagination".into()));
-        }
-        let offset = (page - 1)
-            .checked_mul(page_size)
-            .filter(|n| *n <= i64::MAX as u64)
-            .ok_or_else(|| MessageError::InvalidInput("page is too large".into()))?;
+        let offset = crate::pagination::checked_offset(page, page_size)
+            .map_err(|message| MessageError::InvalidInput(message.into()))?;
         filters.text = filters.text.and_then(|text| {
             let text = text.trim();
             (!text.is_empty()).then(|| text.to_owned())
