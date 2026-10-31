@@ -6,6 +6,10 @@ services:
     restart: unless-stopped
     env_file:
       - .env
+    environment:
+      DATABASE_PATH: /data/nomail.db
+    volumes:
+      - nomail-data:/data
     ports:
       - "${PORT:-3000}:${PORT:-3000}"
     init: true
@@ -15,3 +19,6 @@ services:
     security_opt:
       - no-new-privileges:true
     stop_grace_period: 10s
+
+volumes:
+  nomail-data:

@@ -19,3 +19,9 @@ coverage.out
 
 target
 tests
+data
+**/.wrangler
+**/.dev.vars
+**/node_modules
+**/build
+*.db*

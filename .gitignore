@@ -7,3 +7,11 @@ app.sqlite
 /nomail-api
 /nomail-api-*
 /target/
+/data/
+**/.wrangler/
+**/build/
+**/.dev.vars
+**/node_modules/
+*.db
+*.db-wal
+*.db-shm
