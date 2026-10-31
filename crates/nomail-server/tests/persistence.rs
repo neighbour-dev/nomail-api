@@ -2,7 +2,7 @@ use chrono::{Duration, Utc};
 use nomail_server::{
     auth,
     config::Config,
-    crypto, db,
+    db,
     entity::{device, session, user},
 };
 use sea_orm::{
@@ -144,7 +144,7 @@ async fn cancellation_rolls_back_and_reset_revokes_sessions() {
     .unwrap();
     session::ActiveModel {
         device_id: Set(d.id),
-        refresh_token_hash: Set(crypto::hash_token("refresh")),
+        refresh_token_hash: Set(nomail_app::security::hash_token("refresh")),
         expires_at: Set(now + Duration::days(7)),
         logged_in_at: Set(now),
         created_at: Set(now),
@@ -159,9 +159,7 @@ async fn cancellation_rolls_back_and_reset_revokes_sessions() {
         .unwrap();
     let account = user::Entity::find().one(&database).await.unwrap().unwrap();
     assert_eq!(account.username, "admin");
-    crypto::verify_password("newpassword123".into(), account.password_hash)
-        .await
-        .unwrap();
+    assert!(nomail_app::auth::password::verify("newpassword123", &account.password_hash).unwrap());
     assert_eq!(
         session::Entity::find()
             .filter(session::Column::RevokedAt.is_null())

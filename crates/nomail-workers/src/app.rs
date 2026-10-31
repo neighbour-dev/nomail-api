@@ -1,14 +1,9 @@
 //! Workers request/response adaptation; no endpoint names or business dispatch.
-use crate::{
-    db::Store,
-    error::{ApiError, Result},
-    realtime,
-    services::WorkersEnvironment,
-};
+use crate::{db::Store, error::Result, realtime, services::WorkersEnvironment};
 use futures_util::StreamExt;
 use nomail_app::{
     auth::RequestMeta,
-    http::{self, HttpReply, HttpResult, RequestHead},
+    http::{self, ApiFailure, HttpReply, HttpResult, RequestHead},
 };
 use worker::{Env, Request, Response};
 
@@ -71,12 +66,9 @@ impl http::HttpRequest for WorkersRequest {
     }
     async fn read_body(&mut self) -> HttpResult<Vec<u8>> {
         let mut bytes = Vec::new();
-        let mut stream = self
-            .request
-            .stream()
-            .map_err(|error| ApiError::from(error).into_http())?;
+        let mut stream = self.request.stream().map_err(|_| ApiFailure::internal())?;
         while let Some(chunk) = stream.next().await {
-            let chunk = chunk.map_err(|error| ApiError::from(error).into_http())?;
+            let chunk = chunk.map_err(|_| ApiFailure::internal())?;
             http::check_body_length(bytes.len().saturating_add(chunk.len()))?;
             bytes.extend(chunk);
         }

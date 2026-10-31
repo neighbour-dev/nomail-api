@@ -1,4 +1,4 @@
-use super::{ConfigError, ConfigResult, ConfigView, CreateConfig, UpdateConfig};
+use super::{ConfigError, ConfigId, ConfigResult, ConfigView, CreateConfig, UpdateConfig};
 use crate::{pagination::Page, webhook::Provider};
 use chrono::{DateTime, Utc};
 
@@ -82,13 +82,6 @@ pub struct WebhookConfigService<S, R> {
     pub store: S,
     pub runtime: R,
 }
-fn id(value: &str) -> ConfigResult<i64> {
-    value
-        .parse()
-        .ok()
-        .filter(|id| *id > 0)
-        .ok_or_else(|| ConfigError::InvalidInput("invalid webhook config id".into()))
-}
 impl<S: WebhookConfigStore, R: WebhookConfigRuntime> WebhookConfigService<S, R> {
     fn encrypt(&self, secret: &str) -> ConfigResult<String> {
         if secret.is_empty() {
@@ -109,9 +102,9 @@ impl<S: WebhookConfigStore, R: WebhookConfigRuntime> WebhookConfigService<S, R> 
             page_size: size,
         })
     }
-    pub async fn get(&self, user_id: i64, value: &str) -> ConfigResult<ConfigView> {
+    pub async fn get(&self, user_id: i64, id: ConfigId) -> ConfigResult<ConfigView> {
         self.store
-            .get_owned(user_id, id(value)?)
+            .get_owned(user_id, id.get())
             .await?
             .ok_or(ConfigError::NotFound)
     }
@@ -134,15 +127,14 @@ impl<S: WebhookConfigStore, R: WebhookConfigRuntime> WebhookConfigService<S, R> 
     pub async fn update(
         &self,
         user_id: i64,
-        value: &str,
+        id: ConfigId,
         command: UpdateConfig,
     ) -> ConfigResult<ConfigView> {
-        let id = id(value)?;
         // An empty PATCH is a read, including no change to updated_at.
         if command.is_empty() {
             return self
                 .store
-                .get_owned(user_id, id)
+                .get_owned(user_id, id.get())
                 .await?
                 .ok_or(ConfigError::NotFound);
         }
@@ -159,26 +151,25 @@ impl<S: WebhookConfigStore, R: WebhookConfigRuntime> WebhookConfigService<S, R> 
     async fn mutate(
         &self,
         user_id: i64,
-        id: i64,
+        id: ConfigId,
         mutation: ConfigMutation,
     ) -> ConfigResult<ConfigView> {
         self.store
-            .mutate_owned(user_id, id, &mutation, self.runtime.now())
+            .mutate_owned(user_id, id.get(), &mutation, self.runtime.now())
             .await?
             .ok_or(ConfigError::NotFound)
     }
     pub async fn enabled(
         &self,
         user_id: i64,
-        value: &str,
+        id: ConfigId,
         enabled: bool,
     ) -> ConfigResult<ConfigView> {
-        self.mutate(user_id, id(value)?, ConfigMutation::Enabled(enabled))
+        self.mutate(user_id, id, ConfigMutation::Enabled(enabled))
             .await
     }
-    pub async fn delete(&self, user_id: i64, value: &str) -> ConfigResult<()> {
-        self.mutate(user_id, id(value)?, ConfigMutation::Delete)
-            .await?;
+    pub async fn delete(&self, user_id: i64, id: ConfigId) -> ConfigResult<()> {
+        self.mutate(user_id, id, ConfigMutation::Delete).await?;
         Ok(())
     }
 }

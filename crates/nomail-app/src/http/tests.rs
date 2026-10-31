@@ -308,6 +308,41 @@ fn parameters_decode_once_and_url_generation_uses_the_receive_route() {
 }
 
 #[test]
+fn path_ids_are_parsed_into_business_types_without_a_string_roundtrip() {
+    for id in ["1", "01", "%2B1", "%31", "9223372036854775807"] {
+        let matched = resolve("GET", &format!("/api/webhook/configs/{id}")).unwrap();
+        let expected = if id == "9223372036854775807" {
+            i64::MAX
+        } else {
+            1
+        };
+        assert_eq!(matched.config_id().unwrap().get(), expected);
+    }
+    for id in ["0", "-1", "bad", "9223372036854775808", "1%20", "%252B1"] {
+        let matched = resolve("GET", &format!("/api/webhook/configs/{id}")).unwrap();
+        let error = matched.config_id().unwrap_err();
+        assert_eq!(error.status, 400);
+        assert_eq!(error.message, "invalid webhook config id");
+    }
+    let expected = uuid::Uuid::from_u128(0xabcd);
+    for id in [
+        expected.to_string(),
+        expected.simple().to_string(),
+        expected.to_string().to_uppercase(),
+    ] {
+        let matched = resolve("GET", &format!("/api/messages/{id}")).unwrap();
+        assert_eq!(matched.message_id().unwrap(), expected);
+    }
+    let matched = resolve("GET", "/api/messages/not-a-uuid").unwrap();
+    let error = matched.message_id().unwrap_err();
+    assert_eq!(error.status, 400);
+    assert_eq!(error.message, "invalid message id");
+    assert_eq!(matched.config_id().unwrap_err().status, 500);
+    let matched = resolve("GET", "/api/webhook/configs/1").unwrap();
+    assert_eq!(matched.message_id().unwrap_err().status, 500);
+}
+
+#[test]
 fn common_envelopes_and_json_limits_are_transport_independent() {
     assert_eq!(
         serde_json::to_value(ApiResponse::success(())).unwrap(),

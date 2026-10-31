@@ -1,52 +1,37 @@
-use nomail_app::error::{Diagnostic, DomainError};
-use nomail_app::http::{ApiFailure, ApiResponse};
+//! Final Workers response adaptation; shared HTTP errors already carry policy.
+use nomail_app::{
+    error::Diagnostic,
+    http::{ApiFailure, ApiResponse, HttpError},
+};
 use worker::Response;
 
 pub type Result<T> = std::result::Result<T, ApiError>;
-impl From<nomail_app::http::HttpError> for ApiError {
-    fn from(error: nomail_app::http::HttpError) -> Self {
-        let mut result = Self::from(error.failure);
-        result.diagnostic = error.diagnostic;
-        result
-    }
-}
-impl From<nomail_app::ingestion::IngestionError> for ApiError {
-    fn from(error: nomail_app::ingestion::IngestionError) -> Self {
-        Self::from_domain(error)
-    }
-}
-
-impl From<nomail_app::webhook::config::ConfigError> for ApiError {
-    fn from(error: nomail_app::webhook::config::ConfigError) -> Self {
-        Self::from_domain(error)
-    }
-}
 
 #[derive(Debug)]
-pub struct ApiError {
-    pub status: u16,
-    pub message: String,
-    diagnostic: Option<Diagnostic>,
+pub struct ApiError(HttpError);
+
+impl From<HttpError> for ApiError {
+    fn from(error: HttpError) -> Self {
+        Self(error)
+    }
+}
+impl From<ApiFailure> for ApiError {
+    fn from(failure: ApiFailure) -> Self {
+        Self(failure.into())
+    }
+}
+impl From<worker::Error> for ApiError {
+    fn from(_error: worker::Error) -> Self {
+        // Platform transport failures are not database conflicts. D1 constraint
+        // classification belongs exclusively to the storage adapters.
+        ApiFailure::internal().into()
+    }
 }
 impl ApiError {
-    pub(crate) fn into_http(self) -> nomail_app::http::HttpError {
-        nomail_app::http::HttpError {
-            failure: ApiFailure::new(self.status, self.message),
-            diagnostic: self.diagnostic,
-        }
-    }
-    fn from_domain(error: impl DomainError) -> Self {
-        let diagnostic = error.diagnostic();
-        let mut result = Self::from(ApiFailure::from_domain(&error));
-        result.diagnostic = diagnostic;
-        result
-    }
-    pub fn bad(message: impl Into<String>) -> Self {
-        ApiFailure::bad(message).into()
-    }
     pub fn response(&self) -> worker::Result<Response> {
-        if self.status >= 500 {
-            let diagnostic = self.diagnostic.unwrap_or(Diagnostic {
+        let failure = &self.0.failure;
+        if failure.status >= 500 {
+            let diagnostic = self.0.diagnostic.unwrap_or(Diagnostic {
                 domain: "http",
                 message: "internal operation failed",
             });
@@ -56,40 +41,8 @@ impl ApiError {
                 diagnostic.message
             );
         }
-        Response::from_json(&ApiResponse::error(self.status, &self.message))
-            .map(|r| r.with_status(self.status))
-    }
-}
-impl From<ApiFailure> for ApiError {
-    fn from(error: ApiFailure) -> Self {
-        Self {
-            status: error.status,
-            message: error.message,
-            diagnostic: None,
-        }
-    }
-}
-impl From<worker::Error> for ApiError {
-    fn from(error: worker::Error) -> Self {
-        if error.to_string().contains("UNIQUE constraint failed") {
-            return ApiFailure::new(409, "resource already exists").into();
-        }
-        ApiFailure::internal().into()
-    }
-}
-impl From<nomail_app::auth::AuthError> for ApiError {
-    fn from(error: nomail_app::auth::AuthError) -> Self {
-        Self::from_domain(error)
-    }
-}
-impl From<nomail_app::message::MessageError> for ApiError {
-    fn from(error: nomail_app::message::MessageError) -> Self {
-        Self::from_domain(error)
-    }
-}
-impl From<nomail_app::webhook::WebhookError> for ApiError {
-    fn from(error: nomail_app::webhook::WebhookError) -> Self {
-        Self::from_domain(error)
+        Response::from_json(&ApiResponse::error(failure.status, &failure.message))
+            .map(|r| r.with_status(failure.status))
     }
 }
 

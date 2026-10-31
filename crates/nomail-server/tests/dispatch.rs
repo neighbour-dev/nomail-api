@@ -35,6 +35,24 @@ async fn shared_dispatch_preserves_routing_authentication_body_order_and_health_
         (Method::POST, "/api/unknown", None, StatusCode::NOT_FOUND),
         (Method::POST, "/api/messages", None, StatusCode::NOT_FOUND),
         (
+            Method::GET,
+            "/api/webhook/configs/0",
+            None,
+            StatusCode::UNAUTHORIZED,
+        ),
+        (
+            Method::PATCH,
+            "/api/messages/not-a-uuid",
+            None,
+            StatusCode::UNAUTHORIZED,
+        ),
+        (
+            Method::PATCH,
+            "/api/webhook/configs/bad",
+            Some("invalid"),
+            StatusCode::UNAUTHORIZED,
+        ),
+        (
             Method::PATCH,
             "/api/auth/account",
             None,
@@ -65,6 +83,56 @@ async fn shared_dispatch_preserves_routing_authentication_body_order_and_health_
         assert_eq!(response.status(), expected, "{path}");
         let error: ApiResponse<()> = test::read_body_json(response).await;
         assert_eq!(error.code, expected.as_u16());
+    }
+    let response = test::call_service(&app, test::TestRequest::post().uri("/api/auth/login")
+        .set_json(serde_json::json!({"username":"admin", "password":"password123", "deviceId":"paths", "platform":"ios", "deviceType":"phone"}))
+        .to_request()).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let login: serde_json::Value = test::read_body_json(response).await;
+    let token = login["data"]["accessToken"].as_str().unwrap();
+    for (path, payload, content_type, status, message) in [
+        (
+            "/api/webhook/configs/bad",
+            "{".to_owned(),
+            "application/json",
+            StatusCode::BAD_REQUEST,
+            "invalid webhook config id",
+        ),
+        (
+            "/api/webhook/configs/0/enabled",
+            "{}".to_owned(),
+            "text/plain",
+            StatusCode::BAD_REQUEST,
+            "invalid webhook config id",
+        ),
+        (
+            "/api/messages/not-a-uuid",
+            "{".to_owned(),
+            "text/plain",
+            StatusCode::BAD_REQUEST,
+            "invalid message id",
+        ),
+        (
+            "/api/messages/not-a-uuid",
+            "x".repeat(MAX_BODY_BYTES + 1),
+            "application/json",
+            StatusCode::PAYLOAD_TOO_LARGE,
+            "request body too large",
+        ),
+    ] {
+        let response = test::call_service(
+            &app,
+            test::TestRequest::patch()
+                .uri(path)
+                .insert_header(("Authorization", format!("Bearer {token}")))
+                .insert_header(("Content-Type", content_type))
+                .set_payload(payload)
+                .to_request(),
+        )
+        .await;
+        assert_eq!(response.status(), status, "{path}");
+        let error: ApiResponse<()> = test::read_body_json(response).await;
+        assert_eq!(error.msg, message, "{path}");
     }
     // GET health does not consume a body, and the transport-only limiter still
     // produces the exact shared JSON envelope and Retry-After header.

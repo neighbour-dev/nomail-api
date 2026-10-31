@@ -68,12 +68,6 @@ pub async fn execute(
             actor(&context)?.user_id
         };
     }
-    macro_rules! id {
-        () => {
-            uuid::Uuid::parse_str(matched.parameter()?)
-                .map_err(|_| ApiFailure::bad("invalid message id"))?
-        };
-    }
     match matched.route.operation {
         Operation::Health => unreachable!("health is handled before service configuration"),
         Operation::Login => json::<e::Login>(
@@ -150,7 +144,7 @@ pub async fn execute(
         Operation::GetConfig => json::<e::GetConfig>(
             services
                 .configs
-                .get(user!(), matched.parameter()?)
+                .get(user!(), matched.config_id()?)
                 .await?
                 .into(),
         ),
@@ -159,7 +153,7 @@ pub async fn execute(
                 .configs
                 .update(
                     user!(),
-                    matched.parameter()?,
+                    matched.config_id()?,
                     input!(e::UpdateConfig).try_into()?,
                 )
                 .await?
@@ -168,7 +162,7 @@ pub async fn execute(
         Operation::DeleteConfig => {
             services
                 .configs
-                .delete(user!(), matched.parameter()?)
+                .delete(user!(), matched.config_id()?)
                 .await?;
             json::<e::DeleteConfig>(())
         }
@@ -177,7 +171,7 @@ pub async fn execute(
                 .configs
                 .enabled(
                     user!(),
-                    matched.parameter()?,
+                    matched.config_id()?,
                     input!(e::EnableConfig).enabled,
                 )
                 .await?
@@ -236,15 +230,19 @@ pub async fn execute(
                 )
                 .await?,
         }),
-        Operation::GetMessage => {
-            json::<e::GetMessage>(services.messages.get(user!(), id!()).await?.into())
-        }
+        Operation::GetMessage => json::<e::GetMessage>(
+            services
+                .messages
+                .get(user!(), matched.message_id()?)
+                .await?
+                .into(),
+        ),
         Operation::UpdateMessage => json::<e::UpdateMessage>(
             services
                 .messages
                 .update(
                     user!(),
-                    id!(),
+                    matched.message_id()?,
                     input!(e::UpdateMessage).try_into()?,
                     AuthRuntime::now(&services.auth.runtime),
                 )
@@ -254,12 +252,19 @@ pub async fn execute(
         Operation::DeleteMessage => {
             services
                 .messages
-                .delete(user!(), id!(), AuthRuntime::now(&services.auth.runtime))
+                .delete(
+                    user!(),
+                    matched.message_id()?,
+                    AuthRuntime::now(&services.auth.runtime),
+                )
                 .await?;
             json::<e::DeleteMessage>(())
         }
         Operation::RawMessage => {
-            let raw = services.messages.raw(user!(), id!()).await?;
+            let raw = services
+                .messages
+                .raw(user!(), matched.message_id()?)
+                .await?;
             Ok(HttpOutcome::response(
                 200,
                 raw.content_type,

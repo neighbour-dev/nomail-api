@@ -63,3 +63,26 @@ impl Store {
         Ok(self.statement(sql, values)?.run().await?)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn only_storage_classifies_unique_constraint_failures() {
+        assert!(matches!(
+            StorageError::from(worker::Error::RustError(
+                "UNIQUE constraint failed: sensitive value".into()
+            )),
+            StorageError::Conflict
+        ));
+        let error = StorageError::from(worker::Error::RustError(
+            "sensitive database failure".into(),
+        ));
+        assert!(matches!(
+            error,
+            StorageError::Internal("database operation failed")
+        ));
+        assert!(!format!("{error:?}").contains("sensitive"));
+    }
+}

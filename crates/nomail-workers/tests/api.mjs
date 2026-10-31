@@ -46,13 +46,30 @@ test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, a
     await api('GET', '/api/messages/batch', undefined, undefined, 404);
     for (const route of protectedRoutes()) await api(route.method, route.path, undefined, undefined, 401);
     await api('GET', '/api/messages', undefined, undefined, 401);
+    await api('GET', '/api/webhook/configs/0', undefined, undefined, 401);
+    await api('PATCH', '/api/messages/not-a-uuid', {}, undefined, 401);
+    await api('PATCH', '/api/webhook/configs/bad', {}, 'invalid', 401);
     await api('POST', '/api/auth/login', { ...loginBody('a'), password: 'wrong' }, undefined, 401);
     const login = await api('POST', '/api/auth/login', loginBody('a'));
     let token = login.accessToken;
+    for (const [path, body, contentType, status, message] of [
+      ['/api/webhook/configs/bad', '{', 'application/json', 400, 'invalid webhook config id'],
+      ['/api/webhook/configs/0/enabled', '{}', 'text/plain', 400, 'invalid webhook config id'],
+      ['/api/messages/not-a-uuid', '{', 'text/plain', 400, 'invalid message id'],
+      ['/api/messages/not-a-uuid', 'x'.repeat(4 * 1024 * 1024 + 1), 'application/json', 413, 'request body too large'],
+    ]) {
+      const response = await fetch(origin + path, { method: 'PATCH', headers: { Authorization: `Bearer ${token}`, 'Content-Type': contentType }, body });
+      const failure = await response.json();
+      assert.equal(response.status, status, `${path}: ${JSON.stringify(failure)}`);
+      assert.equal(failure.code, status);
+      assert.equal(failure.msg, message);
+      assert.equal(failure.data, null);
+    }
     assert.equal(login.user.requiresAccountSetup, true);
     const config = await api('POST', '/api/webhook/configs/', { name: 'Monitor', provider: 'generic', secret: 'test-webhook-secret' }, token);
     const configPath = `/api/webhook/configs/${config.id}`;
     assert.equal((await api('GET', configPath, undefined, token)).name, 'Monitor');
+    assert.equal((await api('GET', `/api/webhook/configs/%2B${config.id}`, undefined, token)).id, config.id);
     await api('PATCH', configPath, { name: 'Updated' }, token);
     function localSql(command) {
       const result = spawnSync('wrangler', ['d1', 'execute', 'DB', '--local', '--persist-to', state, '--json', '--command', command], { encoding: 'utf8', env: { ...process.env, CI: 'true' } });
@@ -195,6 +212,8 @@ test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, a
     await api('PATCH', foreignConfigPath + '/enabled', { enabled: false }, token, 404);
     await api('DELETE', foreignConfigPath, undefined, token, 404);
     assert.deepEqual(localSql("SELECT * FROM webhook_configs WHERE key='foreign-scope-key';")[0], foreignConfig);
+    await api('PATCH', '/api/auth/account', { currentPassword: 'password123', username: 'scope-other' }, token, 409);
+    assert.equal((await api('GET', '/api/auth/account', undefined, token)).username, 'admin');
     const foreign = await api('POST', '/api/webhook/foreign-scope-key', { id: 'foreign', title: 'Other owner' });
     const foreignPath = `/api/messages/${foreign.messageId}`;
     await api('GET', foreignPath, undefined, token, 404);

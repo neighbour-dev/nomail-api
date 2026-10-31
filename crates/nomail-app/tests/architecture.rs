@@ -129,3 +129,36 @@ fn protocol_crate_has_no_community_or_deployment_dependencies() {
         assert!(!lib.contains(&format!("pub mod {module};")));
     }
 }
+
+#[test]
+fn workers_configuration_and_randomness_do_not_use_http_errors() {
+    let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("../nomail-workers/src");
+    for name in ["config.rs", "crypto.rs"] {
+        let source = std::fs::read_to_string(src.join(name)).unwrap();
+        for forbidden in ["http::", "ApiError", "ApiFailure", "crate::error"] {
+            assert!(
+                !source.contains(forbidden),
+                "Workers {name} depends on {forbidden}"
+            );
+        }
+    }
+    let adapter = std::fs::read_to_string(src.join("error.rs")).unwrap();
+    for forbidden in [
+        "DomainError",
+        "from_domain",
+        "UNIQUE constraint failed",
+        "into_http",
+        "AuthError",
+        "MessageError",
+        "ConfigError",
+        "IngestionError",
+        "WebhookError",
+    ] {
+        assert!(
+            !adapter.contains(forbidden),
+            "Workers response adapter handles {forbidden}"
+        );
+    }
+    let services = std::fs::read_to_string(src.join("services.rs")).unwrap();
+    assert!(!services.contains("into_http"));
+}

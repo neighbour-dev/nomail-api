@@ -137,21 +137,39 @@ pub struct RouteMatch {
     pub parameter: Option<String>,
 }
 impl RouteMatch {
+    fn raw_parameter(&self) -> Result<&str, ApiFailure> {
+        self.parameter.as_deref().ok_or_else(ApiFailure::internal)
+    }
+    pub fn config_id(&self) -> Result<crate::webhook::config::ConfigId, ApiFailure> {
+        if self.route.path_kind != PathKind::ConfigId {
+            return Err(ApiFailure::internal());
+        }
+        let value = self
+            .raw_parameter()?
+            .parse::<i64>()
+            .map_err(|_| ApiFailure::bad("invalid webhook config id"))?;
+        crate::webhook::config::ConfigId::new(value).map_err(ApiFailure::from)
+    }
+    pub fn message_id(&self) -> Result<uuid::Uuid, ApiFailure> {
+        if self.route.path_kind != PathKind::MessageId {
+            return Err(ApiFailure::internal());
+        }
+        uuid::Uuid::parse_str(self.raw_parameter()?)
+            .map_err(|_| ApiFailure::bad("invalid message id"))
+    }
+    /// Text parameters and compatibility access. Dispatch uses typed accessors
+    /// for IDs so validated values never need to be parsed again by use cases.
     pub fn parameter(&self) -> Result<&str, ApiFailure> {
-        let value = self.parameter.as_deref().ok_or_else(ApiFailure::internal)?;
+        let value = self.raw_parameter()?;
         match self.route.path_kind {
             PathKind::DeviceId => {
                 crate::auth::check_length(value, "deviceId", 128, true).map_err(ApiFailure::bad)?
             }
             PathKind::ConfigId => {
-                value
-                    .parse::<i64>()
-                    .ok()
-                    .filter(|n| *n > 0)
-                    .ok_or_else(|| ApiFailure::bad("invalid webhook config id"))?;
+                self.config_id()?;
             }
             PathKind::MessageId => {
-                uuid::Uuid::parse_str(value).map_err(|_| ApiFailure::bad("invalid message id"))?;
+                self.message_id()?;
             }
             _ => (),
         }

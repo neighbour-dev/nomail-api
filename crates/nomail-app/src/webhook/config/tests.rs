@@ -6,6 +6,9 @@ use std::cell::{Cell, RefCell};
 fn now() -> DateTime<Utc> {
     DateTime::from_timestamp(1000, 0).unwrap()
 }
+fn id() -> ConfigId {
+    ConfigId::new(1).unwrap()
+}
 struct Runtime {
     random_calls: Cell<u8>,
     fail: bool,
@@ -145,11 +148,11 @@ async fn creation_defaults_key_encryption_and_public_projection_are_shared() {
 #[tokio::test]
 async fn patches_are_sparse_empty_is_read_and_secret_never_crosses_store_in_plaintext() {
     let s = service();
-    s.update(7, "1", UpdateConfig::default()).await.unwrap();
+    s.update(7, id(), UpdateConfig::default()).await.unwrap();
     assert_eq!(s.store.writes.get(), 0);
     s.update(
         7,
-        "1",
+        id(),
         UpdateConfig::new(Some("New".into()), None, None, None, None).unwrap(),
     )
     .await
@@ -169,7 +172,7 @@ async fn patches_are_sparse_empty_is_read_and_secret_never_crosses_store_in_plai
     }
     s.update(
         7,
-        "1",
+        id(),
         UpdateConfig::new(None, None, None, Some("replacement".into()), None).unwrap(),
     )
     .await
@@ -201,38 +204,41 @@ async fn validation_scope_soft_deletion_and_runtime_failure_precede_writes() {
         UpdateConfig::new(None, Some("unknown".into()), None, None, None),
         Err(ConfigError::InvalidInput(_))
     ));
-    for value in ["0", "-1", "bad", "9223372036854775808"] {
+    for value in [0, -1, i64::MIN] {
         assert!(matches!(
-            s.get(7, value).await,
+            ConfigId::new(value),
             Err(ConfigError::InvalidInput(_))
         ));
-        assert!(s.enabled(7, value, false).await.is_err());
     }
+    assert_eq!(ConfigId::new(i64::MAX).unwrap().get(), i64::MAX);
     for uid in [8, 9] {
-        assert!(matches!(s.get(uid, "1").await, Err(ConfigError::NotFound)));
+        assert!(matches!(s.get(uid, id()).await, Err(ConfigError::NotFound)));
         assert!(matches!(
             s.update(
                 uid,
-                "1",
+                id(),
                 UpdateConfig::new(Some("Other".into()), None, None, None, None).unwrap()
             )
             .await,
             Err(ConfigError::NotFound)
         ));
         assert!(matches!(
-            s.delete(uid, "1").await,
+            s.delete(uid, id()).await,
             Err(ConfigError::NotFound)
         ));
     }
     assert_eq!(s.store.writes.get(), 0);
-    s.enabled(7, "1", false).await.unwrap();
+    s.enabled(7, id(), false).await.unwrap();
     assert!(matches!(
         *s.store.mutation.borrow(),
         Some(ConfigMutation::Enabled(false))
     ));
-    s.delete(7, "1").await.unwrap();
-    assert!(matches!(s.get(7, "1").await, Err(ConfigError::NotFound)));
-    assert!(matches!(s.delete(7, "1").await, Err(ConfigError::NotFound)));
+    s.delete(7, id()).await.unwrap();
+    assert!(matches!(s.get(7, id()).await, Err(ConfigError::NotFound)));
+    assert!(matches!(
+        s.delete(7, id()).await,
+        Err(ConfigError::NotFound)
+    ));
     assert_eq!(
         s.list(7, ConfigPage::new(1, 20).unwrap())
             .await

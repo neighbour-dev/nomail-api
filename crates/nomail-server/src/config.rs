@@ -1,4 +1,3 @@
-use crate::crypto;
 use std::{env, fmt};
 
 /// Startup configuration errors, never HTTP responses or secret values.
@@ -45,7 +44,7 @@ impl Config {
             database_path: get("DATABASE_PATH", "./data/nomail.db"),
             jwt_secret,
             jwt_issuer: get("JWT_ISSUER", "nomail-api"),
-            encryption_key: crypto::decode_key(&get("SECRET_ENCRYPTION_KEY", ""))
+            encryption_key: nomail_app::security::decode_key(&get("SECRET_ENCRYPTION_KEY", ""))
                 .map_err(ConfigLoadError::EncryptionKey)?,
             port: get("PORT", "3000")
                 .parse()

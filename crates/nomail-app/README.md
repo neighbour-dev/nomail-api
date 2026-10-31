@@ -47,6 +47,10 @@ Server / Workers → nomail-app → nomail-core
 
 Server 的 `ApiError` 仅包装共享 `HttpError` 并实现 Actix `ResponseError`，不再直接转换业务或数据库错误；状态码和公开消息策略仍由 App HTTP 层统一定义。配置加载返回 `ConfigLoadError`，数据库初始化返回分阶段的 `ConnectError`，账号维护和令牌/密码操作返回认证错误，纯加密工具保留共享工具的错误。启动与工具调用不借用 HTTP 错误；请求内部错误仅在最终响应边界记录一次安全诊断。
 
+Workers 的配置和随机数同样不依赖 HTTP 错误：配置失败仅在 `services.rs` 映射一次，随机数/UUID 返回平台工具错误，最终 `ApiError` 只适配共享 HTTP 错误和平台传输失败。唯一约束冲突由 D1 存储层识别，不根据任意平台错误猜测 409。Server 已移除旧 `crypto` 和令牌包装入口，直接使用 App 的安全函数、认证服务与平台 Runtime。
+
+路径参数在共享 HTTP 分发边界按需转为 `ConfigId`（正数业务 ID）或 `Uuid`，用例不再接收配置 ID 字符串，也不重复解析消息 UUID。保留先鉴权、再读取 Body、再按调用参数顺序验证 ID 和 JSON 的行为；路由解析阶段仍仅进行原有的一次 URL 解码。
+
 ```sh
 cargo test --locked -p nomail-app --all-targets
 cargo test --locked -p nomail-app --features openapi --lib

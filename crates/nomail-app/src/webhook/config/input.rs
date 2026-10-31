@@ -5,6 +5,23 @@ use crate::{
     webhook::{Provider, service::configured_provider},
 };
 
+/// Positive configuration identity, independent of URL syntax.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ConfigId(i64);
+impl ConfigId {
+    pub fn new(value: i64) -> ConfigResult<Self> {
+        if value <= 0 {
+            return Err(ConfigError::InvalidInput(
+                "invalid webhook config id".into(),
+            ));
+        }
+        Ok(Self(value))
+    }
+    pub fn get(self) -> i64 {
+        self.0
+    }
+}
+
 pub struct CreateConfig {
     pub(super) name: String,
     pub(super) provider: Provider,

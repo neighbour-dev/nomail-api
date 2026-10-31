@@ -82,7 +82,17 @@ async fn all_api_contracts() {
     assert_eq!(login["data"]["user"]["requiresAccountSetup"], true);
     let token = login["data"]["accessToken"].as_str().unwrap().to_owned();
     let refresh = login["data"]["refreshToken"].as_str().unwrap().to_owned();
-    let claims = auth::decode_token(&token, &state).unwrap();
+    let claims = nomail_app::auth::token::decode(
+        &nomail_app::auth::AuthConfig {
+            jwt_secret: state.config.jwt_secret.clone(),
+            jwt_issuer: state.config.jwt_issuer.clone(),
+            initial_username: state.config.initial_username.clone(),
+            initial_password: state.config.initial_password.clone(),
+        },
+        &token,
+        Utc::now(),
+    )
+    .unwrap();
     assert_eq!(claims.user_id, 1);
     let (_, body) = api!(get, "/api/auth/account", json!({}), Some(&token));
     assert_eq!(body["data"]["username"], "admin");
@@ -302,7 +312,7 @@ async fn all_api_contracts() {
     );
     drop(stream);
 
-    let short_claims = auth::Claims {
+    let short_claims = nomail_app::auth::Claims {
         user_id: claims.user_id,
         session_id: claims.session_id,
         sub: claims.sub.clone(),
