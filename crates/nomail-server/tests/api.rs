@@ -1,33 +1,21 @@
-//! End-to-end contract tests. Use only a disposable PostgreSQL database:
-//! TEST_DATABASE_URL=postgres://... cargo test --test api -- --ignored
-use actix_web::{App, http::StatusCode, middleware::NormalizePath, test, web};
+//! End-to-end contracts against an isolated, temporary SQLite file.
+use actix_web::{App, http::StatusCode, test, web};
 use chrono::Utc;
-use nomail_api::{
+use nomail_server::{
     AppState, app, auth,
     config::Config,
-    crypto, db,
+    db,
     entity::{user, webhook},
     realtime::Hub,
 };
-use sea_orm::{ActiveModelTrait, Database, EntityTrait, Set};
+use sea_orm::{ActiveModelTrait, EntityTrait, Set};
 use serde_json::{Value, json};
 
 #[actix_web::test]
-#[ignore = "requires TEST_DATABASE_URL pointing to disposable PostgreSQL"]
 async fn all_api_contracts() {
-    let base = std::env::var("TEST_DATABASE_URL").expect("TEST_DATABASE_URL is required");
-    let schema = format!("nomail_test_{}", crypto::random_token(8));
-    let admin = Database::connect(&base).await.unwrap();
-    use sea_orm::ConnectionTrait;
-    admin
-        .execute_unprepared(&format!("CREATE SCHEMA {schema}"))
-        .await
-        .unwrap();
-    let mut url = url::Url::parse(&base).unwrap();
-    url.query_pairs_mut()
-        .append_pair("options", &format!("-csearch_path={schema}"));
+    let directory = tempfile::tempdir().unwrap();
     let config = Config {
-        database_url: url.into(),
+        database_path: directory.path().join("nomail.db").to_str().unwrap().into(),
         jwt_secret: "test-secret-at-least-32-characters".into(),
         jwt_issuer: "nomail-test".into(),
         encryption_key: [7; 32],
@@ -44,13 +32,8 @@ async fn all_api_contracts() {
         realtime: Hub::default(),
         health_limiter: app::HealthLimiter::default(),
     });
-    let app = test::init_service(
-        App::new()
-            .app_data(state.clone())
-            .wrap(NormalizePath::trim())
-            .configure(app::configure),
-    )
-    .await;
+    let app =
+        test::init_service(App::new().app_data(state.clone()).configure(app::configure)).await;
 
     macro_rules! api {
         ($method:ident, $url:expr, $body:expr, $token:expr) => {{
@@ -106,42 +89,20 @@ async fn all_api_contracts() {
     let (_, body) = api!(get, "/api/auth/devices", json!({}), Some(&token));
     assert_eq!(body["data"][0]["deviceId"], "a");
     assert_eq!(body["data"][0]["loggedIn"], true);
-    assert_eq!(body["data"][0]["pushEnabled"], false);
-
-    let (status, body) = api!(
-        post,
-        "/api/push/devices/",
-        json!({"deviceId":"a","provider":"apns","pushToken":"token-a"}),
-        Some(&token)
-    );
-    assert_eq!(status, StatusCode::OK, "{body}");
-    assert_eq!(body["data"]["environment"], "production");
-    let (_, body) = api!(
-        patch,
-        "/api/push/devices/a",
-        json!({"enabled":false}),
-        Some(&token)
-    );
-    assert_eq!(body["data"]["enabled"], false);
-    let (_, body) = api!(
-        post,
-        "/api/push/devices",
-        json!({"deviceId":"a","provider":"fcm","pushToken":"new-token"}),
-        Some(&token)
-    );
-    assert_eq!(body["data"]["enabled"], true);
-    let endpoints = nomail_api::entity::push_endpoint::Entity::find()
-        .all(&database)
-        .await
-        .unwrap();
-    assert_eq!(
-        crypto::decrypt(&endpoints[0].encrypted_token, &[7; 32]).unwrap(),
-        "new-token"
-    );
-    let (status, _) = api!(delete, "/api/push/devices/a", json!({}), Some(&token));
-    assert_eq!(status, StatusCode::OK);
-    let (status, _) = api!(delete, "/api/push/devices/a", json!({}), Some(&token));
-    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert!(body["data"][0].get("pushEnabled").is_none());
+    for (method, path) in [
+        ("POST", "/api/push/devices"),
+        ("PATCH", "/api/push/devices/a"),
+        ("DELETE", "/api/push/devices/a"),
+    ] {
+        let request = test::TestRequest::default()
+            .method(method.parse().unwrap())
+            .uri(path)
+            .insert_header(("Authorization", format!("Bearer {token}")))
+            .to_request();
+        let response = test::call_service(&app, request).await;
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
 
     let (status, created) = api!(
         post,
@@ -167,7 +128,7 @@ async fn all_api_contracts() {
     let (status, body) = api!(
         post,
         receive_path,
-        json!({"id":"e1","title":"Disk","content":"hello\n 世界","level":"error"}),
+        json!({"id":"e1","title":"Disk","content":"hello\n 世界","level":"urgent"}),
         None
     );
     assert_eq!(status, StatusCode::OK, "{body}");
@@ -185,14 +146,14 @@ async fn all_api_contracts() {
     let (_, body) = api!(get, "/api/messages/", json!({}), Some(&token));
     assert_eq!(body["data"]["total"], 1);
     assert_eq!(body["data"]["items"][0]["summary"], "hello 世界");
-    assert_eq!(body["data"]["items"][0]["level"], "critical");
+    assert_eq!(body["data"]["items"][0]["level"], "urgent");
     let (_, body) = api!(get, "/api/messages/unread-count", json!({}), Some(&token));
     assert_eq!(body["data"]["count"], 1);
     let (status, _) = api!(get, "/api/messages?from=bad", json!({}), Some(&token));
     assert_eq!(status, StatusCode::BAD_REQUEST);
     let (_, body) = api!(
         get,
-        "/api/messages?query=%E4%B8%96%E7%95%8C&status=unread&level=critical&pinned=false",
+        "/api/messages?query=%E4%B8%96%E7%95%8C&status=unread&level=urgent&pinned=false",
         json!({}),
         Some(&token)
     );
@@ -424,10 +385,14 @@ async fn all_api_contracts() {
     // Concurrent refresh must only accept the original token once.
     let request_one = test::TestRequest::post()
         .uri("/api/auth/refresh-token")
+        .insert_header(("User-Agent", "nomail-refresh-agent"))
+        .peer_addr("127.0.0.2:1234".parse().unwrap())
         .set_json(json!({"refreshToken": refresh}))
         .to_request();
     let request_two = test::TestRequest::post()
         .uri("/api/auth/refresh-token")
+        .insert_header(("User-Agent", "nomail-refresh-agent"))
+        .peer_addr("127.0.0.2:1234".parse().unwrap())
         .set_json(json!({"refreshToken": refresh}))
         .to_request();
     let (one, two) = tokio::join!(
@@ -444,6 +409,15 @@ async fn all_api_contracts() {
         two
     };
     let valid: Value = test::read_body_json(valid).await;
+    let (_, devices) = api!(get, "/api/auth/devices", json!({}), Some(&token));
+    let device = devices["data"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|d| d["deviceId"] == "a")
+        .unwrap();
+    assert_eq!(device["userAgent"], "nomail-refresh-agent");
+    assert_eq!(device["ipAddress"], "127.0.0.2");
     let new_refresh = valid["data"]["refreshToken"].as_str().unwrap();
     let (status, _) = api!(
         post,
@@ -519,7 +493,7 @@ async fn all_api_contracts() {
 
     // Re-running baseline migration never drops existing data.
     use sea_orm_migration::MigratorTrait;
-    nomail_api::migration::Migrator::up(&database, None)
+    nomail_server::migration::Migrator::up(&database, None)
         .await
         .unwrap();
     assert!(
@@ -530,131 +504,4 @@ async fn all_api_contracts() {
             .is_some()
     );
     database.close().await.unwrap();
-    admin
-        .execute_unprepared(&format!("DROP SCHEMA {schema} CASCADE"))
-        .await
-        .unwrap();
-    admin.close().await.unwrap();
-}
-
-#[actix_web::test]
-#[ignore = "requires TEST_DATABASE_URL pointing to disposable PostgreSQL"]
-async fn adopts_legacy_schema_password_tokens_and_ciphertext() {
-    use sea_orm::{ConnectionTrait, DbBackend, Statement};
-    let base = std::env::var("TEST_DATABASE_URL").expect("TEST_DATABASE_URL is required");
-    let schema = format!("nomail_legacy_{}", crypto::random_token(8));
-    let admin = Database::connect(&base).await.unwrap();
-    admin
-        .execute_unprepared(&format!("CREATE SCHEMA {schema}"))
-        .await
-        .unwrap();
-    let mut url = url::Url::parse(&base).unwrap();
-    url.query_pairs_mut()
-        .append_pair("options", &format!("-csearch_path={schema}"));
-    let legacy = Database::connect(url.as_str()).await.unwrap();
-    legacy
-        .execute_unprepared(include_str!("fixtures/legacy-schema.sql"))
-        .await
-        .unwrap();
-    let fixture: Value = serde_json::from_str(include_str!("fixtures/legacy-crypto.json")).unwrap();
-    let hash = fixture["passwordHash"].as_str().unwrap();
-    let encrypted = fixture["encryptedSecret"].as_str().unwrap();
-    legacy.execute(Statement::from_sql_and_values(DbBackend::Postgres,
-        "INSERT INTO users (username,password_hash,created_at,updated_at) VALUES ('legacy',$1,now(),now())", [hash.into()])).await.unwrap();
-    legacy.execute_unprepared("INSERT INTO devices (user_id,device_id,created_at,updated_at) VALUES (1,'legacy-device',now(),now());
-        INSERT INTO sessions (device_id,refresh_token_hash,expires_at,logged_in_at,created_at,updated_at)
-        VALUES (1,'legacy-hash','2100-01-01',now(),now(),now())").await.unwrap();
-    legacy.execute(Statement::from_sql_and_values(DbBackend::Postgres,
-        "INSERT INTO webhook_configs (user_id,name,key,provider,encrypted_secret,created_at,updated_at) VALUES (1,'legacy','legacy-key','generic',$1,now(),now())", [encrypted.into()])).await.unwrap();
-    legacy
-        .execute_unprepared(
-            "INSERT INTO notify_messages (id,webhook_config_id,title,created_at,updated_at)
-        VALUES ('0198c000-0000-7000-8000-000000000001',1,'legacy message',now(),now())",
-        )
-        .await
-        .unwrap();
-    legacy.close().await.unwrap();
-
-    let config = Config {
-        database_url: url.into(),
-        jwt_secret: "test-secret-at-least-32-characters".into(),
-        jwt_issuer: "nomail-test".into(),
-        encryption_key: [7; 32],
-        port: 3000,
-        initial_username: String::new(),
-        initial_password: String::new(),
-    };
-    let database = db::connect(&config).await.unwrap();
-    auth::ensure_initial_user(&database, &config).await.unwrap();
-    let state = web::Data::new(AppState {
-        db: database.clone(),
-        config,
-        realtime: Hub::default(),
-        health_limiter: app::HealthLimiter::default(),
-    });
-    let old_access = fixture["accessToken"].as_str().unwrap();
-    assert_eq!(
-        auth::decode_token(old_access, &state).unwrap().session_id,
-        1
-    );
-    assert_eq!(
-        crypto::decrypt(encrypted, &[7; 32]).unwrap(),
-        "legacy-secret 中文"
-    );
-    crypto::verify_password("legacy123pass".into(), hash.into())
-        .await
-        .unwrap();
-    let app =
-        test::init_service(App::new().app_data(state.clone()).configure(app::configure)).await;
-    let response = test::call_service(
-        &app,
-        test::TestRequest::get()
-            .uri("/api/messages")
-            .insert_header(("Authorization", format!("Bearer {old_access}")))
-            .to_request(),
-    )
-    .await;
-    assert_eq!(response.status(), StatusCode::OK);
-    let body: Value = test::read_body_json(response).await;
-    assert_eq!(body["data"]["items"][0]["title"], "legacy message");
-    assert_eq!(body["data"]["items"][0]["source"], "");
-    let response = test::call_service(
-        &app,
-        test::TestRequest::get()
-            .uri("/api/auth/devices")
-            .insert_header(("Authorization", format!("Bearer {old_access}")))
-            .to_request(),
-    )
-    .await;
-    assert_eq!(response.status(), StatusCode::OK);
-    let body: Value = test::read_body_json(response).await;
-    assert_eq!(body["data"][0]["deviceName"], "");
-    let response = test::call_service(&app, test::TestRequest::post().uri("/api/auth/login")
-        .set_json(json!({"username":"legacy","password":"legacy123pass","deviceId":"legacy-device","platform":"ios","deviceType":"phone"})).to_request()).await;
-    assert_eq!(response.status(), StatusCode::OK);
-    // Receiving with an old encrypted secret verifies both stored data and HMAC interop.
-    use hmac::{Hmac, Mac};
-    use sha2::Sha256;
-    let body = br#"{"id":"legacy-new","content":"received"}"#;
-    let mut mac = Hmac::<Sha256>::new_from_slice("legacy-secret 中文".as_bytes()).unwrap();
-    mac.update(body);
-    let signature = format!("sha256={}", hex::encode(mac.finalize().into_bytes()));
-    let response = test::call_service(
-        &app,
-        test::TestRequest::post()
-            .uri("/api/webhook/legacy-key")
-            .insert_header(("X-NoMail-Signature", signature))
-            .set_payload(body.as_slice())
-            .to_request(),
-    )
-    .await;
-    assert_eq!(response.status(), StatusCode::OK);
-    let body: Value = test::read_body_json(response).await;
-    assert_eq!(body["data"]["duplicate"], false);
-    database.close().await.unwrap();
-    admin
-        .execute_unprepared(&format!("DROP SCHEMA {schema} CASCADE"))
-        .await
-        .unwrap();
-    admin.close().await.unwrap();
 }

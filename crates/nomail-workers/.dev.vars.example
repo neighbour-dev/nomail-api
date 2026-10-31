@@ -1,0 +1,5 @@
+# Local development only. Replace every placeholder before starting Wrangler.
+JWT_SECRET=replace-with-a-long-random-secret
+SECRET_ENCRYPTION_KEY=replace-with-base64-encoded-32-random-bytes
+INITIAL_USERNAME=admin
+INITIAL_PASSWORD=replace-with-a-strong-password123
