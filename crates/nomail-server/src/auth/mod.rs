@@ -1,20 +1,16 @@
-//! Actix extraction and runtime composition. Business rules live in nomail-app.
+//! Native authentication storage/runtime and local account maintenance.
 pub(crate) mod account;
-pub(crate) mod devices;
-mod repository;
+pub(crate) mod repository;
 pub(crate) mod runtime;
-pub(crate) mod session;
 
 use crate::{AppState, config::Config, error::ApiError};
 pub use account::{ensure_initial_user, reset_account};
-use actix_web::{FromRequest, HttpRequest, dev::Payload, web};
 use chrono::{DateTime, Utc};
 pub use nomail_app::auth::{ACCESS_TTL, Claims, MAX_DEVICES, REFRESH_DAYS};
-use nomail_app::auth::{AuthConfig, AuthContext, AuthService};
+use nomail_app::auth::{AuthConfig, AuthService};
 use sea_orm::DatabaseConnection;
-use std::{future::Future, ops::Deref, pin::Pin};
 
-fn auth_config(config: &Config) -> AuthConfig {
+pub(crate) fn auth_config(config: &Config) -> AuthConfig {
     AuthConfig {
         jwt_secret: config.jwt_secret.clone(),
         jwt_issuer: config.jwt_issuer.clone(),
@@ -51,33 +47,4 @@ pub fn decode_token(token: &str, state: &AppState) -> Result<Claims, ApiError> {
         token,
         Utc::now(),
     )?)
-}
-
-pub struct Auth(pub AuthContext);
-impl Deref for Auth {
-    type Target = AuthContext;
-    fn deref(&self) -> &AuthContext {
-        &self.0
-    }
-}
-impl FromRequest for Auth {
-    type Error = ApiError;
-    type Future = Pin<Box<dyn Future<Output = Result<Self, Self::Error>>>>;
-    fn from_request(req: &HttpRequest, _: &mut Payload) -> Self::Future {
-        let state = req.app_data::<web::Data<AppState>>().cloned();
-        let token = req
-            .headers()
-            .get("Authorization")
-            .and_then(|v| v.to_str().ok())
-            .map(str::to_owned);
-        Box::pin(async move {
-            let state = state.ok_or_else(|| ApiError::internal("missing application state"))?;
-            let token = nomail_app::http::bearer_token(token.as_deref())?;
-            Ok(Auth(
-                service(&state.db, &state.config)
-                    .authenticate(token)
-                    .await?,
-            ))
-        })
-    }
 }

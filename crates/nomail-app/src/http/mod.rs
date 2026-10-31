@@ -1,14 +1,22 @@
 //! HTTP contract, independent of any server framework or transport runtime.
 mod config;
+mod dispatch;
 mod error;
 mod response;
 mod routes;
+mod services;
 pub mod sse;
+mod transport;
 pub mod webhook;
 pub use config::ConfigResponse;
-pub use error::ApiFailure;
+pub use dispatch::execute;
+pub use error::{ApiFailure, HttpError, HttpResult};
 pub use response::*;
 pub use routes::*;
+pub use services::{Environment, EnvironmentServices, HealthCheck, Services};
+pub use transport::{
+    HttpOutcome, HttpReply, HttpRequest, HttpResponse, RealtimeEffect, RequestHead, Subscription,
+};
 #[cfg(feature = "openapi")]
 pub mod openapi;
 

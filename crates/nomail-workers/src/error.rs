@@ -3,6 +3,13 @@ use nomail_app::http::{ApiFailure, ApiResponse};
 use worker::Response;
 
 pub type Result<T> = std::result::Result<T, ApiError>;
+impl From<nomail_app::http::HttpError> for ApiError {
+    fn from(error: nomail_app::http::HttpError) -> Self {
+        let mut result = Self::from(error.failure);
+        result.diagnostic = error.diagnostic;
+        result
+    }
+}
 impl From<nomail_app::ingestion::IngestionError> for ApiError {
     fn from(error: nomail_app::ingestion::IngestionError) -> Self {
         Self::from_domain(error)
@@ -22,6 +29,12 @@ pub struct ApiError {
     diagnostic: Option<Diagnostic>,
 }
 impl ApiError {
+    pub(crate) fn into_http(self) -> nomail_app::http::HttpError {
+        nomail_app::http::HttpError {
+            failure: ApiFailure::new(self.status, self.message),
+            diagnostic: self.diagnostic,
+        }
+    }
     fn from_domain(error: impl DomainError) -> Self {
         let diagnostic = error.diagnostic();
         let mut result = Self::from(ApiFailure::from_domain(&error));
@@ -30,9 +43,6 @@ impl ApiError {
     }
     pub fn bad(message: impl Into<String>) -> Self {
         ApiFailure::bad(message).into()
-    }
-    pub fn unauthorized() -> Self {
-        ApiFailure::unauthorized().into()
     }
     pub fn response(&self) -> worker::Result<Response> {
         if self.status >= 500 {
@@ -81,9 +91,6 @@ impl From<nomail_app::webhook::WebhookError> for ApiError {
     fn from(error: nomail_app::webhook::WebhookError) -> Self {
         Self::from_domain(error)
     }
-}
-pub fn success<E: nomail_app::http::Endpoint>(data: E::Response) -> Result<Response> {
-    Ok(Response::from_json(&ApiResponse::success(data))?)
 }
 
 #[cfg(test)]

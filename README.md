@@ -26,7 +26,7 @@ Core 覆盖 Generic、GitHub、GitLab、Stripe、Slack、飞书、Telegram、Sho
 
 ## HTTP 接口契约
 
-`crates/nomail-app/src/http/routes.rs` 是接口唯一清单：路径、方法、Operation、鉴权要求、请求体/响应种类及请求/查询/响应 DTO 在同一处关联。Server 和 Workers 一次接入共享路由解析器，穷尽匹配 Operation 绑定处理函数，不各自注册路径或维护“已知接口”白名单。新增操作遗漏任一端绑定会编译失败；`success::<Endpoint>()` 检查响应数据类型与 App 契约一致。
+`crates/nomail-app/src/http/routes.rs` 是接口唯一清单：路径、方法、Operation、鉴权要求、请求体/响应种类及请求/查询/响应 DTO 在同一处关联。`http/dispatch.rs` 唯一绑定全部 Operation 到用例，Server 和 Workers 只调用 `http::execute`，不再各自匹配 Operation、解析 DTO 或编写逐接口 Handler。新增操作只需修改 App，遗漏共享绑定会编译失败；共享 JSON 编码检查响应数据类型与 Endpoint 契约一致。
 
 公共 `ApiResponse<T>`、错误映射、JSON/查询参数解析、4 MiB 请求体限制、尾斜杠和路径参数解码规则由 App HTTP 层定义。先匹配接口，再进行 Bearer 鉴权，随后解析输入；未知路径/不支持的方法返回 404，路径参数仅解码一次。普通 JSON 接口要求 application/json 或 application/*+json。SSE、可读原文、Webhook 验证/Ping 保持原协议，不强行套 JSON 包装，Webhook Body 原字节用于验签。
 
@@ -172,7 +172,7 @@ crates/nomail-workers/src/    官方 worker-rs、D1 SQL、Durable Objects SSE
 crates/nomail-workers/tests/  Wrangler 本地 D1/DO 集成测试
 ```
 
-例如阅读消息列表：App `http/routes.rs` 的 ListMessages → 对应运行时 `app.rs` 的 Operation 绑定 → App 消息用例及运行时存储查询；接口路径和 DTO 不在运行时重新定义。
+例如阅读消息列表：App `http/routes.rs` 的 ListMessages → `http/dispatch.rs` 的唯一绑定 → App 消息用例及运行时存储查询。两端 `app.rs` 只适配请求、普通响应、SSE 订阅及广播；`services.rs` 只组装存储和执行能力，不随普通接口增加绑定。
 简单接口不强制增加 Service 层。
 
 ## 测试与构建

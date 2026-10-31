@@ -3,6 +3,36 @@
 use std::path::Path;
 
 #[test]
+fn deployments_do_not_bind_or_parse_individual_endpoints() {
+    fn check(path: &Path) {
+        for entry in std::fs::read_dir(path).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                check(&path);
+            } else if path.extension().is_some_and(|v| v == "rs") {
+                let source = std::fs::read_to_string(&path).unwrap();
+                for forbidden in [
+                    "Operation::",
+                    "endpoints as",
+                    "parse_json::<",
+                    "parse_query::<",
+                    "success::<",
+                ] {
+                    assert!(
+                        !source.contains(forbidden),
+                        "{} repeats HTTP dispatch through {forbidden}",
+                        path.display()
+                    );
+                }
+            }
+        }
+    }
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+    check(&root.join("nomail-server/src"));
+    check(&root.join("nomail-workers/src"));
+}
+
+#[test]
 fn business_modules_do_not_depend_on_http() {
     fn check(path: &Path) {
         for entry in std::fs::read_dir(path).unwrap() {

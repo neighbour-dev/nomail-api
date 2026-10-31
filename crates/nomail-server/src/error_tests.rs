@@ -30,6 +30,13 @@ fn adapters_delegate_all_domains_to_the_shared_mapping() {
     let storage: ApiError = sea_orm::DbErr::Custom("sensitive database value".into()).into();
     assert_eq!(storage.message, "internal server error");
     assert!(!format!("{storage:?}").contains("sensitive"));
+    let domain = MessageError::Internal("sensitive raw payload".into());
+    let diagnostic = domain.diagnostic();
+    let shared: nomail_app::http::HttpError = domain.into();
+    let actual: ApiError = shared.into();
+    assert_eq!(actual.diagnostic, diagnostic);
+    assert_eq!(actual.message, "internal server error");
+    assert!(!format!("{actual:?}").contains("sensitive"));
 }
 
 #[derive(Clone)]
@@ -56,7 +63,8 @@ fn conversions_are_silent_and_response_logs_once_without_raw_internal_text() {
     tracing::subscriber::with_default(subscriber, || {
         let storage = ApiError::internal("sensitive database value");
         let domain = AuthError::Internal(storage.message);
-        let error: ApiError = domain.into();
+        let shared: nomail_app::http::HttpError = domain.into();
+        let error: ApiError = shared.into();
         assert!(bytes.lock().unwrap().is_empty());
         let response = error.error_response();
         assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);

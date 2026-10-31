@@ -1,14 +1,15 @@
-//! Actix transport: App alone resolves routes and defines request/response DTOs.
+//! Actix request/response adaptation. All API execution lives in nomail-app::http.
 use crate::{
-    AppState, auth,
-    error::{ApiError, ApiResult, success},
-    message, webhook,
+    AppState,
+    error::{ApiError, ApiResult},
+    realtime,
+    services::NativeEnvironment,
 };
 use actix_web::{HttpRequest, HttpResponse, ResponseError, web};
 use futures_util::StreamExt;
-use nomail_app::auth::AuthContext;
-use nomail_app::http::{
-    self as api, ApiFailure, AuthRequirement, BodyKind, HealthResponse, Operation, endpoints as e,
+use nomail_app::{
+    auth::RequestMeta,
+    http::{self, ApiFailure, HttpReply, HttpResult, RequestHead},
 };
 use std::{
     collections::HashMap,
@@ -17,160 +18,98 @@ use std::{
     time::{Duration, Instant},
 };
 
-pub fn configure(cfg: &mut web::ServiceConfig) {
-    // No local route table or framework-specific path patterns to drift.
-    cfg.default_service(web::to(dispatch));
+pub fn configure(config: &mut web::ServiceConfig) {
+    config.default_service(web::to(handle));
 }
-async fn dispatch(
+async fn handle(
     state: web::Data<AppState>,
     req: HttpRequest,
     payload: web::Payload,
 ) -> HttpResponse {
-    match execute(state, req, payload).await {
+    match execute(&state, req, payload).await {
         Ok(response) => response,
         Err(error) => error.error_response(),
     }
 }
-async fn read_body(payload: &mut web::Payload) -> Result<Vec<u8>, ApiError> {
-    let mut bytes = Vec::new();
-    while let Some(chunk) = payload.next().await {
-        let chunk = chunk.map_err(|e| ApiError::bad(e.to_string()))?;
-        api::check_body_length(bytes.len().saturating_add(chunk.len()))?;
-        bytes.extend_from_slice(&chunk);
+async fn execute(state: &AppState, req: HttpRequest, payload: web::Payload) -> ApiResult {
+    let mut request = ActixRequest::new(req, payload);
+    let outcome = http::execute(&mut request, &NativeEnvironment(state)).await?;
+    for effect in outcome.events {
+        state.realtime.publish(
+            effect.user_id,
+            realtime::Event::MessageCreated(effect.event),
+        );
     }
-    Ok(bytes)
-}
-fn actor(context: &mut Option<AuthContext>) -> Result<auth::Auth, ApiError> {
-    context
-        .take()
-        .map(auth::Auth)
-        .ok_or_else(|| ApiError::internal("missing authenticated route context"))
+    match outcome.reply {
+        HttpReply::Response(response) => {
+            let status = actix_web::http::StatusCode::from_u16(response.status)
+                .map_err(ApiError::internal)?;
+            let mut builder = HttpResponse::build(status);
+            for (name, value) in response.headers {
+                builder.insert_header((name, value));
+            }
+            Ok(builder.body(response.body))
+        }
+        HttpReply::Subscribe(subscription) => Ok(realtime::stream(&state.realtime, subscription)),
+    }
 }
 
-async fn execute(
-    state: web::Data<AppState>,
-    req: HttpRequest,
-    mut payload: web::Payload,
-) -> ApiResult {
-    let matched = api::resolve(req.method().as_str(), req.path())?;
-    let mut context = if matched.route.auth == AuthRequirement::Bearer {
-        let header = req
-            .headers()
-            .get("Authorization")
-            .and_then(|v| v.to_str().ok());
-        Some(
-            auth::service(&state.db, &state.config)
-                .authenticate(api::bearer_token(header)?)
-                .await?,
-        )
-    } else {
-        None
-    };
-    let bytes = if matched.route.body != BodyKind::None {
-        read_body(&mut payload).await?
-    } else {
-        Vec::new()
-    };
-    let content_type = req
-        .headers()
-        .get("Content-Type")
-        .and_then(|v| v.to_str().ok())
-        .map(str::to_owned);
-    macro_rules! body {
-        ($endpoint:ty) => {
-            web::Json(api::parse_json::<$endpoint>(
-                &bytes,
-                content_type.as_deref(),
-            )?)
-        };
+struct ActixRequest {
+    head: RequestHead,
+    payload: web::Payload,
+}
+impl ActixRequest {
+    fn new(req: HttpRequest, payload: web::Payload) -> Self {
+        Self {
+            head: RequestHead {
+                method: req.method().as_str().into(),
+                path: req.path().into(),
+                query: req.query_string().into(),
+                headers: req
+                    .headers()
+                    .iter()
+                    .filter_map(|(name, value)| {
+                        value
+                            .to_str()
+                            .ok()
+                            .map(|value| (name.to_string(), value.to_owned()))
+                    })
+                    .collect(),
+                metadata: RequestMeta::new(
+                    // Forwarded headers are not trusted on the self-hosted server.
+                    req.peer_addr()
+                        .map(|a| a.ip().to_string())
+                        .unwrap_or_default(),
+                    req.headers()
+                        .get("User-Agent")
+                        .and_then(|v| v.to_str().ok())
+                        .unwrap_or("")
+                        .into(),
+                ),
+            },
+            payload,
+        }
     }
-    macro_rules! path {
-        () => {
-            web::Path::from(matched.parameter()?.to_owned())
-        };
+}
+impl http::HttpRequest for ActixRequest {
+    fn head(&self) -> &RequestHead {
+        &self.head
     }
-    // Exhaustive operation binding: a new App endpoint fails compilation here
-    // until a handler is supplied. There are NO method/path literals below.
-    match matched.route.operation {
-        Operation::Health => Ok(health(state, req).await),
-        Operation::Login => {
-            let body = body!(e::Login);
-            auth::session::login(state, req, body).await
+    async fn read_body(&mut self) -> HttpResult<Vec<u8>> {
+        let mut bytes = Vec::new();
+        while let Some(chunk) = self.payload.next().await {
+            let chunk = chunk.map_err(|error| ApiFailure::bad(error.to_string()))?;
+            http::check_body_length(bytes.len().saturating_add(chunk.len()))?;
+            bytes.extend_from_slice(&chunk);
         }
-        Operation::Refresh => {
-            let body = body!(e::Refresh);
-            auth::session::refresh(state, req, body).await
-        }
-        Operation::Logout => auth::session::logout(state, body!(e::Logout)).await,
-        Operation::GetAccount => auth::account::get(state, actor(&mut context)?).await,
-        Operation::UpdateAccount => {
-            auth::account::update(state, actor(&mut context)?, body!(e::UpdateAccount)).await
-        }
-        Operation::ListDevices => auth::devices::list(state, actor(&mut context)?).await,
-        Operation::KickDevice => auth::devices::kick(state, actor(&mut context)?, path!()).await,
-        Operation::DeleteDevice => {
-            auth::devices::delete(state, actor(&mut context)?, path!()).await
-        }
-        Operation::ListConfigs => {
-            webhook::configs::list(
-                state,
-                actor(&mut context)?,
-                web::Query(api::parse_query::<e::ListConfigs>(req.query_string())?),
-            )
-            .await
-        }
-        Operation::CreateConfig => {
-            webhook::configs::create(state, actor(&mut context)?, body!(e::CreateConfig)).await
-        }
-        Operation::GetConfig => webhook::configs::get(state, actor(&mut context)?, path!()).await,
-        Operation::UpdateConfig => {
-            webhook::configs::update(state, actor(&mut context)?, path!(), body!(e::UpdateConfig))
-                .await
-        }
-        Operation::DeleteConfig => {
-            webhook::configs::delete(state, actor(&mut context)?, path!()).await
-        }
-        Operation::EnableConfig => {
-            webhook::configs::enabled(state, actor(&mut context)?, path!(), body!(e::EnableConfig))
-                .await
-        }
-        Operation::ReceiveWebhook => {
-            webhook::receive::handle(state, req, path!(), web::Bytes::from(bytes)).await
-        }
-        Operation::ListMessages => {
-            message::handler::list(
-                state,
-                actor(&mut context)?,
-                web::Query(api::parse_query::<e::ListMessages>(req.query_string())?),
-            )
-            .await
-        }
-        Operation::UnreadCount => message::handler::unread_count(state, actor(&mut context)?).await,
-        Operation::StreamMessages => message::handler::stream(state, actor(&mut context)?).await,
-        Operation::BatchMessages => {
-            message::handler::batch(state, actor(&mut context)?, body!(e::BatchMessages)).await
-        }
-        Operation::GetMessage => message::handler::get(state, actor(&mut context)?, path!()).await,
-        Operation::UpdateMessage => {
-            message::handler::update(
-                state,
-                actor(&mut context)?,
-                path!(),
-                body!(e::UpdateMessage),
-            )
-            .await
-        }
-        Operation::DeleteMessage => {
-            message::handler::delete(state, actor(&mut context)?, path!()).await
-        }
-        Operation::RawMessage => message::handler::raw(state, actor(&mut context)?, path!()).await,
+        Ok(bytes)
     }
 }
 
 #[derive(Clone, Default)]
 pub struct HealthLimiter(Arc<Mutex<HashMap<Option<IpAddr>, Instant>>>);
 impl HealthLimiter {
-    fn allow(&self, ip: Option<IpAddr>) -> bool {
+    pub(crate) fn allow(&self, ip: Option<IpAddr>) -> bool {
         let now = Instant::now();
         let mut entries = self.0.lock().expect("health limiter lock");
         entries.retain(|_, time| now.duration_since(*time) < Duration::from_secs(2));
@@ -181,11 +120,96 @@ impl HealthLimiter {
         true
     }
 }
-async fn health(state: web::Data<AppState>, req: HttpRequest) -> HttpResponse {
-    if !state.health_limiter.allow(req.peer_addr().map(|a| a.ip())) {
-        return HttpResponse::TooManyRequests()
-            .insert_header(("Retry-After", "2"))
-            .json(ApiFailure::new(429, "Too Many Requests").response());
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use nomail_app::webhook::HeaderLookup;
+
+    struct UnconfiguredEnvironment {
+        service_calls: std::cell::Cell<usize>,
     }
-    success::<e::Health>(HealthResponse::database(state.db.ping().await.is_ok()))
+    impl http::Environment for UnconfiguredEnvironment {
+        // These are only type witnesses: this environment never constructs a
+        // database or any use case, and always fails configuration if called.
+        type AuthStore = crate::auth::repository::Store<'static>;
+        type MessageStore = crate::message::repository::Store<'static>;
+        type ConfigStore = crate::webhook::configs::repository::Store<'static>;
+        type Runtime = crate::services::Runtime;
+        fn services(&self) -> HttpResult<http::EnvironmentServices<Self>> {
+            self.service_calls.set(self.service_calls.get() + 1);
+            Err(ApiFailure::internal().into())
+        }
+        async fn health(&self, _: &RequestHead) -> HttpResult<http::HealthCheck> {
+            Ok(http::HealthCheck::Database(true))
+        }
+    }
+    struct UnreadableRequest {
+        head: RequestHead,
+        body_reads: usize,
+    }
+    impl http::HttpRequest for UnreadableRequest {
+        fn head(&self) -> &RequestHead {
+            &self.head
+        }
+        async fn read_body(&mut self) -> HttpResult<Vec<u8>> {
+            self.body_reads += 1;
+            Err(ApiFailure::bad("body must not be read").into())
+        }
+    }
+    #[actix_web::test]
+    async fn shared_executor_routes_and_handles_health_before_loading_services_or_body() {
+        let environment = UnconfiguredEnvironment {
+            service_calls: std::cell::Cell::new(0),
+        };
+        let mut request = UnreadableRequest {
+            head: RequestHead {
+                method: "GET".into(),
+                path: "/api/unknown".into(),
+                query: String::new(),
+                headers: Vec::new(),
+                metadata: RequestMeta::default(),
+            },
+            body_reads: 0,
+        };
+        let error = http::execute(&mut request, &environment)
+            .await
+            .err()
+            .unwrap();
+        assert_eq!(error.failure.status, 404);
+        assert_eq!(environment.service_calls.get(), 0);
+
+        request.head.path = "/api/health".into();
+        let outcome = http::execute(&mut request, &environment).await.unwrap();
+        let HttpReply::Response(response) = outcome.reply else {
+            panic!()
+        };
+        assert_eq!(response.status, 200);
+        assert_eq!(environment.service_calls.get(), 0);
+
+        request.head.method = "POST".into();
+        request.head.path = "/api/auth/login".into();
+        let error = http::execute(&mut request, &environment)
+            .await
+            .err()
+            .unwrap();
+        assert_eq!(error.failure.status, 500);
+        assert_eq!(environment.service_calls.get(), 1);
+        assert_eq!(request.body_reads, 0);
+    }
+    #[actix_web::test]
+    async fn request_adapter_preserves_repeated_headers_and_uses_peer_ip() {
+        let (req, mut payload) = actix_web::test::TestRequest::get()
+            .peer_addr("127.0.0.1:1234".parse().unwrap())
+            .append_header(("X-Repeated", "one"))
+            .append_header(("X-Repeated", "two"))
+            .insert_header(("X-Forwarded-For", "untrusted"))
+            .to_http_parts();
+        let payload = <web::Payload as actix_web::FromRequest>::from_request(&req, &mut payload)
+            .await
+            .unwrap();
+        let request = ActixRequest::new(req, payload);
+        assert_eq!(request.head.values("X-Repeated"), ["one", "two"]);
+        assert_eq!(request.head.metadata.ip, "127.0.0.1");
+    }
 }

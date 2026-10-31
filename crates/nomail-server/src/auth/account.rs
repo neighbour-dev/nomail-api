@@ -1,12 +1,4 @@
-use super::Auth;
-use crate::{
-    AppState,
-    config::Config,
-    error::{ApiError, ApiResult, success},
-};
-use actix_web::web;
-use nomail_app::auth::AccountUpdateRequest;
-use nomail_app::http::endpoints as e;
+use crate::{config::Config, error::ApiError};
 use sea_orm::DatabaseConnection;
 
 pub async fn ensure_initial_user(db: &DatabaseConnection, config: &Config) -> Result<(), ApiError> {
@@ -31,22 +23,4 @@ pub async fn reset_account(
     }
     .reset_account(username, &password)
     .await?)
-}
-pub async fn get(state: web::Data<AppState>, auth: Auth) -> ApiResult {
-    Ok(success::<e::GetAccount>(
-        super::service(&state.db, &state.config)
-            .account(auth.user_id)
-            .await?,
-    ))
-}
-pub async fn update(
-    state: web::Data<AppState>,
-    auth: Auth,
-    body: web::Json<AccountUpdateRequest>,
-) -> ApiResult {
-    Ok(success::<e::UpdateAccount>(
-        super::service(&state.db, &state.config)
-            .update_account(auth.user_id, body.into_inner())
-            .await?,
-    ))
 }

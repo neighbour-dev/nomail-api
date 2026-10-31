@@ -1,159 +1,85 @@
-//! Workers transport binds App operations, never paths/methods/DTO definitions.
+//! Workers request/response adaptation; no endpoint names or business dispatch.
 use crate::{
-    auth,
-    config::Config,
     db::Store,
-    device,
-    error::{ApiError, Result, success},
-    message, webhook,
+    error::{ApiError, Result},
+    realtime,
+    services::WorkersEnvironment,
 };
 use futures_util::StreamExt;
-use nomail_app::auth::AuthContext;
-use nomail_app::http::{
-    self as api, AuthRequirement, BodyKind, HealthResponse, Operation, endpoints as e,
+use nomail_app::{
+    auth::RequestMeta,
+    http::{self, HttpReply, HttpResult, RequestHead},
 };
 use worker::{Env, Request, Response};
 
-async fn body(req: &mut Request) -> Result<Vec<u8>> {
-    let mut bytes = Vec::new();
-    let mut stream = req.stream()?;
-    while let Some(chunk) = stream.next().await {
-        let chunk = chunk?;
-        api::check_body_length(bytes.len().saturating_add(chunk.len()))?;
-        bytes.extend(chunk);
+pub async fn handle(req: Request, env: Env) -> Result<Response> {
+    let mut request = WorkersRequest::new(req)?;
+    // Keep binding failures deferred until the shared executor has matched a
+    // route, so unknown paths still return 404 even with broken configuration.
+    let db = env.d1("DB").map(Store);
+    let outcome = http::execute(&mut request, &WorkersEnvironment { db: &db, env: &env }).await?;
+    for effect in outcome.events {
+        if let Err(_error) = realtime::publish(&env, effect.user_id, effect.event).await {
+            // A failed best-effort broadcast must not fail an already durable ACK.
+            worker::console_error!("realtime publish failed: internal operation failed");
+        }
     }
-    Ok(bytes)
-}
-fn actor(context: &Option<AuthContext>) -> Result<i64> {
-    context.as_ref().map(|ctx| ctx.user_id).ok_or_else(|| {
-        worker::Error::RustError("missing authenticated route context".into()).into()
-    })
+    match outcome.reply {
+        HttpReply::Response(response) => {
+            let mut result = Response::from_bytes(response.body)?.with_status(response.status);
+            for (name, value) in response.headers {
+                result.headers_mut().set(&name, &value)?;
+            }
+            Ok(result)
+        }
+        HttpReply::Subscribe(subscription) => Ok(realtime::subscribe(
+            &env,
+            subscription.user_id,
+            subscription.expires_at.timestamp(),
+        )
+        .await?),
+    }
 }
 
-pub async fn handle(mut req: Request, env: Env) -> Result<Response> {
-    let matched = api::resolve(req.method().as_ref(), &req.path())?;
-    let db = Store(env.d1("DB")?);
-    // Health doesn't need auth/encryption secrets, but the binding remains an
-    // explicit exhaustive arm in the dispatcher below.
-    let config = if matched.route.operation == Operation::Health {
-        None
-    } else {
-        Some(Config::load(&env)?)
-    };
-    let context = if matched.route.auth == AuthRequirement::Bearer {
-        Some(
-            auth::authenticate(
-                &req,
-                &db,
-                config
-                    .as_ref()
-                    .ok_or_else(|| ApiError::from(api::ApiFailure::internal()))?,
-            )
-            .await?,
-        )
-    } else {
-        None
-    };
-    let bytes = if matched.route.body != BodyKind::None {
-        body(&mut req).await?
-    } else {
-        Vec::new()
-    };
-    let content_type = req.headers().get("Content-Type")?;
-    let query = req.url()?.query().unwrap_or("").to_owned();
-    macro_rules! config {
-        () => {
-            config
-                .as_ref()
-                .ok_or_else(|| ApiError::from(api::ApiFailure::internal()))?
-        };
+struct WorkersRequest {
+    head: RequestHead,
+    request: Request,
+}
+impl WorkersRequest {
+    fn new(request: Request) -> Result<Self> {
+        Ok(Self {
+            head: RequestHead {
+                method: request.method().as_ref().into(),
+                path: request.path(),
+                query: request.url()?.query().unwrap_or("").into(),
+                headers: request.headers().entries().collect(),
+                metadata: RequestMeta::new(
+                    request
+                        .headers()
+                        .get("CF-Connecting-IP")?
+                        .unwrap_or_default(),
+                    request.headers().get("User-Agent")?.unwrap_or_default(),
+                ),
+            },
+            request,
+        })
     }
-    macro_rules! json {
-        ($endpoint:ty) => {
-            api::parse_json::<$endpoint>(&bytes, content_type.as_deref())?
-        };
+}
+impl http::HttpRequest for WorkersRequest {
+    fn head(&self) -> &RequestHead {
+        &self.head
     }
-    macro_rules! id {
-        () => {
-            matched.parameter()?
-        };
-    }
-    match matched.route.operation {
-        Operation::Health => success::<e::Health>(HealthResponse::database(
-            db.rows("SELECT 1", vec![]).await.is_ok(),
-        )),
-        Operation::Login => auth::login(&req, json!(e::Login), &db, config!(), &env).await,
-        Operation::Refresh => auth::refresh(&req, json!(e::Refresh), &db, config!()).await,
-        Operation::Logout => auth::logout(json!(e::Logout), &db, config!()).await,
-        Operation::GetAccount => auth::get_account(actor(&context)?, &db, config!()).await,
-        Operation::UpdateAccount => {
-            auth::update_account(json!(e::UpdateAccount), actor(&context)?, &db, config!()).await
+    async fn read_body(&mut self) -> HttpResult<Vec<u8>> {
+        let mut bytes = Vec::new();
+        let mut stream = self
+            .request
+            .stream()
+            .map_err(|error| ApiError::from(error).into_http())?;
+        while let Some(chunk) = stream.next().await {
+            let chunk = chunk.map_err(|error| ApiError::from(error).into_http())?;
+            http::check_body_length(bytes.len().saturating_add(chunk.len()))?;
+            bytes.extend(chunk);
         }
-        Operation::ListDevices => device::list(actor(&context)?, &db, config!()).await,
-        Operation::KickDevice => device::kick(id!(), actor(&context)?, &db, config!()).await,
-        Operation::DeleteDevice => device::delete(id!(), actor(&context)?, &db, config!()).await,
-        Operation::ListConfigs => {
-            webhook::configs::list(
-                api::parse_query::<e::ListConfigs>(&query)?,
-                actor(&context)?,
-                &db,
-                config!(),
-            )
-            .await
-        }
-        Operation::CreateConfig => {
-            webhook::configs::create(json!(e::CreateConfig), actor(&context)?, &db, config!()).await
-        }
-        Operation::GetConfig => {
-            webhook::configs::get(id!(), actor(&context)?, &db, config!()).await
-        }
-        Operation::UpdateConfig => {
-            webhook::configs::update(
-                id!(),
-                json!(e::UpdateConfig),
-                actor(&context)?,
-                &db,
-                config!(),
-            )
-            .await
-        }
-        Operation::DeleteConfig => {
-            webhook::configs::delete(id!(), actor(&context)?, &db, config!()).await
-        }
-        Operation::EnableConfig => {
-            webhook::configs::enabled(
-                id!(),
-                json!(e::EnableConfig),
-                actor(&context)?,
-                &db,
-                config!(),
-            )
-            .await
-        }
-        Operation::ReceiveWebhook => {
-            webhook::receive(&req, &bytes, id!(), &db, config!(), &env).await
-        }
-        Operation::ListMessages => {
-            message::list(
-                api::parse_query::<e::ListMessages>(&query)?,
-                actor(&context)?,
-                &db,
-            )
-            .await
-        }
-        Operation::UnreadCount => message::unread_count(actor(&context)?, &db).await,
-        Operation::StreamMessages => {
-            let ctx = context.ok_or_else(|| ApiError::from(api::ApiFailure::internal()))?;
-            Ok(crate::realtime::subscribe(&env, ctx.user_id, ctx.expires_at.timestamp()).await?)
-        }
-        Operation::BatchMessages => {
-            message::batch(json!(e::BatchMessages), actor(&context)?, &db).await
-        }
-        Operation::GetMessage => message::get(id!(), actor(&context)?, &db).await,
-        Operation::UpdateMessage => {
-            message::update(id!(), json!(e::UpdateMessage), actor(&context)?, &db).await
-        }
-        Operation::DeleteMessage => message::delete(id!(), actor(&context)?, &db).await,
-        Operation::RawMessage => message::raw(id!(), actor(&context)?, &db).await,
+        Ok(bytes)
     }
 }

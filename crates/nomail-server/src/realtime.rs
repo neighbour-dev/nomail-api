@@ -10,6 +10,44 @@ use tokio::sync::mpsc;
 
 type Subscribers = HashMap<i64, HashMap<u64, mpsc::Sender<Event>>>;
 
+/// Native SSE connection execution; routing/authentication are already complete.
+pub(crate) fn stream(
+    hub: &Hub,
+    request: nomail_app::http::Subscription,
+) -> actix_web::HttpResponse {
+    use actix_web::{HttpResponse, web};
+    use chrono::Utc;
+    use nomail_app::http::sse::{HEARTBEAT, HEARTBEAT_SECONDS};
+
+    let mut subscription = hub.subscribe(request.user_id);
+    let stream = async_stream::stream! {
+        yield Ok::<_,actix_web::Error>(web::Bytes::from(encode(&Event::ready(Utc::now()))));
+        let period = std::time::Duration::from_secs(HEARTBEAT_SECONDS);
+        let mut heartbeat = tokio::time::interval_at(tokio::time::Instant::now() + period, period);
+        let expiry = tokio::time::sleep((request.expires_at - Utc::now()).to_std().unwrap_or_default());
+        tokio::pin!(expiry);
+        loop {
+            tokio::select! {
+                _ = &mut expiry => {
+                    yield Ok(web::Bytes::from(encode(&Event::auth_expired())));
+                    break;
+                }
+                _ = heartbeat.tick() => yield Ok(web::Bytes::from_static(HEARTBEAT)),
+                event = subscription.receiver.recv() => match event {
+                    Some(event) => yield Ok(web::Bytes::from(encode(&event))),
+                    None => break,
+                },
+            }
+        }
+        drop(subscription);
+    };
+    HttpResponse::Ok()
+        .insert_header(("Content-Type", "text/event-stream"))
+        .insert_header(("Cache-Control", "no-cache"))
+        .insert_header(("X-Accel-Buffering", "no"))
+        .streaming(stream)
+}
+
 #[derive(Clone, Default)]
 pub struct Hub {
     inner: Arc<Mutex<Subscribers>>,

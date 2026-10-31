@@ -47,7 +47,7 @@ npm test
 
 `npm test` 使用独立临时 D1 存储，启动本地 Wrangler/DO 并检查 API、SSE、签名、软删除、无 ID 消息、并发去重、refresh token 单次消费和密码修改撤销会话。只使用测试凭据，不需要 Cloudflare 账号；本地占用 `127.0.0.1:8791`。需安装 `worker-build`，它必须在 PATH 中。
 
-路由由 `nomail-app::http` 契约解析，Workers 只绑定 Operation，不另写路径/方法/鉴权白名单。请求、响应及公共包装来自 App；测试用生成的 OpenAPI 3.1 校验实际响应，并枚举受保护接口检查鉴权。修改契约后在仓库根目录运行 `cargo run -p nomail-app --features openapi --example export-openapi -- docs/swagger.json`；AJV 仅为测试开发依赖。
+路由和接口执行统一由 `nomail-app::http::execute` 完成，Workers 不再绑定 Operation、解析 DTO 或编写逐接口 Handler。`src/app.rs` 只实现请求/响应适配、广播与订阅，`src/services.rs` 组装 D1 存储、配置和运行时。测试还用生成的 OpenAPI 3.1 对实际 JSON 响应做 Schema 校验，并从文档枚举全部受保护接口检查鉴权。修改契约后先在仓库根目录运行 `cargo run -p nomail-app --features openapi --example export-openapi -- docs/swagger.json`；AJV 仅为测试开发依赖，不进入 Worker 运行包。
 
 ## 与 Server 的边界
 
@@ -55,10 +55,10 @@ npm test
 - 单张消息表同时保存通用字段、类型/版本/完整去重键、带标签的 platform_data JSON、可读原始内容及 NoMail 状态。列表必含 level；详情返回 metadata/platformData，原文继续使用 raw 接口。配置修改和已读/置顶操作不会重写平台快照。
 - 初始 Schema 与 Server 约束对齐：完整作用域去重、平台 JSON/provider 一致性、合法等级、读状态及外键。不转换旧的本地数据库，也不会自动清空已有开发数据。
 - Server 使用 SeaORM/SQLite 的原生 UUID BLOB 与日期编码；D1 使用 UUID TEXT 与规范化 UTC RFC3339 毫秒字符串。通过各自适配层保持同一 HTTP 数据契约，不直接交换数据库文件。
-- `src/auth/` 只包含 HTTP/运行时组装和 AuthStore 的 D1 实现，不维护第二套 JWT、密码策略或业务流程。多步骤登录/改密使用 batch；刷新使用条件 UPDATE 与受影响行数保护，并在同一批次更新设备 IP/User-Agent/最近活动时间；不能将 Server 的持有事务对象方式搬到 Workers。
-- `src/message/handler.rs` 只适配 HTTP，业务由共享 MessageService 执行。D1 MessageStore 接收类型化查询与局部状态命令，更新/详情读取使用同一 batch；批量通过 `json_each(?)` 绑定一个 JSON ID 数组，支持 100 个 ID 的单次原子写入，不用陈旧完整记录覆盖并发操作。
+- `src/auth/` 只包含密码执行和 AuthStore 的 D1 实现，不维护第二套 JWT、密码策略或业务流程。多步骤登录/改密使用 batch；刷新使用条件 UPDATE 与受影响行数保护，并在同一批次更新设备 IP/User-Agent/最近活动时间；不能将 Server 的持有事务对象方式搬到 Workers。
+- `src/message/` 只保留存储适配。D1 MessageStore 接收类型化查询与局部状态命令，更新/详情读取使用同一 batch；批量通过 `json_each(?)` 绑定一个 JSON ID 数组，支持 100 个 ID 的单次原子写入，不用陈旧完整记录覆盖并发操作。
 - `src/webhook/configs/repository.rs` 原子更新配置并返回不含 URL/凭据的 ConfigView，App HTTP 层构造公开响应；空 PATCH 不写入。
-- `src/webhook.rs` 调用 App IngestionService 完成查配置、解密、验签及入箱，并通过共享 HTTP 转换获取 ACK 和 SSE 效果，Workers 只写响应和尽力而为地广播。D1 错误先转为存储/业务错误，不依赖 HTTP 状态码。
+- 查配置、解密、验签及入箱由 App IngestionService 完成，App HTTP 执行器转换 ACK 和 SSE 效果，Workers 只写响应和尽力而为地广播。D1 错误先转为存储/业务错误，不依赖 HTTP 状态码。
 - SSE 为每用户一个 DO，单实例最多 32 个订阅、每订阅 32 条缓冲，20 秒心跳，到访问令牌过期时关闭。无重放、无离线投递，慢客户端可能丢事件；重新连接后应刷新列表。
 - Core 支持的平台多于 HTTP 配置，目前只开放 Generic/GitHub/飞书。飞书仍使用一个 secret 同时作为 Token/Encrypt Key，不能自动降级认证。
 - 本地测试不代表免费套餐 CPU 可满足 bcrypt cost=10。发布前用实际套餐测试登录开销；SSE 会产生 DO 使用费用。没有请求级应用限流，生产需要在 Cloudflare 配置入口限流与防滥用措施。

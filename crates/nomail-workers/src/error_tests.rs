@@ -28,4 +28,11 @@ fn adapters_delegate_all_domains_without_invoking_runtime_logging_during_convers
     let storage: ApiError = worker::Error::RustError("sensitive database value".into()).into();
     assert_eq!(storage.message, "internal server error");
     assert!(!format!("{storage:?}").contains("sensitive"));
+    let domain = MessageError::Internal("sensitive raw payload".into());
+    let diagnostic = domain.diagnostic();
+    let shared: nomail_app::http::HttpError = domain.into();
+    let actual: ApiError = shared.into();
+    assert_eq!(actual.diagnostic, diagnostic);
+    assert_eq!(actual.message, "internal server error");
+    assert!(!format!("{actual:?}").contains("sensitive"));
 }

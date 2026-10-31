@@ -4,6 +4,13 @@ use nomail_app::http::{ApiFailure, ApiResponse};
 use std::fmt;
 
 pub type ApiResult = Result<HttpResponse, ApiError>;
+impl From<nomail_app::http::HttpError> for ApiError {
+    fn from(error: nomail_app::http::HttpError) -> Self {
+        let mut result = Self::from(error.failure);
+        result.diagnostic = error.diagnostic;
+        result
+    }
+}
 impl From<nomail_app::ingestion::IngestionError> for ApiError {
     fn from(error: nomail_app::ingestion::IngestionError) -> Self {
         Self::from_domain(error)
@@ -111,12 +118,6 @@ impl From<sea_orm::DbErr> for ApiError {
             Self::internal(error)
         }
     }
-}
-pub fn success<E: nomail_app::http::Endpoint>(data: E::Response) -> HttpResponse {
-    HttpResponse::Ok().json(ApiResponse::success(data))
-}
-pub fn check_length(value: &str, name: &str, max: usize, required: bool) -> Result<(), ApiError> {
-    nomail_app::auth::check_length(value, name, max, required).map_err(ApiError::bad)
 }
 
 #[cfg(test)]

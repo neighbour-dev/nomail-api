@@ -1,10 +1,53 @@
 //! The single HTTP mapping boundary for domain errors. No logging here.
 use super::ApiResponse;
+use crate::error::Diagnostic;
 use crate::error::{
     AuthError, ConfigError, DomainError, ErrorKind, INTERNAL_MESSAGE, MessageError,
     UNAUTHORIZED_MESSAGE, WebhookError,
 };
 use crate::ingestion::IngestionError;
+
+pub type HttpResult<T> = Result<T, HttpError>;
+
+/// Preserve safe domain diagnostics until the final platform logging boundary.
+#[derive(Clone, Debug)]
+pub struct HttpError {
+    pub failure: ApiFailure,
+    pub diagnostic: Option<Diagnostic>,
+}
+impl std::fmt::Display for HttpError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.failure.fmt(f)
+    }
+}
+impl std::error::Error for HttpError {}
+impl From<ApiFailure> for HttpError {
+    fn from(failure: ApiFailure) -> Self {
+        Self {
+            failure,
+            diagnostic: None,
+        }
+    }
+}
+macro_rules! execution_errors {
+    ($($error:ty),* $(,)?) => {$(
+        impl From<$error> for HttpError {
+            fn from(error: $error) -> Self {
+                Self {
+                    failure: ApiFailure::from_domain(&error),
+                    diagnostic: error.diagnostic(),
+                }
+            }
+        }
+    )*};
+}
+execution_errors!(
+    AuthError,
+    MessageError,
+    ConfigError,
+    WebhookError,
+    IngestionError
+);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ApiFailure {
