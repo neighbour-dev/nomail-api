@@ -5,8 +5,8 @@ use crate::{
     error::{ApiError, ApiResult, success},
 };
 use actix_web::web;
-use nomail_core::api::endpoints as e;
-use nomail_core::auth::AccountUpdateRequest;
+use nomail_app::auth::AccountUpdateRequest;
+use nomail_app::http::endpoints as e;
 use sea_orm::DatabaseConnection;
 
 pub async fn ensure_initial_user(db: &DatabaseConnection, config: &Config) -> Result<(), ApiError> {
@@ -18,13 +18,13 @@ pub async fn reset_account(
     password: String,
 ) -> Result<(), ApiError> {
     // Reset needs no token-signing configuration and remains a local-only tool.
-    let config = nomail_core::auth::AuthConfig {
+    let config = nomail_app::auth::AuthConfig {
         jwt_secret: String::new(),
         jwt_issuer: String::new(),
         initial_username: String::new(),
         initial_password: String::new(),
     };
-    Ok(nomail_core::auth::AuthService {
+    Ok(nomail_app::auth::AuthService {
         store: super::repository::Store(db),
         runtime: super::runtime::Runtime,
         config,

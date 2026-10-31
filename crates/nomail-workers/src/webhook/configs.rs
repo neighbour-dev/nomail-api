@@ -1,4 +1,4 @@
-//! Workers HTTP/runtime adaptation; configuration policies live in Core.
+//! Workers HTTP/runtime adaptation; configuration policies live in App.
 mod repository;
 use crate::{
     config::Config,
@@ -6,8 +6,8 @@ use crate::{
     error::{Result, success},
     time,
 };
-use nomail_core::{
-    api::{PaginationQuery, endpoints as e},
+use nomail_app::{
+    http::{PaginationQuery, endpoints as e},
     webhook::config::*,
 };
 use worker::Response;
@@ -39,7 +39,7 @@ pub async fn list(
     db: &Store,
     config: &Config,
 ) -> Result<Response> {
-    success::<e::ListConfigs>(service(db, config).list(uid, query).await?)
+    success::<e::ListConfigs>(service(db, config).list(uid, query).await?.into())
 }
 pub async fn create(
     body: ConfigRequest,
@@ -47,10 +47,10 @@ pub async fn create(
     db: &Store,
     config: &Config,
 ) -> Result<Response> {
-    success::<e::CreateConfig>(service(db, config).create(uid, body).await?)
+    success::<e::CreateConfig>(service(db, config).create(uid, body).await?.into())
 }
 pub async fn get(id: &str, uid: i64, db: &Store, config: &Config) -> Result<Response> {
-    success::<e::GetConfig>(service(db, config).get(uid, id).await?)
+    success::<e::GetConfig>(service(db, config).get(uid, id).await?.into())
 }
 pub async fn update(
     id: &str,
@@ -59,7 +59,7 @@ pub async fn update(
     db: &Store,
     config: &Config,
 ) -> Result<Response> {
-    success::<e::UpdateConfig>(service(db, config).update(uid, id, body).await?)
+    success::<e::UpdateConfig>(service(db, config).update(uid, id, body).await?.into())
 }
 pub async fn delete(id: &str, uid: i64, db: &Store, config: &Config) -> Result<Response> {
     service(db, config).delete(uid, id).await?;
@@ -72,5 +72,10 @@ pub async fn enabled(
     db: &Store,
     config: &Config,
 ) -> Result<Response> {
-    success::<e::EnableConfig>(service(db, config).enabled(uid, id, body.enabled).await?)
+    success::<e::EnableConfig>(
+        service(db, config)
+            .enabled(uid, id, body.enabled)
+            .await?
+            .into(),
+    )
 }

@@ -255,22 +255,14 @@ impl MessageLevel {
     }
 }
 
-pub use crate::message::MessageContent;
-
-/// NoMail ACK for business deliveries. Platform verification/Ping responses do
-/// not use this envelope and remain ProtocolResponse bytes.
-#[derive(Serialize, Deserialize)]
-#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
-#[serde(untagged)]
-pub enum ReceiveResponse {
-    Message {
-        #[serde(rename = "messageId")]
-        message_id: uuid::Uuid,
-        duplicate: bool,
-    },
-    Ignored {
-        ignored: bool,
-    },
+/// Portable platform content, without inbox state or product-specific defaults.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MessageContent {
+    pub title: String,
+    pub content: String,
+    pub source: Option<String>,
+    pub level: MessageLevel,
+    pub url: Option<String>,
 }
 
 impl FromStr for MessageLevel {

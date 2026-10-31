@@ -67,7 +67,7 @@ async fn config_service_preserves_sparse_concurrent_updates_credentials_and_scop
         .unwrap()
         .unwrap();
     assert_eq!(
-        nomail_core::security::decrypt(initial.encrypted_secret.as_deref().unwrap(), &[7; 32])
+        nomail_app::security::decrypt(initial.encrypted_secret.as_deref().unwrap(), &[7; 32])
             .unwrap(),
         "original-secret"
     );
@@ -148,7 +148,7 @@ async fn config_service_preserves_sparse_concurrent_updates_credentials_and_scop
         .unwrap();
     assert_ne!(replaced.encrypted_secret, initial.encrypted_secret);
     assert_eq!(
-        nomail_core::security::decrypt(replaced.encrypted_secret.as_deref().unwrap(), &[7; 32])
+        nomail_app::security::decrypt(replaced.encrypted_secret.as_deref().unwrap(), &[7; 32])
             .unwrap(),
         "replacement-secret"
     );

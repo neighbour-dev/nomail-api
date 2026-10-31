@@ -1,18 +1,30 @@
 pub mod configs;
 use crate::{
     config::Config,
-    crypto,
     db::Store,
     error::{Result, success},
     time,
 };
-use nomail_core::api::endpoints as e;
-use nomail_core::webhook::{
-    self, ReceiveOutcome, ReceiveResponse, WebhookConfig, WebhookRequest, service,
+use chrono::{DateTime, Utc};
+use nomail_app::{
+    http::{endpoints as e, webhook::WebhookReply},
+    ingestion::{IngestionError, IngestionResult, IngestionRuntime, IngestionService},
+    webhook::WebhookRequest,
 };
-use serde_json::json;
 use worker::{Env, Request, Response};
-
+struct Runtime<'a>(&'a [u8; 32]);
+impl IngestionRuntime for Runtime<'_> {
+    fn now(&self) -> DateTime<Utc> {
+        DateTime::from_timestamp_millis(time::now_ms()).expect("runtime timestamp in range")
+    }
+    fn message_id(&self, now: DateTime<Utc>) -> IngestionResult<uuid::Uuid> {
+        crate::crypto::message_id(now.timestamp_millis() as u64)
+            .map_err(|_| IngestionError::Internal("message identity generation failed".into()))
+    }
+    fn encryption_key(&self) -> &[u8; 32] {
+        self.0
+    }
+}
 pub async fn receive(
     req: &Request,
     bytes: &[u8],
@@ -21,67 +33,34 @@ pub async fn receive(
     config: &Config,
     env: &Env,
 ) -> Result<Response> {
-    let row = db
-        .one(
-            "SELECT * FROM webhook_configs WHERE key=? AND enabled=1 AND deleted_at IS NULL",
-            vec![json!(key)],
-        )
-        .await?;
-    let provider = service::configured_provider(row["provider"].as_str().unwrap())?;
-    let encrypted = row["encrypted_secret"].as_str().unwrap_or("");
-    let secret = if encrypted.is_empty() {
-        String::new()
-    } else {
-        crypto::decrypt(encrypted, &config.encryption_key)?
-    };
     let headers: Vec<(String, String)> = req.headers().entries().collect();
-    let now_ms = time::now_ms();
-    let outcome = webhook::receive(
-        &WebhookConfig::new(
-            provider,
-            service::authentication(provider, &secret),
-            now_ms / 1000,
-        ),
+    let outcome = IngestionService {
+        messages: crate::message::service(db),
+        runtime: Runtime(&config.encryption_key),
+    }
+    .receive(
+        key,
         &WebhookRequest {
             headers: &headers,
             body: bytes,
         },
-    )?;
-    let event = match outcome {
-        ReceiveOutcome::Event(event) => event,
-        ReceiveOutcome::Respond(r) => {
-            let mut response = Response::from_bytes(r.body)?.with_status(r.status);
-            response
+    )
+    .await?;
+    match WebhookReply::from(outcome) {
+        WebhookReply::Control(response) => {
+            let mut result = Response::from_bytes(response.body)?.with_status(response.status);
+            result
                 .headers_mut()
-                .set("Content-Type", &r.content_type)?;
-            return Ok(response);
+                .set("Content-Type", &response.content_type)?;
+            Ok(result)
         }
-        ReceiveOutcome::Ignored { .. } => {
-            return success::<e::ReceiveWebhook>(ReceiveResponse::Ignored { ignored: true });
+        WebhookReply::Acknowledgement { response, created } => {
+            if let Some((user_id, event)) = created
+                && let Err(_error) = crate::realtime::publish(env, user_id, event).await
+            {
+                worker::console_error!("realtime publish failed: internal operation failed");
+            }
+            success::<e::ReceiveWebhook>(response)
         }
-    };
-    let id = uuid::Uuid::parse_str(&crypto::message_id(now_ms as u64)?)
-        .map_err(|e| worker::Error::RustError(e.to_string()))?;
-    let now = chrono::DateTime::from_timestamp_millis(now_ms).expect("runtime timestamp in range");
-    let accepted = crate::message::service(db)
-        .accept(
-            row["id"].as_i64().unwrap(),
-            *event,
-            row["source"].as_str(),
-            id,
-            now,
-        )
-        .await?;
-    if let Some(created) = accepted.created_event
-        && let Err(_error) =
-            crate::realtime::publish(env, row["user_id"].as_i64().unwrap(), created).await
-    {
-        // Best-effort side effect has its own boundary; do not forward an
-        // arbitrary runtime error (which may contain request data) to logs.
-        worker::console_error!("realtime publish failed: internal operation failed");
     }
-    success::<e::ReceiveWebhook>(ReceiveResponse::Message {
-        message_id: accepted.outcome.id(),
-        duplicate: accepted.outcome.duplicate(),
-    })
 }

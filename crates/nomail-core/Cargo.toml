@@ -3,14 +3,13 @@ name = "nomail-core"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.99"
-description = "Runtime-independent NoMail message protocols and community authentication use cases"
+description = "Runtime-independent platform webhook authentication, parsing and content extraction"
 
 [features]
 openapi = ["dep:schemars"]
 
 [dependencies]
 aes = "0.8"
-aes-gcm = { version = "0.10", default-features = false, features = ["aes", "alloc"] }
 base64 = "0.22"
 cbc = { version = "0.1", features = ["alloc"] }
 hex = "0.4"
@@ -21,20 +20,4 @@ serde_urlencoded = "0.7"
 sha2 = "0.10"
 subtle = "2"
 chrono = { version = "0.4", default-features = false, features = ["std", "serde"] }
-uuid = { version = "1", default-features = false, features = ["std", "serde"] }
-bcrypt = { version = "0.17", default-features = false, features = ["alloc", "zeroize"] }
-jsonwebtoken = { version = "10", default-features = false, features = ["rust_crypto"] }
-percent-encoding = "2"
-schemars = { version = "1", optional = true, features = ["chrono04", "uuid1"] }
-
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-getrandom02 = { package = "getrandom", version = "0.2", features = ["js"] }
-getrandom03 = { package = "getrandom", version = "0.3", features = ["wasm_js"] }
-
-[dev-dependencies]
-tokio = { version = "1", features = ["rt", "macros"] }
-
-[[example]]
-name = "export-openapi"
-path = "examples/export_openapi.rs"
-required-features = ["openapi"]
+schemars = { version = "1", optional = true, features = ["chrono04"] }

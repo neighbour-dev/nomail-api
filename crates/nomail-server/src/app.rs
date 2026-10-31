@@ -1,4 +1,4 @@
-//! Actix transport: Core alone resolves routes and defines request/response DTOs.
+//! Actix transport: App alone resolves routes and defines request/response DTOs.
 use crate::{
     AppState, auth,
     error::{ApiError, ApiResult, success},
@@ -6,10 +6,10 @@ use crate::{
 };
 use actix_web::{HttpRequest, HttpResponse, ResponseError, web};
 use futures_util::StreamExt;
-use nomail_core::api::{
-    self, ApiFailure, AuthRequirement, BodyKind, HealthResponse, Operation, endpoints as e,
+use nomail_app::auth::AuthContext;
+use nomail_app::http::{
+    self as api, ApiFailure, AuthRequirement, BodyKind, HealthResponse, Operation, endpoints as e,
 };
-use nomail_core::auth::AuthContext;
 use std::{
     collections::HashMap,
     net::IpAddr,
@@ -89,7 +89,7 @@ async fn execute(
             web::Path::from(matched.parameter()?.to_owned())
         };
     }
-    // Exhaustive operation binding: a new Core endpoint fails compilation here
+    // Exhaustive operation binding: a new App endpoint fails compilation here
     // until a handler is supplied. There are NO method/path literals below.
     match matched.route.operation {
         Operation::Health => Ok(health(state, req).await),

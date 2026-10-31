@@ -13,9 +13,9 @@ impl Config {
             return Err(ApiError::bad("JWT_SECRET is required"));
         }
         let encryption_key =
-            nomail_core::security::decode_key(&env.secret("SECRET_ENCRYPTION_KEY")?.to_string())
+            nomail_app::security::decode_key(&env.secret("SECRET_ENCRYPTION_KEY")?.to_string())
                 .map_err(|_| {
-                    ApiError::from(nomail_core::api::ApiFailure::new(
+                    ApiError::from(nomail_app::http::ApiFailure::new(
                         500,
                         "invalid encryption key configuration",
                     ))

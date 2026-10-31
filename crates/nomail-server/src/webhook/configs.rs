@@ -6,8 +6,8 @@ use crate::{
     error::{ApiResult, success},
 };
 use actix_web::web;
-use nomail_core::{
-    api::{PaginationQuery, endpoints as e},
+use nomail_app::{
+    http::{PaginationQuery, endpoints as e},
     webhook::config::*,
 };
 
@@ -40,7 +40,8 @@ pub async fn list(
     Ok(success::<e::ListConfigs>(
         service(&state)
             .list(auth.user_id, query.into_inner())
-            .await?,
+            .await?
+            .into(),
     ))
 }
 pub async fn create(
@@ -51,12 +52,13 @@ pub async fn create(
     Ok(success::<e::CreateConfig>(
         service(&state)
             .create(auth.user_id, body.into_inner())
-            .await?,
+            .await?
+            .into(),
     ))
 }
 pub async fn get(state: web::Data<AppState>, auth: Auth, path: web::Path<String>) -> ApiResult {
     Ok(success::<e::GetConfig>(
-        service(&state).get(auth.user_id, &path).await?,
+        service(&state).get(auth.user_id, &path).await?.into(),
     ))
 }
 pub async fn update(
@@ -68,7 +70,8 @@ pub async fn update(
     Ok(success::<e::UpdateConfig>(
         service(&state)
             .update(auth.user_id, &path, body.into_inner())
-            .await?,
+            .await?
+            .into(),
     ))
 }
 pub async fn enabled(
@@ -80,7 +83,8 @@ pub async fn enabled(
     Ok(success::<e::EnableConfig>(
         service(&state)
             .enabled(auth.user_id, &path, body.enabled)
-            .await?,
+            .await?
+            .into(),
     ))
 }
 pub async fn delete(state: web::Data<AppState>, auth: Auth, path: web::Path<String>) -> ApiResult {

@@ -1,13 +1,13 @@
 //! SQLite configuration encoding and scoped atomic writes only.
 use crate::{db, entity::webhook};
 use chrono::{DateTime, Utc};
-use nomail_core::webhook::config::*;
+use nomail_app::webhook::config::*;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseConnection, DbErr, EntityTrait,
     PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, Set, TransactionTrait, sea_query::Expr,
 };
 
-pub(super) struct Store<'a>(pub &'a DatabaseConnection);
+pub(crate) struct Store<'a>(pub &'a DatabaseConnection);
 fn storage(error: DbErr) -> ConfigError {
     if matches!(
         error.sql_err(),
@@ -18,16 +18,14 @@ fn storage(error: DbErr) -> ConfigError {
         ConfigError::Internal(error.to_string())
     }
 }
-fn response(c: webhook::Model) -> ConfigResult<ConfigResponse> {
-    Ok(ConfigResponse::new(
+fn response(c: webhook::Model) -> ConfigResult<ConfigView> {
+    Ok(ConfigView::new(
         c.id,
         c.name,
         c.key,
         c.provider
             .parse()
-            .map_err(|e: nomail_core::webhook::WebhookError| {
-                ConfigError::Internal(e.to_string())
-            })?,
+            .map_err(|e: nomail_app::webhook::WebhookError| ConfigError::Internal(e.to_string()))?,
         c.source.unwrap_or_default(),
         c.enabled,
         c.description.unwrap_or_default(),
@@ -38,11 +36,7 @@ fn owned(user_id: i64) -> sea_orm::Select<webhook::Entity> {
         .filter(webhook::Column::UserId.eq(user_id))
         .filter(webhook::Column::DeletedAt.is_null())
 }
-async fn get(
-    db: &impl ConnectionTrait,
-    user_id: i64,
-    id: i64,
-) -> ConfigResult<Option<ConfigResponse>> {
+async fn get(db: &impl ConnectionTrait, user_id: i64, id: i64) -> ConfigResult<Option<ConfigView>> {
     owned(user_id)
         .filter(webhook::Column::Id.eq(id))
         .one(db)
@@ -56,7 +50,7 @@ impl WebhookConfigStore for Store<'_> {
         &self,
         user_id: i64,
         page: &ConfigPage,
-    ) -> ConfigResult<(Vec<ConfigResponse>, u64)> {
+    ) -> ConfigResult<(Vec<ConfigView>, u64)> {
         let tx = self.0.begin().await.map_err(storage)?;
         let total = owned(user_id).count(&tx).await.map_err(storage)?;
         let items = owned(user_id)
@@ -72,10 +66,10 @@ impl WebhookConfigStore for Store<'_> {
         tx.commit().await.map_err(storage)?;
         Ok((items, total))
     }
-    async fn get_owned(&self, user_id: i64, id: i64) -> ConfigResult<Option<ConfigResponse>> {
+    async fn get_owned(&self, user_id: i64, id: i64) -> ConfigResult<Option<ConfigView>> {
         get(self.0, user_id, id).await
     }
-    async fn insert(&self, c: &NewConfig) -> ConfigResult<ConfigResponse> {
+    async fn insert(&self, c: &NewConfig) -> ConfigResult<ConfigView> {
         response(
             webhook::ActiveModel {
                 user_id: Set(c.user_id),
@@ -102,7 +96,7 @@ impl WebhookConfigStore for Store<'_> {
         id: i64,
         command: &ConfigMutation,
         at: DateTime<Utc>,
-    ) -> ConfigResult<Option<ConfigResponse>> {
+    ) -> ConfigResult<Option<ConfigView>> {
         let tx = db::write_transaction(self.0).await.map_err(storage)?;
         let before = if matches!(command, ConfigMutation::Delete) {
             get(&tx, user_id, id).await?

@@ -10,7 +10,7 @@ name = "nomail-api"
 path = "src/main.rs"
 
 [dependencies]
-nomail-core = { path = "../nomail-core" }
+nomail-app = { path = "../nomail-app" }
 actix-web = "4"
 async-stream = "0.3"
 futures-util = "0.3"

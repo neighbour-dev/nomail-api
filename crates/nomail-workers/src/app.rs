@@ -1,4 +1,4 @@
-//! Workers transport binds Core operations, never paths/methods/DTO definitions.
+//! Workers transport binds App operations, never paths/methods/DTO definitions.
 use crate::{
     auth,
     config::Config,
@@ -8,10 +8,10 @@ use crate::{
     message, webhook,
 };
 use futures_util::StreamExt;
-use nomail_core::api::{
-    self, AuthRequirement, BodyKind, HealthResponse, Operation, endpoints as e,
+use nomail_app::auth::AuthContext;
+use nomail_app::http::{
+    self as api, AuthRequirement, BodyKind, HealthResponse, Operation, endpoints as e,
 };
-use nomail_core::auth::AuthContext;
 use worker::{Env, Request, Response};
 
 async fn body(req: &mut Request) -> Result<Vec<u8>> {

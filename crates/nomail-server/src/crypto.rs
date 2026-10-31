@@ -2,7 +2,7 @@ use crate::error::ApiError;
 use rand::{RngCore, rngs::OsRng};
 
 pub fn decode_key(value: &str) -> Result<[u8; 32], ApiError> {
-    nomail_core::security::decode_key(value).map_err(ApiError::bad)
+    nomail_app::security::decode_key(value).map_err(ApiError::bad)
 }
 pub fn random_token(bytes: usize) -> String {
     let mut value = vec![0; bytes];
@@ -10,30 +10,30 @@ pub fn random_token(bytes: usize) -> String {
     hex::encode(value)
 }
 pub fn hash_token(value: &str) -> String {
-    nomail_core::security::hash_token(value)
+    nomail_app::security::hash_token(value)
 }
 
 // Wire format shared with existing installations: Base64(nonce[12] || ciphertext || tag[16]).
 pub fn encrypt(value: &str, key: &[u8; 32]) -> Result<String, ApiError> {
     let mut nonce = [0; 12];
     OsRng.fill_bytes(&mut nonce);
-    nomail_core::security::encrypt(value, key, &nonce).map_err(ApiError::internal)
+    nomail_app::security::encrypt(value, key, &nonce).map_err(ApiError::internal)
 }
 pub fn decrypt(value: &str, key: &[u8; 32]) -> Result<String, ApiError> {
-    nomail_core::security::decrypt(value, key).map_err(ApiError::internal)
+    nomail_app::security::decrypt(value, key).map_err(ApiError::internal)
 }
 pub fn validate_password(value: &str) -> Result<(), ApiError> {
-    nomail_core::security::validate_password(value).map_err(ApiError::bad)
+    nomail_app::security::validate_password(value).map_err(ApiError::bad)
 }
 pub async fn hash_password(value: String) -> Result<String, ApiError> {
-    use nomail_core::auth::AuthRuntime;
+    use nomail_app::auth::AuthRuntime;
     let runtime = crate::auth::runtime::Runtime;
     let mut salt = [0; 16];
     runtime.random_bytes(&mut salt)?;
     Ok(runtime.hash_password(&value, salt).await?)
 }
 pub async fn verify_password(value: String, hash: String) -> Result<(), ApiError> {
-    use nomail_core::auth::AuthRuntime;
+    use nomail_app::auth::AuthRuntime;
     let valid = crate::auth::runtime::Runtime
         .verify_password(&value, &hash)
         .await?;

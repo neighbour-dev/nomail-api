@@ -1,4 +1,4 @@
-//! HTTP and live connection adaptation only; all message use cases are in Core.
+//! HTTP and live connection adaptation only; all message use cases are in App.
 use crate::{
     AppState,
     auth::Auth,
@@ -7,8 +7,8 @@ use crate::{
 };
 use actix_web::{HttpResponse, web};
 use chrono::Utc;
-use nomail_core::{
-    api::{
+use nomail_app::{
+    http::{
         endpoints as e,
         sse::{HEARTBEAT, HEARTBEAT_SECONDS},
     },

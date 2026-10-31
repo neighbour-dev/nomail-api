@@ -6,7 +6,7 @@ use futures_util::{
     future::{Either, select},
     stream,
 };
-use nomail_core::api::{
+use nomail_app::http::{
     ApiFailure,
     sse::{self, HEARTBEAT, HEARTBEAT_SECONDS, MessageCreated, SseEvent},
 };

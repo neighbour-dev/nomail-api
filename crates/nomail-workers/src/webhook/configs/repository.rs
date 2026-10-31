@@ -1,18 +1,17 @@
 //! D1 configuration encoding and scoped atomic writes only.
 use crate::{db, time};
 use chrono::{DateTime, Utc};
-use nomail_core::webhook::config::*;
+use nomail_app::webhook::config::*;
 use serde_json::{Value, json};
 
-pub(super) struct Store<'a>(pub &'a db::Store);
+pub(crate) struct Store<'a>(pub &'a db::Store);
 const OWNED: &str = "id=? AND user_id=? AND deleted_at IS NULL";
 // Never project encrypted credentials into an HTTP view.
 const COLUMNS: &str = "id,name,key,provider,source,enabled,description";
-fn storage(error: crate::error::ApiError) -> ConfigError {
-    if error.status == 409 {
-        ConfigError::Conflict
-    } else {
-        ConfigError::Internal(error.message)
+fn storage(error: db::StorageError) -> ConfigError {
+    match error {
+        db::StorageError::Conflict => ConfigError::Conflict,
+        error => ConfigError::Internal(error.to_string()),
     }
 }
 fn d1(error: worker::Error) -> ConfigError {
@@ -21,9 +20,9 @@ fn d1(error: worker::Error) -> ConfigError {
 fn invalid(message: &str) -> ConfigError {
     ConfigError::Internal(message.into())
 }
-fn response(row: Value) -> ConfigResult<ConfigResponse> {
+fn response(row: Value) -> ConfigResult<ConfigView> {
     let text = |key: &str| row[key].as_str().unwrap_or_default().to_owned();
-    Ok(ConfigResponse::new(
+    Ok(ConfigView::new(
         row["id"]
             .as_i64()
             .ok_or_else(|| invalid("invalid config id"))?,
@@ -42,7 +41,7 @@ impl WebhookConfigStore for Store<'_> {
         &self,
         user_id: i64,
         page: &ConfigPage,
-    ) -> ConfigResult<(Vec<ConfigResponse>, u64)> {
+    ) -> ConfigResult<(Vec<ConfigView>, u64)> {
         let results = self.0.0.batch(vec![
             self.0.statement("SELECT COUNT(*) AS total FROM webhook_configs WHERE user_id=? AND deleted_at IS NULL", vec![json!(user_id)]).map_err(storage)?,
             self.0.statement(&format!("SELECT {COLUMNS} FROM webhook_configs WHERE user_id=? AND deleted_at IS NULL ORDER BY created_at DESC LIMIT ? OFFSET ?"), vec![json!(user_id), json!(page.size), json!(page.offset.to_string())]).map_err(storage)?,
@@ -61,7 +60,7 @@ impl WebhookConfigStore for Store<'_> {
             .collect::<ConfigResult<Vec<_>>>()?;
         Ok((items, total))
     }
-    async fn get_owned(&self, user_id: i64, id: i64) -> ConfigResult<Option<ConfigResponse>> {
+    async fn get_owned(&self, user_id: i64, id: i64) -> ConfigResult<Option<ConfigView>> {
         self.0
             .rows(
                 &format!("SELECT {COLUMNS} FROM webhook_configs WHERE {OWNED}"),
@@ -74,7 +73,7 @@ impl WebhookConfigStore for Store<'_> {
             .map(response)
             .transpose()
     }
-    async fn insert(&self, c: &NewConfig) -> ConfigResult<ConfigResponse> {
+    async fn insert(&self, c: &NewConfig) -> ConfigResult<ConfigView> {
         let at = time::format(c.at.timestamp_millis());
         let rows = self.0.rows(&format!("INSERT INTO webhook_configs (user_id,name,key,provider,source,encrypted_secret,description,enabled,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?) RETURNING {COLUMNS}"),
             vec![json!(c.user_id), json!(c.name), json!(c.key), json!(c.provider), json!(c.source), json!(c.encrypted_secret), json!(c.description), json!(c.enabled), json!(at), json!(at)]).await.map_err(storage)?;
@@ -90,7 +89,7 @@ impl WebhookConfigStore for Store<'_> {
         id: i64,
         command: &ConfigMutation,
         at: DateTime<Utc>,
-    ) -> ConfigResult<Option<ConfigResponse>> {
+    ) -> ConfigResult<Option<ConfigView>> {
         let mut sets = vec!["updated_at=?"];
         let mut values = vec![json!(time::format(at.timestamp_millis()))];
         match command {

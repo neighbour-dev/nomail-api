@@ -4,7 +4,7 @@ use crate::{
     entity::{device, session, user},
 };
 use chrono::{DateTime, Utc};
-use nomail_core::auth::*;
+use nomail_app::auth::*;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseConnection, DbErr, EntityTrait,
     PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, Set, TransactionTrait, sea_query::Expr,

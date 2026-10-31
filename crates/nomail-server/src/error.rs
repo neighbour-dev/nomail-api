@@ -1,12 +1,17 @@
 use actix_web::{HttpResponse, ResponseError, http::StatusCode};
-use nomail_core::api::{ApiFailure, ApiResponse};
-use nomail_core::error::{Diagnostic, DomainError};
+use nomail_app::error::{Diagnostic, DomainError};
+use nomail_app::http::{ApiFailure, ApiResponse};
 use std::fmt;
 
 pub type ApiResult = Result<HttpResponse, ApiError>;
+impl From<nomail_app::ingestion::IngestionError> for ApiError {
+    fn from(error: nomail_app::ingestion::IngestionError) -> Self {
+        Self::from_domain(error)
+    }
+}
 
-impl From<nomail_core::webhook::config::ConfigError> for ApiError {
-    fn from(error: nomail_core::webhook::config::ConfigError) -> Self {
+impl From<nomail_app::webhook::config::ConfigError> for ApiError {
+    fn from(error: nomail_app::webhook::config::ConfigError) -> Self {
         Self::from_domain(error)
     }
 }
@@ -58,18 +63,18 @@ impl From<ApiFailure> for ApiError {
         }
     }
 }
-impl From<nomail_core::auth::AuthError> for ApiError {
-    fn from(error: nomail_core::auth::AuthError) -> Self {
+impl From<nomail_app::auth::AuthError> for ApiError {
+    fn from(error: nomail_app::auth::AuthError) -> Self {
         Self::from_domain(error)
     }
 }
-impl From<nomail_core::message::MessageError> for ApiError {
-    fn from(error: nomail_core::message::MessageError) -> Self {
+impl From<nomail_app::message::MessageError> for ApiError {
+    fn from(error: nomail_app::message::MessageError) -> Self {
         Self::from_domain(error)
     }
 }
-impl From<nomail_core::webhook::WebhookError> for ApiError {
-    fn from(error: nomail_core::webhook::WebhookError) -> Self {
+impl From<nomail_app::webhook::WebhookError> for ApiError {
+    fn from(error: nomail_app::webhook::WebhookError) -> Self {
         Self::from_domain(error)
     }
 }
@@ -107,11 +112,11 @@ impl From<sea_orm::DbErr> for ApiError {
         }
     }
 }
-pub fn success<E: nomail_core::api::Endpoint>(data: E::Response) -> HttpResponse {
+pub fn success<E: nomail_app::http::Endpoint>(data: E::Response) -> HttpResponse {
     HttpResponse::Ok().json(ApiResponse::success(data))
 }
 pub fn check_length(value: &str, name: &str, max: usize, required: bool) -> Result<(), ApiError> {
-    nomail_core::auth::check_length(value, name, max, required).map_err(ApiError::bad)
+    nomail_app::auth::check_length(value, name, max, required).map_err(ApiError::bad)
 }
 
 #[cfg(test)]

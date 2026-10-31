@@ -4,7 +4,7 @@ use crate::{
     db::Store,
     error::{Result, success},
 };
-use nomail_core::api::endpoints as e;
+use nomail_app::http::endpoints as e;
 use worker::Response;
 pub async fn list(uid: i64, db: &Store, config: &Config) -> Result<Response> {
     success::<e::ListDevices>(auth::service(db, config, None).devices(uid).await?)

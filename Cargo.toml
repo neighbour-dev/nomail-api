@@ -1,6 +1,6 @@
 [workspace]
-members = ["crates/nomail-core", "crates/nomail-server", "crates/nomail-workers"]
-default-members = ["crates/nomail-core", "crates/nomail-server"]
+members = ["crates/nomail-core", "crates/nomail-app", "crates/nomail-server", "crates/nomail-workers"]
+default-members = ["crates/nomail-core", "crates/nomail-app", "crates/nomail-server"]
 resolver = "3"
 
 [profile.release]

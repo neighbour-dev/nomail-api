@@ -124,7 +124,7 @@ async fn password_change_revokes_expired_sessions_too_and_device_actions_are_own
     ));
     // Runtime calls the common password implementation, not a second policy.
     assert!(
-        nomail_core::auth::AuthRuntime::verify_password(
+        nomail_app::auth::AuthRuntime::verify_password(
             &Runtime,
             "newpassword123",
             &service

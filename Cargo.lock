@@ -1794,29 +1794,44 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e94e1e6445d314f972ff7395df2de295fe51b71821694f0b0e1e79c4f12c8577"
 
 [[package]]
-name = "nomail-core"
+name = "nomail-app"
 version = "0.1.0"
 dependencies = [
- "aes",
  "aes-gcm",
  "base64",
  "bcrypt",
- "cbc",
  "chrono",
  "getrandom 0.2.17",
  "getrandom 0.3.4",
  "hex",
- "hmac",
  "jsonwebtoken",
+ "nomail-core",
  "percent-encoding",
  "schemars",
  "serde",
  "serde_json",
  "serde_urlencoded",
  "sha2",
- "subtle",
  "tokio",
  "uuid",
+]
+
+[[package]]
+name = "nomail-core"
+version = "0.1.0"
+dependencies = [
+ "aes",
+ "base64",
+ "cbc",
+ "chrono",
+ "hex",
+ "hmac",
+ "schemars",
+ "serde",
+ "serde_json",
+ "serde_urlencoded",
+ "sha2",
+ "subtle",
 ]
 
 [[package]]
@@ -1833,7 +1848,7 @@ dependencies = [
  "hex",
  "hmac",
  "jsonwebtoken",
- "nomail-core",
+ "nomail-app",
  "rand 0.8.8",
  "sea-orm",
  "sea-orm-migration",
@@ -1858,7 +1873,7 @@ dependencies = [
  "futures-util",
  "getrandom 0.2.17",
  "hex",
- "nomail-core",
+ "nomail-app",
  "serde",
  "serde_json",
  "uuid",

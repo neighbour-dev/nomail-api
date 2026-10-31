@@ -4,8 +4,8 @@ pub use handler::*;
 
 pub(crate) fn service(
     db: &crate::db::Store,
-) -> nomail_core::message::MessageService<repository::Store<'_>> {
-    nomail_core::message::MessageService {
+) -> nomail_app::message::MessageService<repository::Store<'_>> {
+    nomail_app::message::MessageService {
         store: repository::Store(db),
     }
 }

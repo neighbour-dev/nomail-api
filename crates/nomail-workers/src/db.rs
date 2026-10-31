@@ -1,6 +1,31 @@
-use crate::error::{ApiError, Result};
 use serde_json::Value;
 use worker::{D1Database, D1PreparedStatement, D1Result, wasm_bindgen::JsValue};
+
+/// Storage failures never carry HTTP status codes or response types.
+#[derive(Debug)]
+pub enum StorageError {
+    Conflict,
+    Internal(&'static str),
+}
+impl std::fmt::Display for StorageError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Conflict => f.write_str("resource already exists"),
+            Self::Internal(message) => f.write_str(message),
+        }
+    }
+}
+impl std::error::Error for StorageError {}
+impl From<worker::Error> for StorageError {
+    fn from(error: worker::Error) -> Self {
+        if error.to_string().contains("UNIQUE constraint failed") {
+            Self::Conflict
+        } else {
+            Self::Internal("database operation failed")
+        }
+    }
+}
+type Result<T> = std::result::Result<T, StorageError>;
 
 pub struct Store(pub D1Database);
 impl Store {
@@ -15,19 +40,16 @@ impl Store {
                     Value::Number(n) => {
                         let number = n
                             .as_f64()
-                            .ok_or_else(|| ApiError::bad("invalid numeric parameter"))?;
+                            .ok_or(StorageError::Internal("invalid numeric parameter"))?;
                         if number.abs() > 9_007_199_254_740_991.0 {
-                            return Err(ApiError::bad(
+                            return Err(StorageError::Internal(
                                 "numeric parameter exceeds D1 safe integer range",
                             ));
                         }
                         JsValue::from_f64(number)
                     }
                     _ => {
-                        return Err(worker::Error::RustError(
-                            "non-scalar database parameter".into(),
-                        )
-                        .into());
+                        return Err(StorageError::Internal("non-scalar database parameter"));
                     }
                 })
             })
@@ -36,13 +58,6 @@ impl Store {
     }
     pub async fn rows(&self, sql: &str, values: Vec<Value>) -> Result<Vec<Value>> {
         Ok(self.statement(sql, values)?.all().await?.results()?)
-    }
-    pub async fn one(&self, sql: &str, values: Vec<Value>) -> Result<Value> {
-        self.rows(sql, values)
-            .await?
-            .into_iter()
-            .next()
-            .ok_or_else(ApiError::not_found)
     }
     pub async fn run(&self, sql: &str, values: Vec<Value>) -> Result<D1Result> {
         Ok(self.statement(sql, values)?.run().await?)

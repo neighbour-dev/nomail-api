@@ -1,16 +1,15 @@
 //! D1 implements the same atomic auth contract as the native SQLite adapter.
 use crate::{db, time};
 use chrono::{DateTime, Utc};
-use nomail_core::auth::*;
+use nomail_app::auth::*;
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 
 pub struct Store<'a>(pub &'a db::Store);
-fn storage(error: crate::error::ApiError) -> AuthError {
-    if error.status == 409 {
-        AuthError::Conflict("resource already exists")
-    } else {
-        AuthError::Internal(error.message)
+fn storage(error: db::StorageError) -> AuthError {
+    match error {
+        db::StorageError::Conflict => AuthError::Conflict("resource already exists"),
+        error => AuthError::Internal(error.to_string()),
     }
 }
 fn d1(error: worker::Error) -> AuthError {
@@ -80,7 +79,7 @@ impl AuthStore for Store<'_> {
     }
     async fn auth_state(&self, id: i64) -> AuthResult<Option<AuthState>> {
         // One read batch is a coherent snapshot; no auth filtering is hidden in
-        // these reads. Core decides expiry, ownership and revocation validity.
+        // these reads. App decides expiry, ownership and revocation validity.
         let result=self.0.0.batch(vec![
             self.0.statement("SELECT * FROM sessions WHERE id=?",vec![json!(id)]).map_err(storage)?,
             self.0.statement("SELECT d.* FROM devices d JOIN sessions s ON s.device_id=d.id WHERE s.id=?",vec![json!(id)]).map_err(storage)?,

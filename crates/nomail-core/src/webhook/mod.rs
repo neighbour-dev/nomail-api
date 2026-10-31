@@ -37,5 +37,3 @@ pub fn receive(
         Provider::Shopify => platforms::shopify::receive(config, request),
     }
 }
-pub mod config;
-pub mod service;

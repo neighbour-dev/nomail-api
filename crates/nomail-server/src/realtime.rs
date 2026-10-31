@@ -1,4 +1,4 @@
-pub use nomail_core::api::sse::{SseEvent as Event, encode};
+pub use nomail_app::http::sse::{SseEvent as Event, encode};
 use std::{
     collections::HashMap,
     sync::{

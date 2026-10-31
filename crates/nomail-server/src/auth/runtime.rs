@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use nomail_core::auth::{AuthError, AuthResult, AuthRuntime, password};
+use nomail_app::auth::{AuthError, AuthResult, AuthRuntime, password};
 use rand::{RngCore, rngs::OsRng};
 
 pub struct Runtime;

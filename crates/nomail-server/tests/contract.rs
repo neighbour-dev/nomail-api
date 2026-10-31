@@ -3,8 +3,8 @@ use actix_web::{
     http::{Method, StatusCode},
     test, web,
 };
-use nomail_core::api::{
-    self, ApiResponse, AuthRequirement, EndpointResponse, PathKind, endpoints as e,
+use nomail_app::http::{
+    self as api, ApiResponse, AuthRequirement, EndpointResponse, PathKind, endpoints as e,
 };
 use nomail_server::{AppState, app, auth, config::Config, db, realtime::Hub};
 use serde_json::json;
@@ -141,7 +141,7 @@ async fn core_inventory_controls_routes_authentication_parameters_and_response_d
     assert_eq!(list.data.total, 1);
     assert_eq!(
         list.data.items[0].level,
-        nomail_core::webhook::MessageLevel::High
+        nomail_app::webhook::MessageLevel::High
     );
     let response = test::call_service(
         &app,

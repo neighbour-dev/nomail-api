@@ -4,7 +4,7 @@ use crate::{
     error::{ApiResult, success},
 };
 use actix_web::web;
-use nomail_core::api::endpoints as e;
+use nomail_app::http::endpoints as e;
 
 pub async fn list(state: web::Data<AppState>, auth: Auth) -> ApiResult {
     Ok(success::<e::ListDevices>(

@@ -1,4 +1,4 @@
-//! Workers request extraction and composition. All auth use cases are in Core.
+//! Workers request extraction and composition. All auth use cases are in App.
 mod repository;
 mod runtime;
 use crate::{
@@ -6,8 +6,8 @@ use crate::{
     db::Store,
     error::{ApiError, Result, success},
 };
-use nomail_core::api::endpoints as e;
-use nomail_core::auth::{AuthConfig, AuthContext, AuthService, RequestMeta};
+use nomail_app::auth::{AuthConfig, AuthContext, AuthService, RequestMeta};
+use nomail_app::http::endpoints as e;
 use worker::{Env, Request, Response};
 
 pub(crate) fn service<'a>(
@@ -43,12 +43,12 @@ pub async fn authenticate(req: &Request, db: &Store, config: &Config) -> Result<
         .headers()
         .get("Authorization")?
         .ok_or_else(ApiError::unauthorized)?;
-    let token = nomail_core::api::bearer_token(Some(&header))?;
+    let token = nomail_app::http::bearer_token(Some(&header))?;
     Ok(service(db, config, None).authenticate(token).await?)
 }
 pub async fn login(
     req: &Request,
-    body: nomail_core::auth::LoginRequest,
+    body: nomail_app::auth::LoginRequest,
     db: &Store,
     config: &Config,
     env: &Env,
@@ -61,7 +61,7 @@ pub async fn login(
 }
 pub async fn refresh(
     req: &Request,
-    body: nomail_core::auth::RefreshRequest,
+    body: nomail_app::auth::RefreshRequest,
     db: &Store,
     config: &Config,
 ) -> Result<Response> {
@@ -72,7 +72,7 @@ pub async fn refresh(
     )
 }
 pub async fn logout(
-    body: nomail_core::auth::RefreshRequest,
+    body: nomail_app::auth::RefreshRequest,
     db: &Store,
     config: &Config,
 ) -> Result<Response> {
@@ -84,7 +84,7 @@ pub async fn get_account(uid: i64, db: &Store, config: &Config) -> Result<Respon
     success::<e::GetAccount>(service.account(uid).await?)
 }
 pub async fn update_account(
-    body: nomail_core::auth::AccountUpdateRequest,
+    body: nomail_app::auth::AccountUpdateRequest,
     uid: i64,
     db: &Store,
     config: &Config,

@@ -1,18 +1,37 @@
 //! D1 storage adapter; no HTTP, raw query parsing, state policy or TTL decisions.
 use crate::{db, time};
 use chrono::{DateTime, Utc};
-use nomail_core::message::*;
+use nomail_app::ingestion::{IngestionError, IngestionResult, IngestionStore, ReceivingConfig};
+use nomail_app::message::*;
 use serde_json::{Value, json};
 use uuid::Uuid;
 
+#[derive(Clone, Copy)]
 pub struct Store<'a>(pub &'a db::Store);
+impl IngestionStore for Store<'_> {
+    async fn receiving_config(&self, key: &str) -> IngestionResult<Option<ReceivingConfig>> {
+        self.0.rows(
+            "SELECT id,user_id,provider,source,encrypted_secret FROM webhook_configs WHERE key=? AND enabled=1 AND deleted_at IS NULL",
+            vec![json!(key)],
+        ).await.map_err(|e| IngestionError::Internal(e.to_string()))?
+            .into_iter().next().map(|row| {
+                let invalid = || IngestionError::Internal("invalid receiving configuration".into());
+                Ok(ReceivingConfig {
+                    id: row["id"].as_i64().ok_or_else(invalid)?,
+                    user_id: row["user_id"].as_i64().ok_or_else(invalid)?,
+                    provider: row["provider"].as_str().ok_or_else(invalid)?.parse().map_err(|_| invalid())?,
+                    source: row["source"].as_str().map(str::to_owned),
+                    encrypted_secret: row["encrypted_secret"].as_str().map(str::to_owned),
+                })
+            }).transpose()
+    }
+}
 const OWNED: &str = "deleted_at IS NULL AND webhook_config_id IN (SELECT id FROM webhook_configs WHERE user_id=? AND deleted_at IS NULL)";
 const DETAIL: &str = "SELECT notify_messages.*, (SELECT name FROM webhook_configs WHERE id=notify_messages.webhook_config_id) AS config_name FROM notify_messages";
-fn storage(error: crate::error::ApiError) -> MessageError {
-    if error.status == 409 {
-        MessageError::Conflict("resource already exists")
-    } else {
-        MessageError::Internal(error.message)
+fn storage(error: db::StorageError) -> MessageError {
+    match error {
+        db::StorageError::Conflict => MessageError::Conflict("resource already exists"),
+        error => MessageError::Internal(error.to_string()),
     }
 }
 fn d1(error: worker::Error) -> MessageError {
@@ -46,7 +65,7 @@ fn decode_message(mut row: Value) -> MessageResult<MessageWithConfig> {
 }
 fn decode_item(mut row: Value) -> MessageResult<MessageListItem> {
     row["pinned"] = json!(row["pinned"].as_i64() == Some(1));
-    row["summary"] = json!(nomail_core::pagination::summarize(
+    row["summary"] = json!(nomail_app::pagination::summarize(
         row["content"].as_str().unwrap_or("")
     ));
     row["source"] = json!(row["source"].as_str().unwrap_or(""));

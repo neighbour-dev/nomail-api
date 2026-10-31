@@ -3,8 +3,8 @@ use crate::{
     error::{ApiResult, success},
 };
 use actix_web::{HttpRequest, web};
-use nomail_core::api::endpoints as e;
-use nomail_core::auth::{LoginRequest, RefreshRequest, RequestMeta};
+use nomail_app::auth::{LoginRequest, RefreshRequest, RequestMeta};
+use nomail_app::http::endpoints as e;
 
 pub fn request_meta(req: &HttpRequest) -> RequestMeta {
     // Forwarded headers remain untrusted unless proxy support is configured.

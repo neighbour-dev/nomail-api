@@ -1,4 +1,4 @@
-//! Actix extraction and runtime composition. Business rules live in nomail-core.
+//! Actix extraction and runtime composition. Business rules live in nomail-app.
 pub(crate) mod account;
 pub(crate) mod devices;
 mod repository;
@@ -9,8 +9,8 @@ use crate::{AppState, config::Config, error::ApiError};
 pub use account::{ensure_initial_user, reset_account};
 use actix_web::{FromRequest, HttpRequest, dev::Payload, web};
 use chrono::{DateTime, Utc};
-pub use nomail_core::auth::{ACCESS_TTL, Claims, MAX_DEVICES, REFRESH_DAYS};
-use nomail_core::auth::{AuthConfig, AuthContext, AuthService};
+pub use nomail_app::auth::{ACCESS_TTL, Claims, MAX_DEVICES, REFRESH_DAYS};
+use nomail_app::auth::{AuthConfig, AuthContext, AuthService};
 use sea_orm::DatabaseConnection;
 use std::{future::Future, ops::Deref, pin::Pin};
 
@@ -38,7 +38,7 @@ pub fn access_token(
     user_id: i64,
     session_id: i64,
 ) -> Result<(String, DateTime<Utc>), ApiError> {
-    Ok(nomail_core::auth::token::issue(
+    Ok(nomail_app::auth::token::issue(
         &auth_config(&state.config),
         user_id,
         session_id,
@@ -46,7 +46,7 @@ pub fn access_token(
     )?)
 }
 pub fn decode_token(token: &str, state: &AppState) -> Result<Claims, ApiError> {
-    Ok(nomail_core::auth::token::decode(
+    Ok(nomail_app::auth::token::decode(
         &auth_config(&state.config),
         token,
         Utc::now(),
@@ -72,7 +72,7 @@ impl FromRequest for Auth {
             .map(str::to_owned);
         Box::pin(async move {
             let state = state.ok_or_else(|| ApiError::internal("missing application state"))?;
-            let token = nomail_core::api::bearer_token(token.as_deref())?;
+            let token = nomail_app::http::bearer_token(token.as_deref())?;
             Ok(Auth(
                 service(&state.db, &state.config)
                     .authenticate(token)

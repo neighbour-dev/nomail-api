@@ -1,5 +1,5 @@
 use super::*;
-use nomail_core::error::{AuthError, ConfigError, MessageError, WebhookError};
+use nomail_app::error::{AuthError, ConfigError, MessageError, WebhookError};
 
 fn check<E: DomainError + Into<ApiError>>(error: E) {
     let expected = ApiFailure::from_domain(&error);

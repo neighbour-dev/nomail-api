@@ -1,10 +1,11 @@
-//! SQLite storage adapter. Policies/defaults/state transitions are Core use cases.
+//! SQLite storage adapter. Policies/defaults/state transitions are App use cases.
 use crate::{
     db,
     entity::{message, webhook},
 };
 use chrono::{DateTime, Utc};
-use nomail_core::message::*;
+use nomail_app::ingestion::{IngestionError, IngestionResult, IngestionStore, ReceivingConfig};
+use nomail_app::message::*;
 use sea_orm::{
     ColumnTrait, ConnectionTrait, DatabaseConnection, DbErr, EntityTrait, FromQueryResult,
     PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, QueryTrait, Select, Set,
@@ -13,7 +14,32 @@ use sea_orm::{
 };
 use uuid::Uuid;
 
+#[derive(Clone, Copy)]
 pub struct Store<'a>(pub &'a DatabaseConnection);
+impl IngestionStore for Store<'_> {
+    async fn receiving_config(&self, key: &str) -> IngestionResult<Option<ReceivingConfig>> {
+        webhook::Entity::find()
+            .filter(webhook::Column::Key.eq(key))
+            .filter(webhook::Column::Enabled.eq(true))
+            .filter(webhook::Column::DeletedAt.is_null())
+            .one(self.0)
+            .await
+            .map_err(|e| IngestionError::Internal(e.to_string()))?
+            .map(|row| {
+                Ok(ReceivingConfig {
+                    id: row.id,
+                    user_id: row.user_id,
+                    provider: row
+                        .provider
+                        .parse()
+                        .map_err(|_| IngestionError::Internal("invalid stored provider".into()))?,
+                    source: row.source,
+                    encrypted_secret: row.encrypted_secret,
+                })
+            })
+            .transpose()
+    }
+}
 fn storage(error: DbErr) -> MessageError {
     if matches!(
         error.sql_err(),
@@ -47,7 +73,7 @@ impl TryFrom<ListRow> for MessageListItem {
         Ok(Self {
             id: m.id,
             title: m.title,
-            summary: nomail_core::pagination::summarize(&m.content),
+            summary: nomail_app::pagination::summarize(&m.content),
             source: m.source.unwrap_or_default(),
             level: serde_json::from_value(serde_json::json!(m.level)).map_err(conversion)?,
             status: m.status,

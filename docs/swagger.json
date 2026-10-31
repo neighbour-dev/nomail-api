@@ -1240,6 +1240,7 @@
         "type": "object"
       },
       "Page_ConfigResponse": {
+        "description": "Application pagination result, independent of HTTP envelopes and routes.",
         "properties": {
           "items": {
             "items": {
@@ -1272,6 +1273,7 @@
         "type": "object"
       },
       "Page_MessageListItem": {
+        "description": "Application pagination result, independent of HTTP envelopes and routes.",
         "properties": {
           "items": {
             "items": {
@@ -1490,7 +1492,7 @@
             "type": "object"
           }
         ],
-        "description": "NoMail ACK for business deliveries. Platform verification/Ping responses do\nnot use this envelope and remain ProtocolResponse bytes."
+        "description": "NoMail HTTP acknowledgement. Platform controls keep their protocol response."
       },
       "ShopifyEvent": {
         "properties": {
@@ -1868,7 +1870,7 @@
     }
   },
   "info": {
-    "description": "由 nomail-core HTTP 契约与 Rust DTO 自动生成，请勿手动修改。成功 code=0，错误 code=HTTP 状态，错误 data=null；未知路径和不支持的方法均返回 404。",
+    "description": "由 nomail-app HTTP 契约与 Rust DTO 自动生成，请勿手动修改。成功 code=0，错误 code=HTTP 状态，错误 data=null；未知路径和不支持的方法均返回 404。",
     "title": "NoMail API",
     "version": "1.0.0"
   },

@@ -53,7 +53,7 @@ fn openapi_covers_the_core_contract_and_valid_local_references() {
                 .count()
         })
         .sum::<usize>();
-    assert_eq!(operations, nomail_core::api::ROUTES.len());
+    assert_eq!(operations, nomail_app::http::ROUTES.len());
     assert!(
         !document["paths"]
             .as_object()

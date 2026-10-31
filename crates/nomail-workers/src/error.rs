@@ -1,11 +1,16 @@
-use nomail_core::api::{ApiFailure, ApiResponse};
-use nomail_core::error::{Diagnostic, DomainError};
+use nomail_app::error::{Diagnostic, DomainError};
+use nomail_app::http::{ApiFailure, ApiResponse};
 use worker::Response;
 
 pub type Result<T> = std::result::Result<T, ApiError>;
+impl From<nomail_app::ingestion::IngestionError> for ApiError {
+    fn from(error: nomail_app::ingestion::IngestionError) -> Self {
+        Self::from_domain(error)
+    }
+}
 
-impl From<nomail_core::webhook::config::ConfigError> for ApiError {
-    fn from(error: nomail_core::webhook::config::ConfigError) -> Self {
+impl From<nomail_app::webhook::config::ConfigError> for ApiError {
+    fn from(error: nomail_app::webhook::config::ConfigError) -> Self {
         Self::from_domain(error)
     }
 }
@@ -28,9 +33,6 @@ impl ApiError {
     }
     pub fn unauthorized() -> Self {
         ApiFailure::unauthorized().into()
-    }
-    pub fn not_found() -> Self {
-        ApiFailure::not_found().into()
     }
     pub fn response(&self) -> worker::Result<Response> {
         if self.status >= 500 {
@@ -65,22 +67,22 @@ impl From<worker::Error> for ApiError {
         ApiFailure::internal().into()
     }
 }
-impl From<nomail_core::auth::AuthError> for ApiError {
-    fn from(error: nomail_core::auth::AuthError) -> Self {
+impl From<nomail_app::auth::AuthError> for ApiError {
+    fn from(error: nomail_app::auth::AuthError) -> Self {
         Self::from_domain(error)
     }
 }
-impl From<nomail_core::message::MessageError> for ApiError {
-    fn from(error: nomail_core::message::MessageError) -> Self {
+impl From<nomail_app::message::MessageError> for ApiError {
+    fn from(error: nomail_app::message::MessageError) -> Self {
         Self::from_domain(error)
     }
 }
-impl From<nomail_core::webhook::WebhookError> for ApiError {
-    fn from(error: nomail_core::webhook::WebhookError) -> Self {
+impl From<nomail_app::webhook::WebhookError> for ApiError {
+    fn from(error: nomail_app::webhook::WebhookError) -> Self {
         Self::from_domain(error)
     }
 }
-pub fn success<E: nomail_core::api::Endpoint>(data: E::Response) -> Result<Response> {
+pub fn success<E: nomail_app::http::Endpoint>(data: E::Response) -> Result<Response> {
     Ok(Response::from_json(&ApiResponse::success(data))?)
 }
 

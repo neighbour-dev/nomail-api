@@ -5,8 +5,8 @@ use crate::{
     time,
 };
 use chrono::{DateTime, Utc};
-use nomail_core::{
-    api::endpoints as e,
+use nomail_app::{
+    http::endpoints as e,
     message::{BatchRequest, ListQuery, UpdateRequest},
 };
 use worker::Response;
