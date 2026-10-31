@@ -2,12 +2,13 @@
 #[cfg(test)]
 mod tests;
 use crate::webhook::{
-    Authentication, EventContent, EventMetadata, IncomingMessage, PlatformData, PlatformEvent,
+    Authentication, EventContent, EventMetadata, MessageContent, PlatformData, PlatformEvent,
     ReceiveOutcome, WebhookConfig, WebhookError, WebhookRequest, crypto, support::*,
 };
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
 pub enum StripeEvent {
     Snapshot(StripeSnapshot),
     /// No API request is performed. Mapping provides a metadata-only summary.
@@ -15,6 +16,7 @@ pub enum StripeEvent {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
 pub struct StripeSnapshot {
     pub object_id: Option<String>,
     pub object_type: Option<String>,
@@ -23,12 +25,14 @@ pub struct StripeSnapshot {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
 pub struct StripeThinNotification {
     pub created: Option<String>,
     pub related_object: Option<StripeRelatedObject>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
 pub struct StripeRelatedObject {
     pub id: Option<String>,
     pub object_type: Option<String>,
@@ -124,15 +128,12 @@ fn verify_signature(
 }
 
 impl StripeEvent {
-    pub fn to_message(&self, metadata: &EventMetadata, raw: &EventContent) -> IncomingMessage {
+    pub fn to_message_content(
+        &self,
+        metadata: &EventMetadata,
+        raw: &EventContent,
+    ) -> MessageContent {
         let kind = &metadata.event_type;
-        let level = if kind.ends_with(".failed") || kind.ends_with("_failed") {
-            "critical"
-        } else if kind.ends_with(".succeeded") {
-            "success"
-        } else {
-            "normal"
-        };
         let content = if matches!(self, Self::Thin(_)) {
             format!(
                 "Stripe event {} (thin notification; details not fetched): {}",
@@ -149,7 +150,7 @@ impl StripeEvent {
             format!("Stripe {kind}"),
             content,
             "stripe".into(),
-            level,
+            "normal",
             String::new(),
         )
     }

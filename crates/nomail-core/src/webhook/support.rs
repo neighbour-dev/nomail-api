@@ -104,8 +104,8 @@ pub(super) fn message(
     source: String,
     level: &str,
     url: String,
-) -> IncomingMessage {
-    IncomingMessage {
+) -> MessageContent {
+    MessageContent {
         title,
         content,
         source: optional(source),

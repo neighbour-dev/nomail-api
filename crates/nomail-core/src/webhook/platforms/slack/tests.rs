@@ -45,7 +45,7 @@ fn events_interactions_and_slash_commands() {
                 | (PlatformData::Slack(SlackEvent::Interaction(_)), 1)
                 | (PlatformData::Slack(SlackEvent::SlashCommand(_)), 2)
         ));
-        assert!(!parsed.to_message().content.is_empty());
+        assert!(!parsed.to_message_content().content.is_empty());
         match kind {
             0 => assert_eq!(parsed.raw.as_json().unwrap()["event"]["text"], "hello"),
             1 => assert_eq!(

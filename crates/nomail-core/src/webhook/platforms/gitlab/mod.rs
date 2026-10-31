@@ -2,13 +2,14 @@
 #[cfg(test)]
 mod tests;
 use crate::webhook::{
-    Authentication, EventContent, EventMetadata, IncomingMessage, PlatformData, PlatformEvent,
+    Authentication, EventContent, EventMetadata, MessageContent, PlatformData, PlatformEvent,
     ReceiveOutcome, WebhookConfig, WebhookError, WebhookRequest, crypto, support::*,
 };
 use base64::{Engine, engine::general_purpose::STANDARD};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
 pub struct GitlabEvent {
     pub instance: Option<String>,
     pub object_kind: Option<String>,
@@ -101,7 +102,11 @@ fn verify_signature(
 }
 
 impl GitlabEvent {
-    pub fn to_message(&self, metadata: &EventMetadata, raw: &EventContent) -> IncomingMessage {
+    pub fn to_message_content(
+        &self,
+        metadata: &EventMetadata,
+        raw: &EventContent,
+    ) -> MessageContent {
         let p = raw.as_json().unwrap_or(&serde_json::Value::Null);
         message(
             format!("GitLab {}", metadata.event_type),

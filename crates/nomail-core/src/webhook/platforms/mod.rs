@@ -17,14 +17,15 @@ pub use slack::SlackEvent;
 pub use stripe::StripeEvent;
 pub use telegram::TelegramEvent;
 
-use super::{EventContent, EventMetadata, IncomingMessage, Provider};
+use super::{EventContent, EventMetadata, MessageContent, Provider};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "provider", content = "event", rename_all = "lowercase")]
+#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
 pub enum PlatformData {
     Generic(GenericEvent),
-    Github(GithubEvent),
+    Github(Box<GithubEvent>),
     Gitlab(GitlabEvent),
     Stripe(StripeEvent),
     Slack(SlackEvent),
@@ -36,6 +37,7 @@ pub enum PlatformData {
 /// A received business event: common processing information, platform semantics,
 /// and complete decoded content. It contains neither HTTP headers nor wire bytes.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
 pub struct PlatformEvent {
     pub metadata: EventMetadata,
     pub data: PlatformData,
@@ -61,17 +63,18 @@ impl PlatformEvent {
     }
 
     /// Apply built-in inbox mappings without network or storage access.
-    /// Database limits, retention, IDs and tenant ownership are not mapping concerns.
-    pub fn to_message(&self) -> IncomingMessage {
+    /// Only common business fields are mapped. This does NOT replace the platform
+    /// data/raw, nor assign database identity, retention or NoMail user state.
+    pub fn to_message_content(&self) -> MessageContent {
         match &self.data {
-            PlatformData::Generic(event) => event.to_message(&self.metadata, &self.raw),
-            PlatformData::Github(event) => event.to_message(&self.metadata, &self.raw),
-            PlatformData::Gitlab(event) => event.to_message(&self.metadata, &self.raw),
-            PlatformData::Stripe(event) => event.to_message(&self.metadata, &self.raw),
-            PlatformData::Slack(event) => event.to_message(&self.metadata, &self.raw),
-            PlatformData::Feishu(event) => event.to_message(&self.metadata, &self.raw),
-            PlatformData::Telegram(event) => event.to_message(&self.metadata, &self.raw),
-            PlatformData::Shopify(event) => event.to_message(&self.metadata, &self.raw),
+            PlatformData::Generic(event) => event.to_message_content(&self.metadata, &self.raw),
+            PlatformData::Github(event) => event.to_message_content(&self.metadata, &self.raw),
+            PlatformData::Gitlab(event) => event.to_message_content(&self.metadata, &self.raw),
+            PlatformData::Stripe(event) => event.to_message_content(&self.metadata, &self.raw),
+            PlatformData::Slack(event) => event.to_message_content(&self.metadata, &self.raw),
+            PlatformData::Feishu(event) => event.to_message_content(&self.metadata, &self.raw),
+            PlatformData::Telegram(event) => event.to_message_content(&self.metadata, &self.raw),
+            PlatformData::Shopify(event) => event.to_message_content(&self.metadata, &self.raw),
         }
     }
 }

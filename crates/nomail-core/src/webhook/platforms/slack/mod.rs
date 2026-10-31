@@ -2,13 +2,14 @@
 #[cfg(test)]
 mod tests;
 use crate::webhook::{
-    Authentication, EventContent, EventMetadata, IncomingMessage, PlatformData, PlatformEvent,
+    Authentication, EventContent, EventMetadata, MessageContent, PlatformData, PlatformEvent,
     ReceiveOutcome, WebhookConfig, WebhookError, WebhookRequest, crypto, support::*,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
 pub enum SlackEvent {
     EventsApi(SlackCallback),
     Interaction(SlackInteraction),
@@ -16,6 +17,7 @@ pub enum SlackEvent {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
 pub struct SlackCallback {
     pub team_id: Option<String>,
     pub subtype: Option<String>,
@@ -23,6 +25,7 @@ pub struct SlackCallback {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
 pub struct SlackInteraction {
     pub team_id: Option<String>,
     pub user_id: Option<String>,
@@ -31,12 +34,14 @@ pub struct SlackInteraction {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
 pub struct SlackAction {
     pub action_id: Option<String>,
     pub value: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
 pub struct SlackCommand {
     pub team_id: Option<String>,
     pub user_id: Option<String>,
@@ -168,7 +173,11 @@ fn verify_signature(
 }
 
 impl SlackEvent {
-    pub fn to_message(&self, metadata: &EventMetadata, raw: &EventContent) -> IncomingMessage {
+    pub fn to_message_content(
+        &self,
+        metadata: &EventMetadata,
+        raw: &EventContent,
+    ) -> MessageContent {
         let (team_id, text) = match self {
             Self::EventsApi(event) => (&event.team_id, &event.text),
             Self::Interaction(event) => (&event.team_id, &event.text),

@@ -1,10 +1,11 @@
-use super::PlatformEvent;
+use super::{PlatformEvent, WebhookError};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{fmt, str::FromStr};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
 pub enum Provider {
     Generic,
     Github,
@@ -116,28 +117,8 @@ impl<'a> WebhookConfig<'a> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum WebhookError {
-    InvalidConfiguration(&'static str),
-    Unauthorized,
-    InvalidPayload(&'static str),
-    Unsupported(&'static str),
-}
-
-impl fmt::Display for WebhookError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(match self {
-            Self::InvalidConfiguration(message)
-            | Self::InvalidPayload(message)
-            | Self::Unsupported(message) => message,
-            Self::Unauthorized => "unauthorized",
-        })
-    }
-}
-
-impl std::error::Error for WebhookError {}
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
 pub struct DeduplicationKey {
     /// Must additionally be scoped by tenant and webhook endpoint in storage.
     pub scope: String,
@@ -145,6 +126,7 @@ pub struct DeduplicationKey {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
 pub struct EventMetadata {
     pub event_type: String,
     pub version: Option<String>,
@@ -155,6 +137,7 @@ pub struct EventMetadata {
 /// before semantic modeling or message mapping. Not the bytes used for signatures.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "format", content = "value", rename_all = "lowercase")]
+#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
 pub enum EventContent {
     Json(Value),
     Text(String),
@@ -236,38 +219,69 @@ pub struct ProtocolResponse {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
 pub enum MessageLevel {
+    Low,
     Normal,
-    Success,
-    Warning,
-    Critical,
+    High,
+    Urgent,
 }
 
 impl MessageLevel {
-    pub fn from_label(value: &str) -> Self {
-        match value.trim().to_ascii_lowercase().as_str() {
-            "critical" | "alert" | "error" | "failed" | "failure" => Self::Critical,
-            "warning" | "warn" => Self::Warning,
-            "success" | "pass" | "passed" | "ok" => Self::Success,
-            _ => Self::Normal,
+    /// Attention priority, independent of platform outcome and retention policy.
+    pub const fn priority_rank(self) -> u8 {
+        match self {
+            Self::Low => 0,
+            Self::Normal => 1,
+            Self::High => 2,
+            Self::Urgent => 3,
         }
+    }
+
+    pub const fn is_at_least(self, threshold: Self) -> bool {
+        self.priority_rank() >= threshold.priority_rank()
+    }
+    pub fn from_label(value: &str) -> Self {
+        value.parse().unwrap_or(Self::Normal)
     }
 
     pub const fn as_str(self) -> &'static str {
         match self {
+            Self::Low => "low",
             Self::Normal => "normal",
-            Self::Success => "success",
-            Self::Warning => "warning",
-            Self::Critical => "critical",
+            Self::High => "high",
+            Self::Urgent => "urgent",
         }
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct IncomingMessage {
-    pub title: String,
-    pub content: String,
-    pub source: Option<String>,
-    pub level: MessageLevel,
-    pub url: Option<String>,
+pub use crate::message::MessageContent;
+
+/// NoMail ACK for business deliveries. Platform verification/Ping responses do
+/// not use this envelope and remain ProtocolResponse bytes.
+#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
+#[serde(untagged)]
+pub enum ReceiveResponse {
+    Message {
+        #[serde(rename = "messageId")]
+        message_id: uuid::Uuid,
+        duplicate: bool,
+    },
+    Ignored {
+        ignored: bool,
+    },
+}
+
+impl FromStr for MessageLevel {
+    type Err = &'static str;
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "low" => Ok(Self::Low),
+            "normal" => Ok(Self::Normal),
+            "high" => Ok(Self::High),
+            "urgent" => Ok(Self::Urgent),
+            _ => Err("level must be low, normal, high or urgent"),
+        }
+    }
 }

@@ -1,0 +1,38 @@
+[package]
+name = "nomail-server"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.99"
+default-run = "nomail-api"
+
+[[bin]]
+name = "nomail-api"
+path = "src/main.rs"
+
+[dependencies]
+nomail-core = { path = "../nomail-core" }
+actix-web = "4"
+async-stream = "0.3"
+futures-util = "0.3"
+base64 = "0.22"
+chrono = { version = "0.4", features = ["serde"] }
+clap = { version = "4", features = ["derive"] }
+dotenvy = "0.15"
+hex = "0.4"
+rand = "0.8"
+sea-orm = { version = "1.1", default-features = false, features = ["sqlx-sqlite", "runtime-tokio-rustls", "macros", "with-chrono", "with-uuid"] }
+sea-orm-migration = { version = "1.1", default-features = false, features = ["sqlx-sqlite", "runtime-tokio-rustls"] }
+sqlx = { version = "0.8", default-features = false, features = ["sqlite", "runtime-tokio"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+tokio = { version = "1", features = ["sync", "time", "macros", "rt-multi-thread"] }
+tracing = "0.1"
+tracing-actix-web = "0.7"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+uuid = { version = "1", features = ["v7", "serde"] }
+
+[dev-dependencies]
+jsonwebtoken = { version = "10", default-features = false, features = ["rust_crypto"] }
+hmac = "0.12"
+tempfile = "3"

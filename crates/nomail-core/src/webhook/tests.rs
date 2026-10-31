@@ -52,13 +52,28 @@ fn invalid_json_objects_are_rejected() {
 #[test]
 fn normalized_levels_are_stable() {
     for (label, expected) in [
-        (" ERROR ", MessageLevel::Critical),
-        ("warn", MessageLevel::Warning),
-        ("pass", MessageLevel::Success),
+        (" LOW ", MessageLevel::Low),
+        ("normal", MessageLevel::Normal),
+        ("High", MessageLevel::High),
+        (" URGENT ", MessageLevel::Urgent),
+        ("error", MessageLevel::Normal),
+        ("warning", MessageLevel::Normal),
+        ("critical", MessageLevel::Normal),
+        ("success", MessageLevel::Normal),
+        ("failed", MessageLevel::Normal),
         ("info", MessageLevel::Normal),
     ] {
         assert_eq!(MessageLevel::from_label(label), expected);
     }
+    for label in ["low", "normal", "high", "urgent"] {
+        let level: MessageLevel = label.parse().unwrap();
+        assert_eq!(
+            serde_json::to_string(&level).unwrap(),
+            format!("\"{label}\"")
+        );
+        assert_eq!(level.as_str(), label);
+    }
+    assert!("critical".parse::<MessageLevel>().is_err());
 }
 
 #[test]
@@ -103,12 +118,12 @@ fn event_envelope_roundtrips_without_losing_unknown_content() {
         .unwrap(),
     );
     let before = parsed.clone();
-    let message = parsed.to_message();
+    let message = parsed.to_message_content();
     assert_eq!(parsed, before);
     let decoded: PlatformEvent =
         serde_json::from_str(&serde_json::to_string(&parsed).unwrap()).unwrap();
     assert_eq!(decoded, parsed);
-    assert_eq!(decoded.to_message(), message);
+    assert_eq!(decoded.to_message_content(), message);
     assert_eq!(
         decoded.metadata.deduplication_key.as_ref().unwrap().value,
         "delivery-1"

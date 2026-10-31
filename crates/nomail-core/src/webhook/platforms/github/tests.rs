@@ -28,8 +28,8 @@ fn form_signature_covers_original_encoded_body() {
         panic!()
     };
     assert_eq!(
-        github.to_message(&parsed.metadata, &parsed.raw),
-        parsed.to_message()
+        github.to_message_content(&parsed.metadata, &parsed.raw),
+        parsed.to_message_content()
     );
     assert_eq!(parsed.raw.as_json(), Some(&payload));
     assert_eq!(parsed.provider(), Provider::Github);
@@ -38,12 +38,12 @@ fn form_signature_covers_original_encoded_body() {
         Some("owner/repo")
     );
     assert_eq!(
-        parsed.to_message().title,
+        parsed.to_message_content().title,
         "GitHub issues: opened: owner/repo"
     );
-    assert_eq!(parsed.to_message().content, "Bug");
+    assert_eq!(parsed.to_message_content().content, "Bug");
     assert_eq!(
-        parsed.to_message().url.as_deref(),
+        parsed.to_message_content().url.as_deref(),
         Some("https://example.com/issue")
     );
     assert_eq!(
@@ -79,7 +79,7 @@ fn control_unknown_events_and_resource_ids() {
         .unwrap(),
     );
     assert!(parsed.metadata().deduplication_key.is_none());
-    assert!(parsed.to_message().content.contains("custom"));
+    assert!(parsed.to_message_content().content.contains("custom"));
     assert!(receive_with(Provider::Github, Authentication::None, &Vec::new(), b"{}").is_err());
 }
 
@@ -87,8 +87,32 @@ fn control_unknown_events_and_resource_ids() {
 fn workflow_mapping() {
     let h = headers(&[("X-GitHub-Event", "workflow_run")]);
     let parsed = event(receive_with(Provider::Github, Authentication::None, &h, br#"{"repository":{"full_name":"owner/repo"},"workflow_run":{"name":"CI","conclusion":"failure","html_url":"https://example.com/run/1"}}"#).unwrap());
-    assert_eq!(parsed.to_message().level, MessageLevel::Critical);
-    assert_eq!(parsed.to_message().content, "CI");
+    assert_eq!(parsed.to_message_content().level, MessageLevel::Normal);
+    assert_eq!(
+        parsed.raw.as_json().unwrap()["workflow_run"]["conclusion"],
+        "failure"
+    );
+    assert_eq!(parsed.to_message_content().content, "CI");
+}
+
+#[test]
+fn issue_comments_are_normal_and_retain_structured_detail() {
+    let h = headers(&[("X-GitHub-Event", "issue_comment")]);
+    let payload = br#"{"action":"created","issue":{"number":123,"title":"Bug","labels":[{"name":"bug","color":"ff0000"}]},"comment":{"body":"  Reply  ","user":{"login":"alice"}},"workflow_run":{"conclusion":"failure"}}"#;
+    let parsed = event(receive_with(Provider::Github, Authentication::None, &h, payload).unwrap());
+    assert_eq!(parsed.to_message_content().level, MessageLevel::Normal);
+    let PlatformData::Github(github) = &parsed.data else {
+        panic!()
+    };
+    assert_eq!(github.issue.as_ref().unwrap().number, Some(123));
+    assert_eq!(
+        github.comment.as_ref().unwrap().body.as_deref(),
+        Some("  Reply  ")
+    );
+    assert_eq!(
+        github.issue.as_ref().unwrap().labels[0].name.as_deref(),
+        Some("bug")
+    );
 }
 
 #[test]
@@ -108,7 +132,7 @@ fn event_serialization_preserves_unknown_fields() {
     assert_eq!(encoded["raw"]["value"]["unknown"]["preserved"], true);
     let decoded: PlatformEvent = serde_json::from_value(encoded).unwrap();
     assert_eq!(decoded, parsed);
-    assert_eq!(decoded.to_message(), parsed.to_message());
+    assert_eq!(decoded.to_message_content(), parsed.to_message_content());
 }
 
 #[test]

@@ -3,6 +3,7 @@
 //! Provider and authentication policy must come from trusted endpoint configuration,
 //! never from request headers. Pass the original, unmodified request body.
 mod crypto;
+mod error;
 pub mod platforms;
 mod support;
 mod types;
@@ -12,6 +13,7 @@ mod test_support;
 #[cfg(test)]
 mod tests;
 
+pub use error::WebhookError;
 pub use platforms::*;
 pub use types::*;
 
@@ -35,3 +37,5 @@ pub fn receive(
         Provider::Shopify => platforms::shopify::receive(config, request),
     }
 }
+pub mod config;
+pub mod service;

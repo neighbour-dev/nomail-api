@@ -2,7 +2,7 @@
 #[cfg(test)]
 mod tests;
 use crate::webhook::{
-    Authentication, EventContent, EventMetadata, IncomingMessage, PlatformData, PlatformEvent,
+    Authentication, EventContent, EventMetadata, MessageContent, PlatformData, PlatformEvent,
     ReceiveOutcome, WebhookConfig, WebhookError, WebhookRequest, crypto, support::*,
 };
 use aes::cipher::{BlockDecryptMut, KeyIvInit, block_padding::Pkcs7};
@@ -12,27 +12,49 @@ use serde_json::Value;
 use sha2::{Digest, Sha256};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
 pub enum FeishuEvent {
-    V2(FeishuV2Event),
+    V2(Box<FeishuV2Event>),
     Legacy(FeishuLegacyEvent),
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
 pub struct FeishuV2Event {
     pub app_id: Option<String>,
     pub tenant_key: Option<String>,
     pub message: Option<FeishuMessage>,
+    pub sender: Option<FeishuSender>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
+pub struct FeishuSender {
+    pub open_id: Option<String>,
+    pub user_id: Option<String>,
+    pub union_id: Option<String>,
+    pub sender_type: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
 pub struct FeishuMessage {
     pub message_id: Option<String>,
     pub message_type: Option<String>,
     /// Feishu's original content string; text messages contain nested JSON here.
     pub content: Option<String>,
+    /// Decoded nested content for platform-specific text/post/media rendering.
+    /// Preserve the original content string as well, including unknown formats.
+    pub content_json: Option<Value>,
+    pub chat_id: Option<String>,
+    pub chat_type: Option<String>,
+    pub create_time: Option<String>,
+    pub parent_id: Option<String>,
+    pub root_id: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
 pub struct FeishuLegacyEvent {
     pub uuid: Option<String>,
 }
@@ -106,7 +128,7 @@ pub(in crate::webhook) fn receive(
         text(&payload, &["uuid"]),
     ]);
     let event = match schema.as_str() {
-        "2.0" => FeishuEvent::V2(FeishuV2Event {
+        "2.0" => FeishuEvent::V2(Box::new(FeishuV2Event {
             app_id: optional(text(&payload, &["header", "app_id"])),
             tenant_key: optional(text(&payload, &["header", "tenant_key"])),
             message: payload["event"]
@@ -116,8 +138,27 @@ pub(in crate::webhook) fn receive(
                     message_id: optional(text(value, &["message_id"])),
                     message_type: optional(text(value, &["message_type"])),
                     content: optional(text(value, &["content"])),
+                    content_json: value["content"]
+                        .as_str()
+                        .and_then(|s| serde_json::from_str(s).ok()),
+                    chat_id: optional(text(value, &["chat_id"])),
+                    chat_type: optional(text(value, &["chat_type"])),
+                    create_time: optional(text(value, &["create_time"])),
+                    parent_id: optional(text(value, &["parent_id"])),
+                    root_id: optional(text(value, &["root_id"])),
                 }),
-        }),
+            sender: payload["event"]["sender"]
+                .as_object()
+                .map(|_| FeishuSender {
+                    open_id: optional(text(&payload, &["event", "sender", "sender_id", "open_id"])),
+                    user_id: optional(text(&payload, &["event", "sender", "sender_id", "user_id"])),
+                    union_id: optional(text(
+                        &payload,
+                        &["event", "sender", "sender_id", "union_id"],
+                    )),
+                    sender_type: optional(text(&payload, &["event", "sender", "sender_type"])),
+                }),
+        })),
         "" => FeishuEvent::Legacy(FeishuLegacyEvent {
             uuid: optional(text(&payload, &["uuid"])),
         }),
@@ -189,7 +230,11 @@ fn first_header<'a>(request: &'a WebhookRequest<'_>, name: &str, alternate: &str
 }
 
 impl FeishuEvent {
-    pub fn to_message(&self, metadata: &EventMetadata, raw: &EventContent) -> IncomingMessage {
+    pub fn to_message_content(
+        &self,
+        metadata: &EventMetadata,
+        raw: &EventContent,
+    ) -> MessageContent {
         let p = raw.as_json().unwrap_or(&Value::Null);
         let message_fields = match self {
             Self::V2(event) => event.message.as_ref(),

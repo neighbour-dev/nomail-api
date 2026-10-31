@@ -30,7 +30,7 @@ fn update_types_and_non_text_messages() {
             .unwrap(),
         );
         assert_eq!(parsed.metadata().event_type, kind);
-        assert!(parsed.to_message().content.contains(expected));
+        assert!(parsed.to_message_content().content.contains(expected));
     }
     assert!(
         receive_with(

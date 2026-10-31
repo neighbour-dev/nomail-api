@@ -2,12 +2,13 @@
 #[cfg(test)]
 mod tests;
 use crate::webhook::{
-    Authentication, EventContent, EventMetadata, IncomingMessage, PlatformData, PlatformEvent,
+    Authentication, EventContent, EventMetadata, MessageContent, PlatformData, PlatformEvent,
     ReceiveOutcome, WebhookConfig, WebhookError, WebhookRequest, crypto, support::*,
 };
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
 pub struct TelegramEvent {
     pub update_id: i64,
     pub chat_id: Option<i64>,
@@ -69,7 +70,11 @@ pub(in crate::webhook) fn receive(
 }
 
 impl TelegramEvent {
-    pub fn to_message(&self, metadata: &EventMetadata, raw: &EventContent) -> IncomingMessage {
+    pub fn to_message_content(
+        &self,
+        metadata: &EventMetadata,
+        raw: &EventContent,
+    ) -> MessageContent {
         let kind = &metadata.event_type;
         let payload = raw.as_json().unwrap_or(&serde_json::Value::Null);
         let update = &payload[kind];

@@ -1,6 +1,61 @@
 # nomail-core
 
-不依赖 Actix、Workers SDK、数据库、Tokio、环境变量或系统时钟的 Rust 业务内核。目前实现 Webhook 协议接收与内置收件箱消息映射；尚未包含持久化、推送、队列或 Workers 部署入口。
+不依赖 Actix、Workers SDK、数据库驱动、Tokio（仅测试使用）、环境变量或系统时钟的 Rust 业务内核。包含 Webhook 协议接收与映射、收件箱规范化、完整的社区认证业务、分页及凭据加密格式；持久化、时间、随机数和密码计算的调度由运行时提供，部署入口分别在相邻的 `nomail-server`、`nomail-workers` crate。
+
+## HTTP 契约
+
+`src/api/routes.rs` 的单一清单关联路径、方法、鉴权、原始/JSON 请求体、JSON/SSE/raw/平台控制响应，以及 Endpoint 关联的请求/查询/响应类型。`api::resolve()` 统一尾斜杠、静态路径优先和单次参数解码；`parse_json::<Endpoint>()` / `parse_query::<Endpoint>()` 统一输入解析，`ApiResponse<T>` / `ApiFailure` 统一响应包装与错误语义。数据库驱动和 HTTP 框架仍留在适配层。
+
+DTO 按业务放在 auth/message/webhook 模块；消息详情和配置列表等响应也是具体 Rust 类型，不通过两端各自的 json! 拼字段。`api::EndpointResponse<E>` 表示 JSON 业务成功分支，不能用于 SSE、raw 或平台控制响应。列表 DTO 直接定义 summary/source 等线上的字段，不把存储表示当作接口类型。
+
+启用可选 `openapi` feature 后，使用真实 DTO 的 JsonSchema 和同一路由清单生成 OpenAPI 3.1。生成器不包含另一份手写路径或响应模型；默认/WASM 生产构建不链接 Schema 生成器。导出命令在仓库根目录运行：
+
+```bash
+cargo run --locked -p nomail-core --features openapi --example export-openapi -- docs/swagger.json
+cargo test --locked -p nomail-core --features openapi --lib
+```
+
+文档快照、路由唯一性、鉴权清单、DTO/查询解析和非 JSON 协议均有契约测试；两端操作绑定采用穷尽匹配，普通成功响应通过 `success::<Endpoint>()` 检查关联的响应类型。
+
+`api/sse.rs` 统一事件名、MessageCreated/Ready 等数据 DTO、帧编码及心跳。OpenAPI 的 `x-sse-events` 是这些逻辑事件的类型 Schema；实际 HTTP 响应仍是 text/event-stream，不是 JSON 包装。平台端只管理连接、计时与广播，私有 DO 容量错误会在公开 HTTP 边界转换为共同错误格式。
+
+## 认证业务
+
+`src/auth/service.rs` 是唯一的登录、刷新、退出、鉴权、账号更新/初始化/本地重置和设备管理流程。`dto.rs` 定义公共请求/响应，`model.rs` 定义账号/设备/会话及鉴权上下文；不接收 ORM 实体、D1 JSON 或 HTTP 对象。
+
+- `AuthStore`：账号/设备/会话读取，以及 `complete_login`、`rotate_refresh_token`、`update_account` 等原子操作。SQLite 与 D1 分别实现，不能把并发安全的凭据重验、Token 单次消费、设备上限和会话撤销拆成无保护的 CRUD。
+- `AuthRuntime`：提供可信时间、随机字节、密码计算执行方式；bcrypt cost/格式/错误语义在 `password.rs` 中唯一实现。
+- `token.rs`：只使用 jsonwebtoken 校验签名、HS256、issuer 和必要字段；到期判断显式使用传入的时间，`exp <= now` 拒绝，不依赖内部系统时钟。
+- 存储命令只携带密码/Token 的哈希，不传入明文密码或明文 Refresh Token。包含凭据的配置、账号快照和令牌响应不实现 Debug；账号快照不实现 Serialize，响应使用独立 DTO。
+
+AuthStore 接口允许非 Send future，以兼容 Workers；不强迫 D1 模拟持有事务对象。Core 测试使用固定时间和内存测试替身，原子性还由 SQLite 与 Wrangler 本地 D1 集成测试验证。
+
+## 消息业务
+
+`src/message/` 包含完整 Message 模型、HTTP DTO、类型化查询、`MessageService` 和 `MessageStore`，保持 `nomail_core::message::*` 公开路径与 API 契约不变。
+
+- `MessageQuery` 统一解析分页、等级、布尔值、ID 和 UTC 时间；HTTP 规范化委托同一解析器，存储不再解析原始查询字符串。
+- `MessageService` 统一消息管理与接收初始化；ID/时间显式传入，不依赖 AuthRuntime 或 HTTP 对象。
+- `StatePatch` / `ReadChange` 表达局部状态变更，缺省字段不写入；`MessageMutation` 不允许修改内容、平台快照、原文或接收信息。
+- `MessageStore::update_owned` 原子执行所有权/可见性检查、局部更新与更新后详情读取，不能保存陈旧完整记录覆盖并发修改。批量先验证全部输入、去重，再执行一次带作用域的写入，支持 100 个不同 ID。
+- `accept` 直接构造唯一完整 Message，设置默认状态与统一 3 天保留期，存储仅负责编码。只有首次创建返回 SSE 效果，重复记录（包括已软删除记录）不再产生事件。
+- 列表不加载 platform_data/raw；raw 独立读取，不依赖平台 JSON 解码。配置软删除可见性、原有 LIKE 搜索与过期元数据行为不变，不增加自动清理或新业务功能。
+
+Core 用固定时间及内存替身测试规则；SQLite 与本地 D1 集成测试另行验证并发局部更新、用户隔离及批量边界。
+
+## Webhook 配置管理
+
+`webhook::config::WebhookConfigService` 统一配置 CRUD、启停、空字符串忽略/空 PATCH 不写入语义、Key 生成、默认状态和凭据加密。`WebhookConfigRuntime` 提供时间、随机字节及加密密钥；AES-GCM 格式复用 `security`。写给存储的 `NewConfig` / `ConfigPatch` 仅包含加密凭据，不实现 Debug/Serialize。
+
+`WebhookConfigStore` 接收类型化的创建和局部变更命令，在原子操作内检查所有权/未删除状态并返回配置投影；不能先读旧快照再无条件保存所有字段。SQLite 通过事务实现更新及结果读取，D1 通过 scoped UPDATE RETURNING 实现。列表的计数和分页使用一致读取，offset 验证范围并由 D1 精确绑定。Core 单元测试验证规则，SQLite/D1 集成测试验证并发、凭据保留及跨用户隔离。接收编排和数据库结构保持不变。
+
+## 错误约定
+
+`nomail_core::error` 是错误的统一查找入口，导出 AuthError、MessageError、ConfigError、WebhookError 及相应 Result 别名；原有业务模块公开路径保持不变。错误定义仍位于各自的 `error.rs`，不合并为跨领域大枚举。
+
+所有领域错误实现 `DomainError`，提供 `ErrorKind`、公开文案及安全 `Diagnostic`。Core 不打印日志，不引用 HTTP 状态码；`api/error.rs` 集中将分类映射为 400/401/404/409/500，内部错误始终返回 `internal server error`。413/429 等传输错误仍属于 ApiFailure，不扩充业务错误分类。现有响应文案与 JSON 格式不变。
+
+Server/Workers 只在最终错误响应边界记录内部失败，中间存储→领域→HTTP 转换不记录，避免同一请求重复输出。默认诊断仅含静态领域标签和失败描述，不自动输出 Internal(String)、Display、密码、Token、数据库值或原始请求体。内部原始信息不等于安全日志；需要详细诊断时应在来源处显式提供经过审查的安全上下文，不能直接转发底层错误文本。
 
 ## 代码组织
 
@@ -30,7 +85,7 @@ src/webhook/
 
 每个平台目录均包含 `mod.rs` 和 `tests.rs`，修改一个平台只需进入对应目录。认证策略校验由平台自己负责；外层 `Authentication` 仅保留现有配置枚举，不集中实现各平台认证。没有 Parser trait，也不要求各平台采用相同的内部流程。
 
-`PlatformEvent` 是统一事件信封，`PlatformData` 枚举承载平台专有模型。平台模型的 `to_message(metadata, raw)` 执行本平台内置映射，外部直接使用 `event.to_message()`。`nomail_core::webhook::GithubEvent` 等公开路径仍可用，也可按 `nomail_core::webhook::platforms::github::GithubEvent` 定位。
+`PlatformEvent` 是解析结果，`PlatformData` 枚举承载平台专有模型。平台模型的 `to_message_content(metadata, raw)` 执行内置映射，外部使用 `event.to_message_content()` 得到 `MessageContent`，它只表示通用业务字段，不是完整消息、也不是另一条消息。`nomail_core::message::Message` 同时包含通用内容、平台数据/raw 和 NoMail 管理字段。`nomail_core::webhook::GithubEvent` 等公开路径仍可用，也可按 `nomail_core::webhook::platforms::github::GithubEvent` 定位。
 
 ## 事件模型与可读原始内容
 
@@ -42,7 +97,8 @@ WebhookRequest（签名用的原始字节）+ 可信配置
       │     ├── metadata：事件类型、版本、带作用域的去重标识
       │     ├── data：PlatformData，各平台有意义的专有字段
       │     └── raw：EventContent，人类可读的平台完整原始内容
-      │           → to_message() → IncomingMessage
+      │           → to_message_content() → 通用业务字段 MessageContent
+      │     三部分与通用字段一起保存为同一条 NoMail Message
       ├── Respond：验证 / Ping
       └── Ignored：无需生成业务事件
 ```
@@ -66,14 +122,15 @@ use nomail_core::webhook::{
 // 有密钥的端点应使用 HmacSha256 等认证方式，不能在验签失败时回退为 None。
 let config = WebhookConfig::new(Provider::Generic, Authentication::None, 1_793_354_400);
 let headers = vec![("Content-Type".into(), "application/json".into())];
-let body = br#"{"id":"evt-1","title":"Backup","content":"Done","level":"success"}"#;
+let body = br#"{"id":"evt-1","title":"Backup","content":"Done","level":"normal"}"#;
 
 match receive(&config, &WebhookRequest { headers: &headers, body })? {
     ReceiveOutcome::Event(event) => {
-        let message = event.to_message();
+        let message = event.to_message_content();
         assert_eq!(message.title, "Backup");
         let key = &event.metadata().deduplication_key;
-        // 适配层用 message + key 原子入库，成功后再返回平台要求的 ACK。
+        // 适配层把通用字段、event.metadata、event.data、event.raw
+        // 与 NoMail 管理状态原子写入同一行，成功后再返回 ACK。
         assert_eq!(event.raw.as_json().unwrap()["id"], "evt-1");
         // event.data 用于平台展示/交互，event.raw 保留可读完整内容。
     }
@@ -90,7 +147,9 @@ match receive(&config, &WebhookRequest { headers: &headers, body })? {
 
 `receive()` 是安全接入入口，将配置对应的认证、必要的解密/解码和解析放在同一流程中，避免调用方忘记验签。输出业务请求时是 `ReceiveOutcome::Event(Box<PlatformEvent>)`（Box 避免放大控制结果的枚举大小）；控制请求不伪装成消息。
 
-`to_message()` 采用 Rust 命名规范，对应概念上的 `toMessage`。它是纯函数，使用内置规则生成 `IncomingMessage`，不生成数据库主键、不设置用户/租户、不执行保留策略、不调用外部 API。平台原始事件与收件箱消息是两种不同模型。
+`to_message_content()` 是纯映射：生成标题、正文、来源、必填 MessageLevel 和链接，不生成 ID、不读取系统时间、不设置用户状态、不调用外部 API。`apply_inbox_rules()` 原地处理默认值与长度，替代原来的重复中间模型；存储时仍保留平台结构和 raw。NoMail 的接收时间、已读、置顶、过期/删除时间由应用流程管理，不写进平台解析结果。
+
+`MessageLevel` 为 `low / normal / high / urgent`，定义 `priority_rank()` / `is_at_least()`。这是关注优先级，不是结果或故障严重程度。`from_label()` 支持这四个标签（去首尾空白、不区分大小写），未知或旧标签回退 normal；严格解析/列表筛选拒绝其他值。平台成功、失败等状态保留在 data/raw，没有明确优先级规则时默认 normal。优先级不决定通知或删除：`DEFAULT_RETENTION_DAYS` 当前统一为 3 天，不实现通知发送或规则引擎。
 
 ## 协议范围
 

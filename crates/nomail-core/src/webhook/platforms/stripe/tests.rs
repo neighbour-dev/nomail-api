@@ -30,10 +30,15 @@ fn snapshot_thin_and_rotating_signatures() {
             is_thin
         );
         if is_thin {
-            assert!(parsed.to_message().content.contains("details not fetched"));
-            assert!(parsed.to_message().url.is_none());
+            assert!(
+                parsed
+                    .to_message_content()
+                    .content
+                    .contains("details not fetched")
+            );
+            assert!(parsed.to_message_content().url.is_none());
         } else {
-            assert_eq!(parsed.to_message().level, MessageLevel::Success);
+            assert_eq!(parsed.to_message_content().level, MessageLevel::Normal);
         }
         assert!(
             receive_with(
@@ -44,6 +49,24 @@ fn snapshot_thin_and_rotating_signatures() {
             )
             .is_err()
         );
+    }
+}
+
+#[test]
+fn payment_outcomes_do_not_assign_attention_priority() {
+    for kind in ["payment_intent.failed", "payment_intent.succeeded"] {
+        let body = serde_json::json!({"id":"evt_priority","object":"event","type":kind,"data":{"object":{"id":"pi_1"}}}).to_string();
+        let parsed = event(
+            receive_with(
+                Provider::Stripe,
+                Authentication::None,
+                &Vec::new(),
+                body.as_bytes(),
+            )
+            .unwrap(),
+        );
+        assert_eq!(parsed.to_message_content().level, MessageLevel::Normal);
+        assert_eq!(parsed.metadata.event_type, kind);
     }
 }
 

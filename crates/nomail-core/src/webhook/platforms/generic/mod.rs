@@ -3,13 +3,14 @@
 #[cfg(test)]
 mod tests;
 use crate::webhook::{
-    Authentication, EventContent, EventMetadata, IncomingMessage, PlatformData, PlatformEvent,
+    Authentication, EventContent, EventMetadata, MessageContent, PlatformData, PlatformEvent,
     ReceiveOutcome, WebhookConfig, WebhookError, WebhookRequest, crypto, support::*,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
 pub enum GenericEvent {
     Json(GenericJsonEvent),
     Text(GenericTextEvent),
@@ -17,6 +18,7 @@ pub enum GenericEvent {
 
 /// Fields explicitly supported by the NoMail JSON protocol. Unknown fields stay in raw.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
 pub struct GenericJsonEvent {
     pub title: Option<String>,
     pub content: Option<String>,
@@ -29,6 +31,7 @@ pub struct GenericJsonEvent {
 
 /// Inputs supplied through X-NoMail-* headers for a plain-text request.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
 pub struct GenericTextEvent {
     pub title: Option<String>,
     pub source: Option<String>,
@@ -100,7 +103,11 @@ pub(in crate::webhook) fn receive(
 }
 
 impl GenericEvent {
-    pub fn to_message(&self, metadata: &EventMetadata, raw: &EventContent) -> IncomingMessage {
+    pub fn to_message_content(
+        &self,
+        metadata: &EventMetadata,
+        raw: &EventContent,
+    ) -> MessageContent {
         match self {
             Self::Text(fields) => message(
                 fields
