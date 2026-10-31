@@ -16,6 +16,7 @@ RUN apk add --no-cache ca-certificates tzdata \
     && adduser -S -D -u 10001 -G nomail nomail
 RUN mkdir /data && chown nomail:nomail /data
 COPY --from=builder /out/ /usr/local/bin/
+COPY LICENSE /usr/share/licenses/nomail-api/LICENSE
 ENV PORT=3000 JWT_ISSUER=nomail-api TZ=Asia/Shanghai DATABASE_PATH=/data/nomail.db
 EXPOSE 3000
 USER nomail

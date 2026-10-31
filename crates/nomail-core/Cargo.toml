@@ -3,6 +3,7 @@ name = "nomail-core"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.99"
+license.workspace = true
 description = "Runtime-independent platform webhook authentication, parsing and content extraction"
 
 [features]

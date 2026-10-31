@@ -2,41 +2,9 @@
 
 Cloudflare 官方 [workers-rs](https://github.com/cloudflare/workers-rs) 的 `worker` SDK，Rust → WASM。使用 D1 存储账号、设备、会话、Webhook 配置和消息，Durable Objects 按用户广播 SSE。不依赖 Actix、SeaORM、PostgreSQL 或 Node.js 业务框架。
 
-## 安装与本地运行
+## 安装与部署
 
-需要 Rust 1.99+、WASM target、Node.js 22+：
-
-```bash
-rustup target add wasm32-unknown-unknown
-cargo install worker-build --locked --version 0.8.7
-```
-
-在此目录执行：
-
-```bash
-npm ci
-cp .dev.vars.example .dev.vars
-npx wrangler d1 migrations apply DB --local
-npm run dev
-```
-
-修改 `.dev.vars` 的密钥与密码。加密密钥是 Base64 的 32 个随机字节，可在仓库根目录运行 `cargo run -p nomail-server --bin gen-secret-key` 生成。`.dev.vars` 不得提交。
-
-首次登录会在账号表为空时创建初始账号；后续不会因修改初始密码配置而重置账号。首次登录后通过 `/api/auth/account` 改密，再移除 `INITIAL_PASSWORD`。所有受保护接口除了验证 JWT，还查询设备/会话撤销状态。
-
-## 部署
-
-1. `npx wrangler login`。
-2. `npx wrangler d1 create nomail`，将生成的数据库 ID 写入 `wrangler.toml`；全零 ID 仅用于本地测试。
-3. 分别用 `npx wrangler secret put NAME` 设置：
-   - `JWT_SECRET`
-   - `SECRET_ENCRYPTION_KEY`
-   - `INITIAL_USERNAME`
-   - `INITIAL_PASSWORD`
-4. `npx wrangler d1 migrations apply DB --remote` 初始化数据库。
-5. `npm run deploy`，Wrangler 会调用官方 `worker-build --release`。首次部署同时创建 `Realtime` Durable Object class。
-
-不要对远程数据库运行集成测试。密钥在升级时保持不变，否则已有 Token 或加密配置无法继续使用。
+环境准备、本地运行、D1/Secret 配置及远程部署统一见[安装指南](../../docs/install.md)。开发检查和提交要求见[贡献指南](../../CONTRIBUTING.md)，本文件仅补充 Workers 的实现边界。
 
 ## 测试
 

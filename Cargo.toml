@@ -3,6 +3,9 @@ members = ["crates/nomail-core", "crates/nomail-app", "crates/nomail-server", "c
 default-members = ["crates/nomail-core", "crates/nomail-app", "crates/nomail-server"]
 resolver = "3"
 
+[workspace.package]
+license = "AGPL-3.0-only"
+
 [profile.release]
 lto = "thin"
 # Keep WASM target_features for wasm-bindgen's externref transform.
