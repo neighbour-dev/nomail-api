@@ -14,11 +14,21 @@ Server / Workers → nomail-app → nomail-core
 - `webhook/config/`：开源版接收配置、凭据加密、Key、启停及存储接口。
 - `webhook/service.rs`：开源版支持的平台和收件箱规范化规则。
 - `ingestion/`：唯一完整接收用例：查配置、解密凭据、调用协议、区分控制请求、构造消息并幂等入箱。只依赖 `IngestionStore` 的有效配置查询和幂等插入两个操作，不持有 `MessageService` 或继承 `MessageStore`。时间、ID 和密钥由运行时提供；控制请求不创建消息 ID，不入库。只在首次持久化成功且返回 ID 一致时产生业务事件。
-- `http/`：唯一接口清单、完整接口执行、输入解析、响应包装、HTTP 错误映射、配置 URL、SSE 编码和 OpenAPI。两端一次接入 `http::execute`，不分别维护路径、方法、DTO 或逐接口 Handler。
+- `http/contract/`：集中定义唯一路由清单、所有 HTTP 请求/响应 DTO、响应包装和 SSE 事件，按认证、消息、配置、公共类型分文件。`http::*` 保留契约重导出。
+- `http/`：完整接口执行、输入解析、业务结果转换、HTTP 错误映射、配置 URL、SSE 编码和 OpenAPI。两端一次接入 `http::execute`，不分别维护路径、方法、DTO 或逐接口 Handler。
 
 业务不依赖 `http`。配置用例和存储返回无 URL 的 `ConfigView`，HTTP 转换为 `ConfigResponse`；接收用例返回业务结果，`http::webhook::WebhookReply` 将其转换为 ACK/控制响应及可选 SSE 效果。连接与尽力而为的广播由平台实现，不增加可靠投递或重放。
 
-业务输入输出可以直接使用 Serde；不为无差异的数据机械复制 DTO。HTTP 特有的 URL、响应包装、状态码和帧格式不能进入业务或存储接口。`tests/architecture.rs` 检查该边界。
+业务和存储接口不使用 HTTP DTO。认证使用 `Login` / `UpdateAccount`、`AccountInfo` / `SessionTokens` / `DeviceInfo`；消息返回轻量 `MessagePreview` 或 `MessageWithConfig`，数量直接返回 `u64`。HTTP 转换负责 camelCase、空字符串回退、嵌套展开和包装；业务 `pagination::Page` 与契约 `Page` 通过一个泛型转换连接。`Claims` 是 JWT 内容，实体的 Serde 可以用于存储，不属于 HTTP 契约。`tests/architecture.rs` 检查业务无 HTTP/Schema 依赖，应用 wire schema 仅定义在契约目录。
+
+消息查询和批量操作、配置创建和修改在共享 HTTP 层完成一次输入转换，再调用用例：
+
+- `http/contract/message.rs` 保留查询参数原始语法，转换为只读 `MessageQuery`；不会把枚举、布尔值和时间重新字符串化。Service 直接使用类型化过滤条件和已校验分页；配置分页同样先转为 `ConfigPage`。
+- 批量输入转换为 UUID 列表及 `BatchAction`。先检查原始 1～100 条限制，再解析 ID 和操作、去重；Service 不再匹配任意 action 字符串。
+- `http/contract/config.rs` 分别定义创建和修改请求。创建的 name/provider 由 Serde 要求提供；修改的缺省和空字符串仍表示保留，null 和错误类型仍拒绝。通用 JSON 解析器不再二次解析或维护端点必填字段特判。
+- `CreateConfig` / `UpdateConfig` 通过业务构造入口验证，字段不对外开放构造，不派生 Debug/Serialize。Service 仍负责生成 Key、加密凭据、时间和默认值，存储只接收含密文的 `NewConfig` / `ConfigPatch`。全空修改仍是只读，不更新接收配置的时间。
+
+这些类型不是通用命令框架；权限、资源状态和原子写入检查仍保留在用例与存储边界。
 
 存储接口表达原子操作，不是通用 CRUD。刷新单次消费、改密撤销、所有权检查、局部更新、幂等约束分别由 SQLite 事务和 D1 条件语句/batch 实现；不能拆成无保护的多步读写。
 
@@ -26,7 +36,7 @@ Server / Workers → nomail-app → nomail-core
 
 ## HTTP 契约与检查
 
-`src/http/routes.rs` 是路径、方法、鉴权、输入输出类型和 OpenAPI 的唯一清单；`src/http/dispatch.rs` 是唯一的 Operation → 用例绑定。新增操作只需修改 App；若遗漏共享分发会编译失败，不要求两个部署补写 Handler。公开 HTTP/数据库行为保持不变。
+`src/http/contract/routes.rs` 是路径、方法、鉴权、输入输出类型和 OpenAPI 的唯一清单；`src/http/dispatch.rs` 是唯一的 Operation → 用例绑定及请求/结果转换边界。消息列表存储仅选预览列；D1 用私有存储行解码，不借用 HTTP 字段别名。`http/contract/events.rs` 定义事件，`http/sse.rs` 只负责帧编码和心跳。新增操作只需修改 App；若遗漏共享分发会编译失败，不要求两个部署补写 Handler。公开 HTTP/数据库行为保持不变。
 
 平台实现两个小边界：
 
