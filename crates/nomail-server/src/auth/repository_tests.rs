@@ -1,5 +1,5 @@
 use super::*;
-use crate::{auth::runtime::Runtime, config::Config};
+use crate::config::Config;
 
 fn config(dir: &tempfile::TempDir) -> Config {
     Config {
@@ -133,7 +133,7 @@ async fn password_change_revokes_expired_sessions_too_and_device_actions_are_own
     // Runtime calls the common password implementation, not a second policy.
     assert!(
         nomail_app::auth::AuthRuntime::verify_password(
-            &Runtime,
+            &service.runtime,
             "newpassword123",
             &service
                 .store

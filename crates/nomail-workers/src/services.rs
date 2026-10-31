@@ -1,19 +1,18 @@
-//! D1/Workers composition and execution capabilities, without endpoint bindings.
+//! D1/Workers service composition, without endpoint bindings.
 use crate::{
     auth,
     config::{Config, ConfigLoadError},
     db::Store,
-    message, time, webhook,
+    message,
+    runtime::Runtime,
+    webhook,
 };
-use chrono::{DateTime, Utc};
 use nomail_app::{
-    auth::{AuthConfig, AuthResult, AuthRuntime},
+    auth::AuthConfig,
     http::{
         ApiFailure, Environment, EnvironmentServices, HealthCheck, HttpResult, RequestHead,
         Services,
     },
-    ingestion::{IngestionError, IngestionResult, IngestionRuntime},
-    webhook::config::{ConfigError, ConfigResult, WebhookConfigRuntime},
 };
 use worker::Env;
 
@@ -75,48 +74,6 @@ impl<'a> Environment for WorkersEnvironment<'a> {
         Ok(HealthCheck::Database(
             self.database()?.rows("SELECT 1", vec![]).await.is_ok(),
         ))
-    }
-}
-
-#[derive(Clone)]
-pub(crate) struct Runtime {
-    encryption_key: [u8; 32],
-}
-impl AuthRuntime for Runtime {
-    fn now(&self) -> DateTime<Utc> {
-        DateTime::from_timestamp_millis(time::now_ms()).expect("runtime timestamp in range")
-    }
-    fn random_bytes(&self, bytes: &mut [u8]) -> AuthResult<()> {
-        auth::runtime::Runtime.random_bytes(bytes)
-    }
-    async fn hash_password(&self, value: &str, salt: [u8; 16]) -> AuthResult<String> {
-        auth::runtime::Runtime.hash_password(value, salt).await
-    }
-    async fn verify_password(&self, value: &str, hash: &str) -> AuthResult<bool> {
-        auth::runtime::Runtime.verify_password(value, hash).await
-    }
-}
-impl WebhookConfigRuntime for Runtime {
-    fn now(&self) -> DateTime<Utc> {
-        AuthRuntime::now(self)
-    }
-    fn random_bytes(&self, bytes: &mut [u8]) -> ConfigResult<()> {
-        AuthRuntime::random_bytes(self, bytes).map_err(|e| ConfigError::Internal(e.to_string()))
-    }
-    fn encryption_key(&self) -> &[u8; 32] {
-        &self.encryption_key
-    }
-}
-impl IngestionRuntime for Runtime {
-    fn now(&self) -> DateTime<Utc> {
-        AuthRuntime::now(self)
-    }
-    fn message_id(&self, now: DateTime<Utc>) -> IngestionResult<uuid::Uuid> {
-        crate::crypto::message_id(now.timestamp_millis() as u64)
-            .map_err(|_| IngestionError::Internal("message identity generation failed".into()))
-    }
-    fn encryption_key(&self) -> &[u8; 32] {
-        &self.encryption_key
     }
 }
 

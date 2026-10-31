@@ -6,6 +6,7 @@ mod db;
 mod error;
 mod message;
 mod realtime;
+mod runtime;
 mod services;
 mod time;
 mod webhook;

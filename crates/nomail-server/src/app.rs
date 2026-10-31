@@ -131,7 +131,7 @@ mod tests {
         type MessageStore = crate::message::repository::Store<'static>;
         type ConfigStore = crate::webhook::configs::repository::Store<'static>;
         type IngestionStore = crate::message::repository::Store<'static>;
-        type Runtime = crate::services::Runtime;
+        type Runtime = crate::runtime::Runtime;
         fn services(&self) -> HttpResult<http::EnvironmentServices<Self>> {
             self.service_calls.set(self.service_calls.get() + 1);
             Err(ApiFailure::internal().into())

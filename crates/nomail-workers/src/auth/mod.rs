@@ -1,3 +1,2 @@
-//! Workers authentication storage and password execution adapters.
+//! Workers authentication storage adapter.
 pub(crate) mod repository;
-pub(crate) mod runtime;

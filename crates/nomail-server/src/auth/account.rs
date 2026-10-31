@@ -19,7 +19,11 @@ pub async fn reset_account(
     };
     nomail_app::auth::AuthService {
         store: super::repository::Store(db),
-        runtime: super::runtime::Runtime,
+        // This local operation only uses password/randomness capabilities, not
+        // encrypted webhook credentials; no encryption configuration is needed.
+        runtime: crate::runtime::Runtime {
+            encryption_key: [0; 32],
+        },
         config,
     }
     .reset_account(username, &password)

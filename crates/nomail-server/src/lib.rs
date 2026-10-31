@@ -7,6 +7,7 @@ pub mod error;
 pub mod message;
 pub mod migration;
 pub mod realtime;
+mod runtime;
 mod services;
 pub mod webhook;
 

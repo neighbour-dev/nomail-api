@@ -1,9 +1,8 @@
-//! Native authentication storage/runtime and local account maintenance.
+//! Native authentication storage and local account maintenance.
 pub(crate) mod account;
 pub(crate) mod repository;
-pub(crate) mod runtime;
 
-use crate::config::Config;
+use crate::{config::Config, runtime::Runtime};
 pub use account::{ensure_initial_user, reset_account};
 use nomail_app::auth::{AuthConfig, AuthService};
 use sea_orm::DatabaseConnection;
@@ -19,10 +18,12 @@ pub(crate) fn auth_config(config: &Config) -> AuthConfig {
 pub(crate) fn service<'a>(
     db: &'a DatabaseConnection,
     config: &Config,
-) -> AuthService<repository::Store<'a>, runtime::Runtime> {
+) -> AuthService<repository::Store<'a>, Runtime> {
     AuthService {
         store: repository::Store(db),
-        runtime: runtime::Runtime,
+        runtime: Runtime {
+            encryption_key: config.encryption_key,
+        },
         config: auth_config(config),
     }
 }

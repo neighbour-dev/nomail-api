@@ -43,6 +43,8 @@ Server / Workers → nomail-app → nomail-core
 - `HttpRequest` 提供请求头部及延迟 Body 读取；共享执行器先匹配路由、再鉴权、再读取和解析 Body。适配器逐块检查 4 MiB 限制，共享层额外检查最终长度。Webhook 原字节和重复头不被 JSON 转换破坏。
 - `Environment` 分别组装 Auth/Message/Config/Ingestion 存储和运行时，返回 `Services`，不按接口定义方法。消息管理与接收的存储类型独立，不要求消息存储实现接收接口或 `Clone`。服务配置只在已知非健康检查路由上读取，健康检查无需账号或加密配置。原子操作仍由原存储接口负责。
 
+每个平台仅在自己的 `src/runtime.rs` 中实现一个具体 `Runtime`，直接满足 App 的认证、配置和接收三个窄 trait；`services.rs` 只负责组装，不再转发到 `auth/runtime.rs`。时间和随机数直接使用平台能力，随机数错误分别映射到所属用例，不经认证错误中转。Server 密码运算仍使用 `spawn_blocking`，本地账号维护也复用同一个 Runtime；App 测试继续使用自己的可控替身。
+
 `HttpOutcome` 包含已编码的普通响应或 SSE 订阅指令，以及首次持久化后的实时效果。两端只写响应、建立连接和执行尽力而为的广播，不再出现 Operation 匹配、Endpoint 引用或请求 DTO 解析。`HttpError` 将安全诊断保留到平台最终日志边界，不泄露内部错误文本。
 
 Server 的 `ApiError` 仅包装共享 `HttpError` 并实现 Actix `ResponseError`，不再直接转换业务或数据库错误；状态码和公开消息策略仍由 App HTTP 层统一定义。配置加载返回 `ConfigLoadError`，数据库初始化返回分阶段的 `ConnectError`，账号维护和令牌/密码操作返回认证错误，纯加密工具保留共享工具的错误。启动与工具调用不借用 HTTP 错误；请求内部错误仅在最终响应边界记录一次安全诊断。
