@@ -1240,7 +1240,7 @@
         "type": "object"
       },
       "Page_ConfigResponse": {
-        "description": "Application pagination result, independent of HTTP envelopes and routes.",
+        "description": "Wire pagination envelope, separate from the application page.",
         "properties": {
           "items": {
             "items": {
@@ -1273,7 +1273,7 @@
         "type": "object"
       },
       "Page_MessageListItem": {
-        "description": "Application pagination result, independent of HTTP envelopes and routes.",
+        "description": "Wire pagination envelope, separate from the application page.",
         "properties": {
           "items": {
             "items": {
@@ -6440,11 +6440,9 @@
                     "type": "string"
                   },
                   "name": {
-                    "default": "",
                     "type": "string"
                   },
                   "provider": {
-                    "default": "",
                     "type": "string"
                   },
                   "secret": {
@@ -6460,7 +6458,7 @@
                   "name",
                   "provider"
                 ],
-                "title": "ConfigRequest",
+                "title": "CreateConfigRequest",
                 "type": "object"
               }
             }
@@ -7206,7 +7204,7 @@
                     "type": "string"
                   }
                 },
-                "title": "ConfigRequest",
+                "title": "UpdateConfigRequest",
                 "type": "object"
               }
             }

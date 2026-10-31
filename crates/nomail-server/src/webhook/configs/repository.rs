@@ -55,8 +55,8 @@ impl WebhookConfigStore for Store<'_> {
         let total = owned(user_id).count(&tx).await.map_err(storage)?;
         let items = owned(user_id)
             .order_by_desc(webhook::Column::CreatedAt)
-            .offset(page.offset)
-            .limit(page.size)
+            .offset(page.offset())
+            .limit(page.size())
             .all(&tx)
             .await
             .map_err(storage)?

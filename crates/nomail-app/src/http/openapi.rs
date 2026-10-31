@@ -123,17 +123,7 @@ pub fn document() -> Value {
         }
         match route.body {
             BodyKind::Json => {
-                let mut schema = register((route.request_schema)(), &mut schemas);
-                if !route.operation.required_body_fields().is_empty() {
-                    let required = route.operation.required_body_fields();
-                    for name in required {
-                        assert!(
-                            schema["properties"].get(*name).is_some(),
-                            "stale required request field: {name}"
-                        );
-                    }
-                    schema["required"] = json!(required);
-                }
+                let schema = register((route.request_schema)(), &mut schemas);
                 operation["requestBody"] =
                     json!({"required":true,"content":{"application/json":{"schema":schema}}});
             }
@@ -177,6 +167,18 @@ mod tests {
                 }
             );
         }
+        let create_schema = &document["paths"]["/api/webhook/configs"]["post"]["requestBody"]["content"]
+            ["application/json"]["schema"];
+        let update_schema = &document["paths"]["/api/webhook/configs/{id}"]["patch"]["requestBody"]
+            ["content"]["application/json"]["schema"];
+        assert_eq!(create_schema["required"], json!(["name", "provider"]));
+        assert!(create_schema["properties"]["name"].get("default").is_none());
+        assert!(
+            create_schema["properties"]["provider"]
+                .get("default")
+                .is_none()
+        );
+        assert!(update_schema.get("required").is_none());
         fn references(value: &Value, root: &Value) {
             match value {
                 Value::Object(object) => {

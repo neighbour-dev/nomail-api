@@ -1,5 +1,7 @@
+use super::super::ApiFailure;
+#[cfg(feature = "openapi")]
+use super::super::openapi;
 use super::*;
-use crate::{auth, message, webhook};
 use percent_encoding::{NON_ALPHANUMERIC, percent_decode_str, utf8_percent_encode};
 use serde::{Serialize, de::DeserializeOwned};
 
@@ -69,7 +71,7 @@ pub struct Route {
 }
 pub trait Endpoint {
     type Request: DeserializeOwned;
-    type Query: QueryDto;
+    type Query: DeserializeOwned;
     type Response: Serialize + DeserializeOwned;
     const OPERATION: Operation;
 }
@@ -105,27 +107,27 @@ macro_rules! endpoints {
 }
 endpoints! {
     Health => ("health",Get,"/api/health",Public,None,Json,false,None,(),(),HealthResponse,"Health","健康检查"),
-    Login => ("login",Post,"/api/auth/login",Public,Json,Json,false,None,auth::LoginRequest,(),auth::TokenResponse,"Auth","登录"),
-    Refresh => ("refreshToken",Post,"/api/auth/refresh-token",Public,Json,Json,false,None,auth::RefreshRequest,(),auth::TokenResponse,"Auth","轮换刷新令牌"),
-    Logout => ("logout",Post,"/api/auth/logout",Public,Json,Json,false,None,auth::RefreshRequest,(),(),"Auth","退出登录"),
-    GetAccount => ("getAccount",Get,"/api/auth/account",Bearer,None,Json,false,None,(),(),auth::AccountResponse,"Auth","获取账号"),
-    UpdateAccount => ("updateAccount",Patch,"/api/auth/account",Bearer,Json,Json,false,None,auth::AccountUpdateRequest,(),auth::AccountResponse,"Auth","修改账号"),
-    ListDevices => ("listDevices",Get,"/api/auth/devices",Bearer,None,Json,false,None,(),(),Vec<auth::DeviceResponse>,"Auth","设备列表"),
+    Login => ("login",Post,"/api/auth/login",Public,Json,Json,false,None,LoginRequest,(),TokenResponse,"Auth","登录"),
+    Refresh => ("refreshToken",Post,"/api/auth/refresh-token",Public,Json,Json,false,None,RefreshRequest,(),TokenResponse,"Auth","轮换刷新令牌"),
+    Logout => ("logout",Post,"/api/auth/logout",Public,Json,Json,false,None,RefreshRequest,(),(),"Auth","退出登录"),
+    GetAccount => ("getAccount",Get,"/api/auth/account",Bearer,None,Json,false,None,(),(),AccountResponse,"Auth","获取账号"),
+    UpdateAccount => ("updateAccount",Patch,"/api/auth/account",Bearer,Json,Json,false,None,AccountUpdateRequest,(),AccountResponse,"Auth","修改账号"),
+    ListDevices => ("listDevices",Get,"/api/auth/devices",Bearer,None,Json,false,None,(),(),Vec<DeviceResponse>,"Auth","设备列表"),
     KickDevice => ("kickDevice",Delete,"/api/auth/devices/{deviceId}/session",Bearer,None,Json,false,DeviceId,(),(),(),"Auth","撤销设备会话"),
     DeleteDevice => ("deleteDevice",Delete,"/api/auth/devices/{deviceId}",Bearer,None,Json,false,DeviceId,(),(),(),"Auth","删除设备"),
     ListConfigs => ("listWebhookConfigs",Get,"/api/webhook/configs",Bearer,None,Json,true,None,(),PaginationQuery,Page<ConfigResponse>,"Webhook Configs","接收配置列表"),
-    CreateConfig => ("createWebhookConfig",Post,"/api/webhook/configs",Bearer,Json,Json,false,None,webhook::config::ConfigRequest,(),ConfigResponse,"Webhook Configs","创建接收配置"),
+    CreateConfig => ("createWebhookConfig",Post,"/api/webhook/configs",Bearer,Json,Json,false,None,CreateConfigRequest,(),ConfigResponse,"Webhook Configs","创建接收配置"),
     GetConfig => ("getWebhookConfig",Get,"/api/webhook/configs/{id}",Bearer,None,Json,false,ConfigId,(),(),ConfigResponse,"Webhook Configs","配置详情"),
-    UpdateConfig => ("updateWebhookConfig",Patch,"/api/webhook/configs/{id}",Bearer,Json,Json,false,ConfigId,webhook::config::ConfigRequest,(),ConfigResponse,"Webhook Configs","修改接收配置"),
+    UpdateConfig => ("updateWebhookConfig",Patch,"/api/webhook/configs/{id}",Bearer,Json,Json,false,ConfigId,UpdateConfigRequest,(),ConfigResponse,"Webhook Configs","修改接收配置"),
     DeleteConfig => ("deleteWebhookConfig",Delete,"/api/webhook/configs/{id}",Bearer,None,Json,false,ConfigId,(),(),(),"Webhook Configs","删除接收配置"),
-    EnableConfig => ("enableWebhookConfig",Patch,"/api/webhook/configs/{id}/enabled",Bearer,Json,Json,false,ConfigId,webhook::config::EnabledRequest,(),ConfigResponse,"Webhook Configs","启停接收配置"),
+    EnableConfig => ("enableWebhookConfig",Patch,"/api/webhook/configs/{id}/enabled",Bearer,Json,Json,false,ConfigId,EnabledRequest,(),ConfigResponse,"Webhook Configs","启停接收配置"),
     ReceiveWebhook => ("receiveWebhook",Post,"/api/webhook/{key}",Webhook,Raw,Webhook,false,WebhookKey,Vec<u8>,(),ReceiveResponse,"Webhook","接收平台消息或控制请求"),
-    ListMessages => ("listMessages",Get,"/api/messages",Bearer,None,Json,true,None,(),message::ListQuery,Page<message::MessageListItem>,"Messages","消息列表"),
+    ListMessages => ("listMessages",Get,"/api/messages",Bearer,None,Json,true,None,(),ListMessagesQuery,Page<MessageListItem>,"Messages","消息列表"),
     UnreadCount => ("unreadCount",Get,"/api/messages/unread-count",Bearer,None,Json,false,None,(),(),CountResponse,"Messages","未读数量"),
     StreamMessages => ("streamMessages",Get,"/api/messages/stream",Bearer,None,Sse,false,None,(),(),(),"Messages","在线 SSE 事件流"),
-    BatchMessages => ("batchMessages",Post,"/api/messages/batch",Bearer,Json,Json,false,None,message::BatchRequest,(),AffectedResponse,"Messages","批量修改消息"),
-    GetMessage => ("getMessage",Get,"/api/messages/{id}",Bearer,None,Json,false,MessageId,(),(),message::MessageDetail,"Messages","消息详情"),
-    UpdateMessage => ("updateMessage",Patch,"/api/messages/{id}",Bearer,Json,Json,false,MessageId,message::UpdateRequest,(),message::MessageDetail,"Messages","修改消息状态"),
+    BatchMessages => ("batchMessages",Post,"/api/messages/batch",Bearer,Json,Json,false,None,BatchMessagesRequest,(),AffectedResponse,"Messages","批量修改消息"),
+    GetMessage => ("getMessage",Get,"/api/messages/{id}",Bearer,None,Json,false,MessageId,(),(),MessageDetail,"Messages","消息详情"),
+    UpdateMessage => ("updateMessage",Patch,"/api/messages/{id}",Bearer,Json,Json,false,MessageId,UpdateMessageRequest,(),MessageDetail,"Messages","修改消息状态"),
     DeleteMessage => ("deleteMessage",Delete,"/api/messages/{id}",Bearer,None,Json,false,MessageId,(),(),(),"Messages","删除消息"),
     RawMessage => ("rawMessage",Get,"/api/messages/{id}/raw",Bearer,None,Raw,false,MessageId,(),(),(),"Messages","读取可读原始内容"),
 }
@@ -222,13 +224,4 @@ pub fn webhook_url(key: &str) -> String {
         "{key}",
         &utf8_percent_encode(key, NON_ALPHANUMERIC).to_string(),
     )
-}
-
-impl Operation {
-    pub fn required_body_fields(self) -> &'static [&'static str] {
-        match self {
-            Self::CreateConfig => webhook::config::ConfigRequest::REQUIRED_CREATE_FIELDS,
-            _ => &[],
-        }
-    }
 }

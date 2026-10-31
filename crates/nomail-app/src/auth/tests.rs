@@ -1,6 +1,5 @@
 use super::*;
 use chrono::{DateTime, Duration, Utc};
-use serde_json::json;
 use std::cell::{Cell, RefCell};
 
 fn config() -> AuthConfig {
@@ -11,8 +10,17 @@ fn config() -> AuthConfig {
         initial_password: "password123".into(),
     }
 }
-fn request(username: &str, password: &str) -> LoginRequest {
-    serde_json::from_value(json!({"username":username,"password":password,"deviceId":"phone","platform":"ios","deviceType":"phone"})).unwrap()
+fn request(username: &str, password: &str) -> Login {
+    Login {
+        username: username.into(),
+        password: password.into(),
+        device: DeviceInput {
+            device_id: "phone".into(),
+            platform: "ios".into(),
+            device_type: "phone".into(),
+            ..Default::default()
+        },
+    }
 }
 struct Runtime {
     seconds: Cell<i64>,
@@ -294,32 +302,28 @@ async fn shared_flow_uses_one_clock_token_policy_metadata_and_revocation_policy(
     assert_eq!(service.store.touches.get(), 1);
     let rotated = service
         .refresh(
-            RefreshRequest {
-                refresh_token: result.refresh_token.clone(),
-            },
+            &result.refresh_token,
             RequestMeta::new("ip-after".into(), "refresh-agent".into()),
         )
         .await
         .unwrap();
     assert!(matches!(
         service
-            .refresh(
-                RefreshRequest {
-                    refresh_token: result.refresh_token
-                },
-                RequestMeta::default()
-            )
+            .refresh(&result.refresh_token, RequestMeta::default())
             .await,
         Err(AuthError::Unauthorized)
     ));
     let devices = service.devices(11).await.unwrap();
     assert!(devices[0].logged_in);
-    assert_eq!(devices[0].ip_address, "ip-after");
-    assert_eq!(devices[0].user_agent, "refresh-agent");
+    assert_eq!(devices[0].device.ip_address.as_deref(), Some("ip-after"));
+    assert_eq!(
+        devices[0].device.user_agent.as_deref(),
+        Some("refresh-agent")
+    );
     service
         .update_account(
             11,
-            AccountUpdateRequest {
+            UpdateAccount {
                 current_password: "password123".into(),
                 username: String::new(),
                 new_password: "newpassword123".into(),

@@ -73,6 +73,47 @@ async fn config_service_preserves_sparse_concurrent_updates_credentials_and_scop
     );
     assert_eq!(api!(patch, &path, json!({})).1, created);
     assert_eq!(
+        api!(
+            patch,
+            &path,
+            json!({"name":"","provider":"","source":"","secret":"","description":""})
+        )
+        .1,
+        created
+    );
+    for field in ["name", "provider", "source", "secret", "description"] {
+        let mut invalid_update = json!({});
+        invalid_update[field] = Value::Null;
+        assert_eq!(
+            api!(patch, &path, invalid_update).0,
+            StatusCode::BAD_REQUEST
+        );
+        let mut invalid_create = json!({"name":"Invalid", "provider":"generic"});
+        invalid_create[field] = Value::Null;
+        assert_eq!(
+            api!(post, "/api/webhook/configs", invalid_create).0,
+            StatusCode::BAD_REQUEST
+        );
+    }
+    for invalid in [
+        json!({}),
+        json!([]),
+        json!(["Name", "generic"]),
+        json!({"name":"Missing"}),
+        json!({"provider":"generic"}),
+        json!({"name":"", "provider":"generic"}),
+        json!({"name":"Name", "provider":""}),
+    ] {
+        assert_eq!(
+            api!(post, "/api/webhook/configs", invalid).0,
+            StatusCode::BAD_REQUEST
+        );
+    }
+    assert_eq!(
+        webhook::Entity::find().all(&database).await.unwrap().len(),
+        1
+    );
+    assert_eq!(
         webhook::Entity::find_by_id(id)
             .one(&database)
             .await

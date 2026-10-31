@@ -1,6 +1,5 @@
 use super::*;
 use crate::{auth::runtime::Runtime, config::Config};
-use serde_json::json;
 
 fn config(dir: &tempfile::TempDir) -> Config {
     Config {
@@ -13,8 +12,17 @@ fn config(dir: &tempfile::TempDir) -> Config {
         initial_password: "password123".into(),
     }
 }
-fn login_request(id: &str) -> LoginRequest {
-    serde_json::from_value(json!({"username":"admin","password":"password123","deviceId":id,"platform":"ios","deviceType":"phone"})).unwrap()
+fn login_request(id: &str) -> Login {
+    Login {
+        username: "admin".into(),
+        password: "password123".into(),
+        device: DeviceInput {
+            device_id: id.into(),
+            platform: "ios".into(),
+            device_type: "phone".into(),
+            ..Default::default()
+        },
+    }
 }
 
 #[tokio::test]
@@ -34,7 +42,7 @@ async fn stale_verified_credentials_cannot_create_a_device_or_change_the_account
         .complete_login(LoginWrite {
             user_id: 1,
             expected_password_hash: before.password_hash.clone(),
-            device: DeviceInput::from(&login_request("stale")),
+            device: login_request("stale").device,
             meta: RequestMeta::default(),
             refresh_token_hash: "stale-refresh-hash".into(),
             expires_at: Utc::now() + chrono::Duration::days(7),
@@ -107,7 +115,7 @@ async fn password_change_revokes_expired_sessions_too_and_device_actions_are_own
     service
         .update_account(
             1,
-            AccountUpdateRequest {
+            UpdateAccount {
                 current_password: "password123".into(),
                 username: String::new(),
                 new_password: "newpassword123".into(),

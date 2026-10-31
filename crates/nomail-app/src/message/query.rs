@@ -1,4 +1,4 @@
-use super::{ListQuery, MessageError, MessageResult};
+use super::{MessageError, MessageResult};
 use crate::webhook::MessageLevel;
 use chrono::{DateTime, Utc};
 
@@ -24,9 +24,9 @@ impl ReadStatus {
         }
     }
 }
-/// Validated business query, not another message model or raw HTTP map.
-#[derive(Clone, Debug)]
-pub struct MessageQuery {
+
+#[derive(Clone, Debug, Default)]
+pub struct MessageFilters {
     pub text: Option<String>,
     pub status: Option<ReadStatus>,
     pub level: Option<MessageLevel>,
@@ -34,75 +34,68 @@ pub struct MessageQuery {
     pub pinned: Option<bool>,
     pub from: Option<DateTime<Utc>>,
     pub to: Option<DateTime<Utc>>,
-    pub page: u64,
-    pub page_size: u64,
-    pub offset: u64,
 }
-fn optional(value: Option<&str>) -> Option<&str> {
-    value.filter(|s| !s.is_empty())
-}
-fn trimmed(value: Option<&str>) -> Option<&str> {
-    optional(value.map(str::trim))
-}
-fn time(value: Option<&str>, name: &str) -> MessageResult<Option<DateTime<Utc>>> {
-    optional(value)
-        .map(|s| {
-            DateTime::parse_from_rfc3339(s)
-                .map(|v| v.with_timezone(&Utc))
-                .map_err(|_| MessageError::InvalidInput(format!("invalid {name}")))
-        })
-        .transpose()
+
+/// Validated, read-only query. Storage sees types, not HTTP strings or syntax.
+#[derive(Clone, Debug)]
+pub struct MessageQuery {
+    filters: MessageFilters,
+    page: u64,
+    page_size: u64,
+    offset: u64,
 }
 impl MessageQuery {
-    pub fn parse(q: &ListQuery) -> MessageResult<Self> {
-        let status = trimmed(q.status.as_deref())
-            .map(ReadStatus::parse)
-            .transpose()?;
-        let level = trimmed(q.level.as_deref())
-            .map(|s| {
-                s.parse()
-                    .map_err(|s: &str| MessageError::InvalidInput(s.into()))
-            })
-            .transpose()?;
-        let webhook_config_id = optional(q.webhook_config_id.as_deref())
-            .map(|s| {
-                s.parse::<i64>()
-                    .ok()
-                    .filter(|n| *n > 0)
-                    .ok_or_else(|| MessageError::InvalidInput("invalid webhookConfigId".into()))
-            })
-            .transpose()?;
-        let pinned = optional(q.pinned.as_deref())
-            .map(|s| match s {
-                "1" | "t" | "T" | "TRUE" | "true" | "True" => Ok(true),
-                "0" | "f" | "F" | "FALSE" | "false" | "False" => Ok(false),
-                _ => Err(MessageError::InvalidInput("invalid pinned".into())),
-            })
-            .transpose()?;
-        let from = time(q.from.as_deref(), "from")?;
-        let to = time(q.to.as_deref(), "to")?;
-        if from.zip(to).is_some_and(|(a, b)| a > b) {
+    pub fn new(mut filters: MessageFilters, page: u64, page_size: u64) -> MessageResult<Self> {
+        if filters.webhook_config_id.is_some_and(|id| id <= 0) {
+            return Err(MessageError::InvalidInput("invalid webhookConfigId".into()));
+        }
+        if filters
+            .from
+            .zip(filters.to)
+            .is_some_and(|(from, to)| from > to)
+        {
             return Err(MessageError::InvalidInput(
                 "from must not be after to".into(),
             ));
         }
-        let (page, page_size) =
-            crate::pagination::pagination(q.page.as_deref(), q.page_size.as_deref());
+        if page == 0 || !(1..=100).contains(&page_size) {
+            return Err(MessageError::InvalidInput("invalid pagination".into()));
+        }
         let offset = (page - 1)
             .checked_mul(page_size)
             .filter(|n| *n <= i64::MAX as u64)
             .ok_or_else(|| MessageError::InvalidInput("page is too large".into()))?;
+        filters.text = filters.text.and_then(|text| {
+            let text = text.trim();
+            (!text.is_empty()).then(|| text.to_owned())
+        });
         Ok(Self {
-            text: trimmed(q.query.as_deref()).map(str::to_owned),
-            status,
-            level,
-            webhook_config_id,
-            pinned,
-            from,
-            to,
+            filters,
             page,
             page_size,
             offset,
         })
+    }
+    pub fn filters(&self) -> &MessageFilters {
+        &self.filters
+    }
+    pub fn page(&self) -> u64 {
+        self.page
+    }
+    pub fn page_size(&self) -> u64 {
+        self.page_size
+    }
+    pub fn offset(&self) -> u64 {
+        self.offset
+    }
+}
+impl Default for MessageQuery {
+    fn default() -> Self {
+        Self {
+            filters: MessageFilters::default(),
+            page: 1,
+            page_size: 20,
+            offset: 0,
+        }
     }
 }

@@ -1,5 +1,5 @@
 use super::{
-    MessageListItem, MessageQuery, MessageResult, MessageWithConfig, RawContent, ReadStatus,
+    MessagePreview, MessageQuery, MessageResult, MessageWithConfig, RawContent, ReadStatus,
 };
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
@@ -54,7 +54,7 @@ pub trait MessageStore {
         &self,
         user_id: i64,
         query: &MessageQuery,
-    ) -> MessageResult<(Vec<MessageListItem>, u64)>;
+    ) -> MessageResult<(Vec<MessagePreview>, u64)>;
     async fn count_unread_owned(&self, user_id: i64) -> MessageResult<u64>;
     async fn get_owned(&self, user_id: i64, id: Uuid) -> MessageResult<Option<MessageWithConfig>>;
     async fn get_raw_owned(&self, user_id: i64, id: Uuid) -> MessageResult<Option<RawContent>>;

@@ -1,4 +1,3 @@
-use super::LoginRequest;
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
 
@@ -86,6 +85,7 @@ impl RequestMeta {
 
 /// Only device registration data crosses the storage boundary, never the
 /// plaintext login password or plaintext refresh token.
+#[derive(Default)]
 pub struct DeviceInput {
     pub device_id: String,
     pub device_name: String,
@@ -98,21 +98,4 @@ pub struct DeviceInput {
     pub app_build: String,
     pub locale: String,
     pub time_zone: String,
-}
-impl From<&LoginRequest> for DeviceInput {
-    fn from(r: &LoginRequest) -> Self {
-        Self {
-            device_id: r.device_id.clone(),
-            device_name: r.device_name.clone(),
-            platform: r.platform.clone(),
-            device_type: r.device_type.clone(),
-            manufacturer: r.manufacturer.clone(),
-            model: r.model.clone(),
-            os_version: r.os_version.clone(),
-            app_version: r.app_version.clone(),
-            app_build: r.app_build.clone(),
-            locale: r.locale.clone(),
-            time_zone: r.time_zone.clone(),
-        }
-    }
 }

@@ -1,5 +1,5 @@
 use super::*;
-use crate::{pagination::PaginationQuery, webhook::Provider};
+use crate::webhook::Provider;
 use chrono::{DateTime, Utc};
 use std::cell::{Cell, RefCell};
 
@@ -50,7 +50,7 @@ impl WebhookConfigStore for Store {
         user_id: i64,
         page: &ConfigPage,
     ) -> ConfigResult<(Vec<ConfigView>, u64)> {
-        assert_eq!(page.offset, (page.page - 1) * page.size);
+        assert_eq!(page.offset(), (page.page() - 1) * page.size());
         Ok(if user_id == 7 && !self.deleted.get() {
             (vec![fixture()], 1)
         } else {
@@ -114,13 +114,15 @@ fn service() -> WebhookConfigService<Store, Runtime> {
         },
     }
 }
-fn body() -> ConfigRequest {
-    ConfigRequest {
-        name: "Name".into(),
-        provider: "generic".into(),
-        secret: "credential".into(),
-        ..Default::default()
-    }
+fn body() -> CreateConfig {
+    CreateConfig::new(
+        "Name".into(),
+        "generic".into(),
+        String::new(),
+        "credential".into(),
+        String::new(),
+    )
+    .unwrap()
 }
 #[tokio::test]
 async fn creation_defaults_key_encryption_and_public_projection_are_shared() {
@@ -128,21 +130,12 @@ async fn creation_defaults_key_encryption_and_public_projection_are_shared() {
     let response = s.create(7, body()).await.unwrap();
     assert_eq!(response.key, hex::encode([1; 16]));
     assert!(response.enabled);
-    assert!(
-        serde_json::to_value(&response)
-            .unwrap()
-            .get("url")
-            .is_none()
-    );
     let encrypted = s.store.encrypted.borrow().clone();
     assert_ne!(encrypted, "credential");
     assert_eq!(
         crate::security::decrypt(&encrypted, &[9; 32]).unwrap(),
         "credential"
     );
-    let json = serde_json::to_value(response).unwrap();
-    assert!(json.get("secret").is_none());
-    assert!(json.get("encryptedSecret").is_none());
     let mut empty = body();
     empty.secret.clear();
     s.create(7, empty).await.unwrap();
@@ -152,15 +145,12 @@ async fn creation_defaults_key_encryption_and_public_projection_are_shared() {
 #[tokio::test]
 async fn patches_are_sparse_empty_is_read_and_secret_never_crosses_store_in_plaintext() {
     let s = service();
-    s.update(7, "1", ConfigRequest::default()).await.unwrap();
+    s.update(7, "1", UpdateConfig::default()).await.unwrap();
     assert_eq!(s.store.writes.get(), 0);
     s.update(
         7,
         "1",
-        ConfigRequest {
-            name: "New".into(),
-            ..Default::default()
-        },
+        UpdateConfig::new(Some("New".into()), None, None, None, None).unwrap(),
     )
     .await
     .unwrap();
@@ -180,10 +170,7 @@ async fn patches_are_sparse_empty_is_read_and_secret_never_crosses_store_in_plai
     s.update(
         7,
         "1",
-        ConfigRequest {
-            secret: "replacement".into(),
-            ..Default::default()
-        },
+        UpdateConfig::new(None, None, None, Some("replacement".into()), None).unwrap(),
     )
     .await
     .unwrap();
@@ -201,19 +188,17 @@ async fn patches_are_sparse_empty_is_read_and_secret_never_crosses_store_in_plai
 async fn validation_scope_soft_deletion_and_runtime_failure_precede_writes() {
     let s = service();
     assert!(matches!(
-        s.create(7, ConfigRequest::default()).await,
+        CreateConfig::new(
+            String::new(),
+            String::new(),
+            String::new(),
+            String::new(),
+            String::new()
+        ),
         Err(ConfigError::InvalidInput(_))
     ));
     assert!(matches!(
-        s.update(
-            7,
-            "1",
-            ConfigRequest {
-                provider: "unknown".into(),
-                ..Default::default()
-            }
-        )
-        .await,
+        UpdateConfig::new(None, Some("unknown".into()), None, None, None),
         Err(ConfigError::InvalidInput(_))
     ));
     for value in ["0", "-1", "bad", "9223372036854775808"] {
@@ -229,10 +214,7 @@ async fn validation_scope_soft_deletion_and_runtime_failure_precede_writes() {
             s.update(
                 uid,
                 "1",
-                ConfigRequest {
-                    name: "Other".into(),
-                    ..Default::default()
-                }
+                UpdateConfig::new(Some("Other".into()), None, None, None, None).unwrap()
             )
             .await,
             Err(ConfigError::NotFound)
@@ -252,7 +234,10 @@ async fn validation_scope_soft_deletion_and_runtime_failure_precede_writes() {
     assert!(matches!(s.get(7, "1").await, Err(ConfigError::NotFound)));
     assert!(matches!(s.delete(7, "1").await, Err(ConfigError::NotFound)));
     assert_eq!(
-        s.list(7, PaginationQuery::default()).await.unwrap().total,
+        s.list(7, ConfigPage::new(1, 20).unwrap())
+            .await
+            .unwrap()
+            .total,
         0
     );
     let failing = WebhookConfigService {

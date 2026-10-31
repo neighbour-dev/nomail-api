@@ -79,27 +79,43 @@ pub async fn execute(
         Operation::Login => json::<e::Login>(
             services
                 .auth
-                .login(input!(e::Login), head.metadata.clone())
-                .await?,
+                .login(input!(e::Login).into(), head.metadata.clone())
+                .await?
+                .into(),
         ),
         Operation::Refresh => json::<e::Refresh>(
             services
                 .auth
-                .refresh(input!(e::Refresh), head.metadata.clone())
-                .await?,
+                .refresh(&input!(e::Refresh).refresh_token, head.metadata.clone())
+                .await?
+                .into(),
         ),
         Operation::Logout => {
-            services.auth.logout(input!(e::Logout)).await?;
+            services
+                .auth
+                .logout(&input!(e::Logout).refresh_token)
+                .await?;
             json::<e::Logout>(())
         }
-        Operation::GetAccount => json::<e::GetAccount>(services.auth.account(user!()).await?),
+        Operation::GetAccount => {
+            json::<e::GetAccount>(services.auth.account(user!()).await?.into())
+        }
         Operation::UpdateAccount => json::<e::UpdateAccount>(
             services
                 .auth
-                .update_account(user!(), input!(e::UpdateAccount))
-                .await?,
+                .update_account(user!(), input!(e::UpdateAccount).into())
+                .await?
+                .into(),
         ),
-        Operation::ListDevices => json::<e::ListDevices>(services.auth.devices(user!()).await?),
+        Operation::ListDevices => json::<e::ListDevices>(
+            services
+                .auth
+                .devices(user!())
+                .await?
+                .into_iter()
+                .map(Into::into)
+                .collect(),
+        ),
         Operation::KickDevice => {
             services
                 .auth
@@ -117,14 +133,17 @@ pub async fn execute(
         Operation::ListConfigs => json::<e::ListConfigs>(
             services
                 .configs
-                .list(user!(), parse_query::<e::ListConfigs>(&head.query)?)
+                .list(
+                    user!(),
+                    parse_query::<e::ListConfigs>(&head.query)?.try_into()?,
+                )
                 .await?
                 .into(),
         ),
         Operation::CreateConfig => json::<e::CreateConfig>(
             services
                 .configs
-                .create(user!(), input!(e::CreateConfig))
+                .create(user!(), input!(e::CreateConfig).try_into()?)
                 .await?
                 .into(),
         ),
@@ -138,7 +157,11 @@ pub async fn execute(
         Operation::UpdateConfig => json::<e::UpdateConfig>(
             services
                 .configs
-                .update(user!(), matched.parameter()?, input!(e::UpdateConfig))
+                .update(
+                    user!(),
+                    matched.parameter()?,
+                    input!(e::UpdateConfig).try_into()?,
+                )
                 .await?
                 .into(),
         ),
@@ -189,28 +212,32 @@ pub async fn execute(
         Operation::ListMessages => json::<e::ListMessages>(
             services
                 .messages
-                .list(user!(), parse_query::<e::ListMessages>(&head.query)?)
-                .await?,
+                .list(
+                    user!(),
+                    parse_query::<e::ListMessages>(&head.query)?.try_into()?,
+                )
+                .await?
+                .into(),
         ),
-        Operation::UnreadCount => {
-            json::<e::UnreadCount>(services.messages.unread_count(user!()).await?)
-        }
+        Operation::UnreadCount => json::<e::UnreadCount>(super::CountResponse {
+            count: services.messages.unread_count(user!()).await?,
+        }),
         Operation::StreamMessages => {
             let context = actor(&context)?;
             Ok(HttpOutcome::subscribe(context.user_id, context.expires_at))
         }
-        Operation::BatchMessages => json::<e::BatchMessages>(
-            services
+        Operation::BatchMessages => json::<e::BatchMessages>(super::AffectedResponse {
+            affected: services
                 .messages
                 .batch(
                     user!(),
-                    input!(e::BatchMessages),
+                    input!(e::BatchMessages).try_into()?,
                     AuthRuntime::now(&services.auth.runtime),
                 )
                 .await?,
-        ),
+        }),
         Operation::GetMessage => {
-            json::<e::GetMessage>(services.messages.get(user!(), id!()).await?)
+            json::<e::GetMessage>(services.messages.get(user!(), id!()).await?.into())
         }
         Operation::UpdateMessage => json::<e::UpdateMessage>(
             services
@@ -218,10 +245,11 @@ pub async fn execute(
                 .update(
                     user!(),
                     id!(),
-                    input!(e::UpdateMessage),
+                    input!(e::UpdateMessage).try_into()?,
                     AuthRuntime::now(&services.auth.runtime),
                 )
-                .await?,
+                .await?
+                .into(),
         ),
         Operation::DeleteMessage => {
             services

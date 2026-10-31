@@ -66,7 +66,7 @@ impl MessageStore for Store {
         &self,
         user_id: i64,
         q: &MessageQuery,
-    ) -> MessageResult<(Vec<MessageListItem>, u64)> {
+    ) -> MessageResult<(Vec<MessagePreview>, u64)> {
         *self.last_query.borrow_mut() = Some(q.clone());
         let rows = self.rows.borrow();
         let mut selected: Vec<_> = rows.values().filter(|m| self.visible(user_id, m)).collect();
@@ -75,13 +75,13 @@ impl MessageStore for Store {
         Ok((
             selected
                 .into_iter()
-                .skip(usize::try_from(q.offset).unwrap_or(usize::MAX))
-                .take(q.page_size as usize)
-                .map(|m| MessageListItem {
+                .skip(usize::try_from(q.offset()).unwrap_or(usize::MAX))
+                .take(q.page_size() as usize)
+                .map(|m| MessagePreview {
                     id: m.id,
                     title: m.common.title.clone(),
                     summary: crate::pagination::summarize(&m.common.content),
-                    source: m.common.source.clone().unwrap_or_default(),
+                    source: m.common.source.clone(),
                     level: m.common.level,
                     status: m.status.clone(),
                     pinned: m.pinned,
@@ -256,10 +256,7 @@ async fn state_updates_are_sparse_preserve_content_and_use_one_operation_timesta
         .update(
             7,
             id,
-            UpdateRequest {
-                status: Some("read".into()),
-                pinned: None,
-            },
+            UpdateMessage::new(Some(ReadStatus::Read), None).unwrap(),
             read_time,
         )
         .await
@@ -268,66 +265,48 @@ async fn state_updates_are_sparse_preserve_content_and_use_one_operation_timesta
         .update(
             7,
             id,
-            UpdateRequest {
-                status: None,
-                pinned: Some(true),
-            },
+            UpdateMessage::new(None, Some(true)).unwrap(),
             read_time + Duration::seconds(1),
         )
         .await
-        .unwrap();
+        .unwrap()
+        .message;
     assert!(pinned.pinned);
     assert_eq!(pinned.status, "read");
     assert_eq!(pinned.read_at, Some(read_time));
     assert_eq!(pinned.platform_data, before.platform_data);
     assert_eq!(pinned.metadata.event_type, before.metadata.event_type);
-    assert_eq!(pinned.created_at, before.received_at);
+    assert_eq!(pinned.received_at, before.received_at);
     let repeated = service
         .update(
             7,
             id,
-            UpdateRequest {
-                status: Some("read".into()),
-                pinned: None,
-            },
+            UpdateMessage::new(Some(ReadStatus::Read), None).unwrap(),
             read_time + Duration::seconds(2),
         )
         .await
         .unwrap();
-    assert_eq!(repeated.read_at, Some(read_time + Duration::seconds(2)));
+    assert_eq!(
+        repeated.message.read_at,
+        Some(read_time + Duration::seconds(2))
+    );
     let unread = service
         .update(
             7,
             id,
-            UpdateRequest {
-                status: Some("unread".into()),
-                pinned: None,
-            },
+            UpdateMessage::new(Some(ReadStatus::Unread), None).unwrap(),
             read_time + Duration::seconds(3),
         )
         .await
         .unwrap();
-    assert!(unread.pinned);
-    assert!(unread.read_at.is_none());
+    assert!(unread.message.pinned);
+    assert!(unread.message.read_at.is_none());
     assert_eq!(
         service.store.rows.borrow()[&id].raw_payload,
         before.raw_payload
     );
     let writes = service.store.writes.get();
-    assert!(
-        service
-            .update(
-                7,
-                id,
-                UpdateRequest {
-                    status: None,
-                    pinned: None
-                },
-                now()
-            )
-            .await
-            .is_err()
-    );
+    assert!(UpdateMessage::new(None, None).is_err());
     assert_eq!(service.store.writes.get(), writes);
 }
 
@@ -343,26 +322,9 @@ async fn batch_validation_precedes_writes_and_scope_and_duplicate_semantics_are_
         service.store.seed(config, event(None, "normal"), id);
     }
     let writes = service.store.writes.get();
-    for request in [
-        BatchRequest {
-            ids: vec![],
-            action: "pin".into(),
-        },
-        BatchRequest {
-            ids: vec![a.to_string(); 101],
-            action: "pin".into(),
-        },
-        BatchRequest {
-            ids: vec![a.to_string(), "invalid".into()],
-            action: "pin".into(),
-        },
-        BatchRequest {
-            ids: vec![a.to_string()],
-            action: "invalid".into(),
-        },
-    ] {
+    for ids in [vec![], vec![a; 101]] {
         assert!(matches!(
-            service.batch(7, request, now()).await,
+            BatchMessages::new(ids, BatchAction::Pin),
             Err(MessageError::InvalidInput(_))
         ));
         assert_eq!(service.store.writes.get(), writes);
@@ -371,24 +333,19 @@ async fn batch_validation_precedes_writes_and_scope_and_duplicate_semantics_are_
     let result = service
         .batch(
             7,
-            BatchRequest {
-                ids: vec![
-                    a.to_string(),
-                    a.to_string(),
-                    b.to_string(),
-                    foreign.to_string(),
-                    Uuid::from_u128(99).to_string(),
-                ],
-                action: "mark_read".into(),
-            },
+            BatchMessages::new(
+                vec![a, a, b, foreign, Uuid::from_u128(99)],
+                BatchAction::MarkRead,
+            )
+            .unwrap(),
             at,
         )
         .await
         .unwrap();
-    assert_eq!(result.affected, 2);
+    assert_eq!(result, 2);
     assert_eq!(service.store.last_ids.borrow().len(), 4);
     for id in [a, b] {
-        let row = service.get(7, id).await.unwrap();
+        let row = service.get(7, id).await.unwrap().message;
         assert_eq!(row.read_at, Some(at));
         assert_eq!(row.updated_at, at);
     }
@@ -398,10 +355,7 @@ async fn batch_validation_precedes_writes_and_scope_and_duplicate_semantics_are_
             .update(
                 7,
                 foreign,
-                UpdateRequest {
-                    status: None,
-                    pinned: Some(true)
-                },
+                UpdateMessage::new(None, Some(true)).unwrap(),
                 at
             )
             .await,
@@ -427,7 +381,11 @@ async fn expiry_is_not_an_implicit_visibility_filter_and_raw_is_a_separate_view(
         );
     }
     assert_eq!(
-        service.list(7, ListQuery::default()).await.unwrap().total,
+        service
+            .list(7, MessageQuery::default())
+            .await
+            .unwrap()
+            .total,
         4
     );
     let id = Uuid::from_u128(1);
@@ -465,7 +423,11 @@ async fn expiry_is_not_an_implicit_visibility_filter_and_raw_is_a_separate_view(
     ));
     service.store.configs.borrow_mut().get_mut(&1).unwrap().2 = true;
     assert_eq!(
-        service.list(7, ListQuery::default()).await.unwrap().total,
+        service
+            .list(7, MessageQuery::default())
+            .await
+            .unwrap()
+            .total,
         0
     );
 }
@@ -501,36 +463,49 @@ fn received_message_factory_preserves_full_deduplication_metadata() {
 }
 
 #[test]
-fn typed_queries_share_pagination_boolean_level_time_validation_and_search_semantics() {
-    let query:ListQuery=serde_json::from_value(json!({"page":"0","pageSize":"999","query":" %hello_ ","status":" read ","level":"HIGH","pinned":"T","webhookConfigId":"2","from":"2026-01-01T01:00:00+01:00","to":"2026-01-02T00:00:00Z"})).unwrap();
-    let parsed = query.parsed().unwrap();
-    assert_eq!(parsed.page, 1);
-    assert_eq!(parsed.page_size, 100);
-    assert_eq!(parsed.text.as_deref(), Some("%hello_"));
-    assert_eq!(parsed.status, Some(ReadStatus::Read));
-    assert_eq!(parsed.level, Some(MessageLevel::High));
-    assert_eq!(parsed.pinned, Some(true));
-    assert_eq!(parsed.webhook_config_id, Some(2));
-    assert_eq!(
-        parsed.from.unwrap().to_rfc3339(),
-        "2026-01-01T00:00:00+00:00"
-    );
-    for value in [
-        json!({"level":"critical"}),
-        json!({"status":"invalid"}),
-        json!({"pinned":"invalid"}),
-        json!({"webhookConfigId":"0"}),
-        json!({"from":"bad"}),
-        json!({"from":"2026-01-02T00:00:00Z","to":"2026-01-01T00:00:00Z"}),
-        json!({"page":i64::MAX.to_string(),"pageSize":"100"}),
-    ] {
-        assert!(
-            serde_json::from_value::<ListQuery>(value)
-                .unwrap()
-                .parsed()
-                .is_err()
-        );
+fn typed_query_construction_validates_invariants_without_wire_strings() {
+    let filters = MessageFilters {
+        text: Some(" %hello_ ".into()),
+        status: Some(ReadStatus::Read),
+        level: Some(MessageLevel::High),
+        pinned: Some(true),
+        webhook_config_id: Some(2),
+        ..Default::default()
+    };
+    let query = MessageQuery::new(filters, 2, 20).unwrap();
+    assert_eq!(query.offset(), 20);
+    assert_eq!(query.page(), 2);
+    assert_eq!(query.filters().text.as_deref(), Some("%hello_"));
+    for (page, size) in [(0, 20), (1, 0), (1, 101), (i64::MAX as u64, 100)] {
+        assert!(MessageQuery::new(MessageFilters::default(), page, size).is_err());
     }
+    assert!(
+        MessageQuery::new(
+            MessageFilters {
+                webhook_config_id: Some(0),
+                ..Default::default()
+            },
+            1,
+            20
+        )
+        .is_err()
+    );
+    assert!(
+        MessageQuery::new(
+            MessageFilters {
+                from: Some(now()),
+                to: Some(now() - Duration::seconds(1)),
+                ..Default::default()
+            },
+            1,
+            20
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn summaries_preserve_whitespace_and_length_behavior() {
     assert_eq!(
         crate::pagination::summarize("  hello\n世界  "),
         "hello 世界"

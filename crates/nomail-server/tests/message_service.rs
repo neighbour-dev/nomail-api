@@ -66,6 +66,16 @@ async fn sparse_updates_bulk_limits_scope_and_raw_reads_use_the_shared_service()
         None
     );
     let first = first["data"]["messageId"].as_str().unwrap().to_owned();
+    let (status, filtered) = api!(
+        get,
+        "/api/messages?status=%20unread%20&level=HIGH&pinned=F&query=%20body%20&page=0&pageSize=999",
+        json!({}),
+        Some(token)
+    );
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(filtered["data"]["total"], 1);
+    assert_eq!(filtered["data"]["page"], 1);
+    assert_eq!(filtered["data"]["pageSize"], 100);
     let path = format!("/api/messages/{first}");
     let (_, snapshot) = api!(get, &path, json!({}), Some(token));
     let snapshot = snapshot["data"].clone();
@@ -254,6 +264,8 @@ async fn sparse_updates_bulk_limits_scope_and_raw_reads_use_the_shared_service()
         json!({"ids":vec![first.clone();101],"action":"unpin"}),
         json!({"ids":[],"action":"pin"}),
         json!({"ids":[first],"action":"invalid"}),
+        json!({"ids":null,"action":"pin"}),
+        json!({"ids":[first],"action":null}),
     ] {
         assert_eq!(
             api!(post, "/api/messages/batch", body, Some(token)).0,

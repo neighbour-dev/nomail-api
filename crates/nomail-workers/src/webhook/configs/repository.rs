@@ -44,7 +44,7 @@ impl WebhookConfigStore for Store<'_> {
     ) -> ConfigResult<(Vec<ConfigView>, u64)> {
         let results = self.0.0.batch(vec![
             self.0.statement("SELECT COUNT(*) AS total FROM webhook_configs WHERE user_id=? AND deleted_at IS NULL", vec![json!(user_id)]).map_err(storage)?,
-            self.0.statement(&format!("SELECT {COLUMNS} FROM webhook_configs WHERE user_id=? AND deleted_at IS NULL ORDER BY created_at DESC LIMIT ? OFFSET ?"), vec![json!(user_id), json!(page.size), json!(page.offset.to_string())]).map_err(storage)?,
+            self.0.statement(&format!("SELECT {COLUMNS} FROM webhook_configs WHERE user_id=? AND deleted_at IS NULL ORDER BY created_at DESC LIMIT ? OFFSET ?"), vec![json!(user_id), json!(page.size()), json!(page.offset().to_string())]).map_err(storage)?,
         ]).await.map_err(d1)?;
         let total = results[0]
             .results::<Value>()

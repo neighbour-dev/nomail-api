@@ -45,15 +45,37 @@ fn decode_message(mut row: Value) -> MessageResult<MessageWithConfig> {
         config_name: name,
     })
 }
-fn decode_item(mut row: Value) -> MessageResult<MessageListItem> {
-    row["pinned"] = json!(row["pinned"].as_i64() == Some(1));
-    row["summary"] = json!(nomail_app::pagination::summarize(
-        row["content"].as_str().unwrap_or("")
-    ));
-    row["source"] = json!(row["source"].as_str().unwrap_or(""));
-    serde_json::from_value(row).map_err(|e| invalid(format!("invalid list row: {e}")))
+#[derive(serde::Deserialize)]
+struct ListRow {
+    id: Uuid,
+    title: String,
+    content: String,
+    source: Option<String>,
+    level: nomail_app::webhook::MessageLevel,
+    status: String,
+    pinned: i64,
+    webhook_config_id: i64,
+    created_at: DateTime<Utc>,
+    expire_at: Option<DateTime<Utc>>,
+}
+fn decode_item(row: Value) -> MessageResult<MessagePreview> {
+    let row: ListRow =
+        serde_json::from_value(row).map_err(|e| invalid(format!("invalid list row: {e}")))?;
+    Ok(MessagePreview {
+        id: row.id,
+        title: row.title,
+        summary: nomail_app::pagination::summarize(&row.content),
+        source: row.source,
+        level: row.level,
+        status: row.status,
+        pinned: row.pinned == 1,
+        webhook_config_id: row.webhook_config_id,
+        received_at: row.created_at,
+        expires_at: row.expire_at,
+    })
 }
 fn filter(user_id: i64, q: &MessageQuery) -> (String, Vec<Value>) {
+    let q = q.filters();
     let mut clause = OWNED.to_owned();
     let mut values = vec![json!(user_id)];
     if let Some(text) = &q.text {
@@ -117,12 +139,12 @@ impl MessageStore for Store<'_> {
         &self,
         user_id: i64,
         q: &MessageQuery,
-    ) -> MessageResult<(Vec<MessageListItem>, u64)> {
+    ) -> MessageResult<(Vec<MessagePreview>, u64)> {
         let (clause, values) = filter(user_id, q);
         let mut page_values = values.clone();
         // Bind OFFSET as text so SQLite can convert its exact i64 value without
         // an intermediate JS Number losing integer precision.
-        page_values.extend([json!(q.page_size), json!(q.offset.to_string())]);
+        page_values.extend([json!(q.page_size()), json!(q.offset().to_string())]);
         let result=self.0.0.batch(vec![
             self.0.statement(&format!("SELECT COUNT(*) AS total FROM notify_messages WHERE {clause}"),values).map_err(storage)?,
             self.0.statement(&format!("SELECT id,title,content,source,level,status,pinned,webhook_config_id,created_at,expire_at FROM notify_messages WHERE {clause} ORDER BY created_at DESC LIMIT ? OFFSET ?"),page_values).map_err(storage)?,

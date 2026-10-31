@@ -43,14 +43,14 @@ struct ListRow {
     created_at: DateTime<Utc>,
     expire_at: Option<DateTime<Utc>>,
 }
-impl TryFrom<ListRow> for MessageListItem {
+impl TryFrom<ListRow> for MessagePreview {
     type Error = MessageError;
     fn try_from(m: ListRow) -> MessageResult<Self> {
         Ok(Self {
             id: m.id,
             title: m.title,
             summary: nomail_app::pagination::summarize(&m.content),
-            source: m.source.unwrap_or_default(),
+            source: m.source,
             level: serde_json::from_value(serde_json::json!(m.level)).map_err(conversion)?,
             status: m.status,
             pinned: m.pinned,
@@ -84,6 +84,7 @@ fn owned_ids(user_id: i64) -> sea_orm::sea_query::SelectStatement {
         .into_query()
 }
 fn filtered(user_id: i64, q: &MessageQuery) -> Select<message::Entity> {
+    let q = q.filters();
     let mut query = owned(user_id);
     if let Some(text) = &q.text {
         // Preserve existing substring/wildcard search semantics; no new search engine.
@@ -168,7 +169,7 @@ impl MessageStore for Store<'_> {
         &self,
         user_id: i64,
         q: &MessageQuery,
-    ) -> MessageResult<(Vec<MessageListItem>, u64)> {
+    ) -> MessageResult<(Vec<MessagePreview>, u64)> {
         let tx = self.0.begin().await.map_err(storage)?;
         let query = filtered(user_id, q);
         let total = query.clone().count(&tx).await.map_err(storage)?;
@@ -187,8 +188,8 @@ impl MessageStore for Store<'_> {
                 message::Column::ExpireAt,
             ])
             .order_by_desc(message::Column::CreatedAt)
-            .offset(q.offset)
-            .limit(q.page_size)
+            .offset(q.offset())
+            .limit(q.page_size())
             .into_model::<ListRow>()
             .all(&tx)
             .await

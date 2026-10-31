@@ -53,25 +53,21 @@ impl<S: AuthStore, R: AuthRuntime> AuthService<S, R> {
         refresh: String,
         now: DateTime<Utc>,
         setup: bool,
-    ) -> AuthResult<TokenResponse> {
+    ) -> AuthResult<SessionTokens> {
         let (access, expiry) = token::issue(&self.config, grant.account.id, grant.session.id, now)?;
-        Ok(TokenResponse {
+        Ok(SessionTokens {
             access_token: access,
             access_token_expires_at: expiry,
             refresh_token: refresh,
             refresh_token_expires_at: grant.session.expires_at,
-            user: AccountResponse {
+            user: AccountInfo {
                 id: grant.account.id,
                 username: grant.account.username,
                 requires_account_setup: setup,
             },
         })
     }
-    pub async fn login(
-        &self,
-        request: LoginRequest,
-        meta: RequestMeta,
-    ) -> AuthResult<TokenResponse> {
+    pub async fn login(&self, request: Login, meta: RequestMeta) -> AuthResult<SessionTokens> {
         token::validate_config(&self.config)?;
         request.validate().map_err(AuthError::InvalidInput)?;
         self.ensure_initial_account().await?;
@@ -86,7 +82,7 @@ impl<S: AuthStore, R: AuthRuntime> AuthService<S, R> {
             .complete_login(LoginWrite {
                 user_id: account.id,
                 expected_password_hash: account.password_hash,
-                device: DeviceInput::from(&request),
+                device: request.device,
                 meta,
                 refresh_token_hash: crate::security::hash_token(&refresh),
                 expires_at: now + Duration::days(REFRESH_DAYS),
@@ -101,18 +97,18 @@ impl<S: AuthStore, R: AuthRuntime> AuthService<S, R> {
     }
     pub async fn refresh(
         &self,
-        request: RefreshRequest,
+        refresh_token: &str,
         meta: RequestMeta,
-    ) -> AuthResult<TokenResponse> {
+    ) -> AuthResult<SessionTokens> {
         token::validate_config(&self.config)?;
-        check_length(&request.refresh_token, "refreshToken", usize::MAX, true)
+        check_length(refresh_token, "refreshToken", usize::MAX, true)
             .map_err(AuthError::InvalidInput)?;
         let now = self.runtime.now();
         let refresh = self.random_token()?;
         let grant = self
             .store
             .rotate_refresh_token(RefreshWrite {
-                previous_hash: crate::security::hash_token(&request.refresh_token),
+                previous_hash: crate::security::hash_token(refresh_token),
                 new_hash: crate::security::hash_token(&refresh),
                 expires_at: now + Duration::days(REFRESH_DAYS),
                 now,
@@ -121,13 +117,13 @@ impl<S: AuthStore, R: AuthRuntime> AuthService<S, R> {
             .await?;
         self.tokens(grant, refresh, now, false)
     }
-    pub async fn logout(&self, request: RefreshRequest) -> AuthResult<()> {
-        check_length(&request.refresh_token, "refreshToken", usize::MAX, true)
+    pub async fn logout(&self, refresh_token: &str) -> AuthResult<()> {
+        check_length(refresh_token, "refreshToken", usize::MAX, true)
             .map_err(AuthError::InvalidInput)?;
         if self
             .store
             .revoke_refresh_token(
-                &crate::security::hash_token(&request.refresh_token),
+                &crate::security::hash_token(refresh_token),
                 self.runtime.now(),
             )
             .await?
@@ -169,9 +165,9 @@ impl<S: AuthStore, R: AuthRuntime> AuthService<S, R> {
             expires_at,
         })
     }
-    pub async fn account(&self, user_id: i64) -> AuthResult<AccountResponse> {
+    pub async fn account(&self, user_id: i64) -> AuthResult<AccountInfo> {
         let account = Self::active_account(self.store.account_by_id(user_id).await?)?;
-        Ok(AccountResponse {
+        Ok(AccountInfo {
             id: account.id,
             username: account.username,
             requires_account_setup: false,
@@ -180,8 +176,8 @@ impl<S: AuthStore, R: AuthRuntime> AuthService<S, R> {
     pub async fn update_account(
         &self,
         user_id: i64,
-        request: AccountUpdateRequest,
-    ) -> AuthResult<AccountResponse> {
+        request: UpdateAccount,
+    ) -> AuthResult<AccountInfo> {
         request.validate().map_err(AuthError::InvalidInput)?;
         let account = Self::active_account(self.store.account_by_id(user_id).await?)?;
         self.verify_password(&request.current_password, &account.password_hash)
@@ -205,7 +201,7 @@ impl<S: AuthStore, R: AuthRuntime> AuthService<S, R> {
                 now: self.runtime.now(),
             })
             .await?;
-        Ok(AccountResponse {
+        Ok(AccountInfo {
             id: account.id,
             username: account.username,
             requires_account_setup: false,
@@ -234,7 +230,7 @@ impl<S: AuthStore, R: AuthRuntime> AuthService<S, R> {
             .await?;
         Ok(())
     }
-    pub async fn devices(&self, user_id: i64) -> AuthResult<Vec<DeviceResponse>> {
+    pub async fn devices(&self, user_id: i64) -> AuthResult<Vec<DeviceInfo>> {
         let now = self.runtime.now();
         let mut items = Vec::new();
         for row in self.store.devices(user_id).await? {
@@ -243,33 +239,17 @@ impl<S: AuthStore, R: AuthRuntime> AuthService<S, R> {
                 continue;
             }
             let session = row.session.filter(|s| s.deleted_at.is_none());
-            items.push(DeviceResponse {
-                device_id: d.device_id,
-                device_name: d.name.unwrap_or_default(),
-                platform: d.platform,
-                device_type: d.device_type,
-                manufacturer: d.manufacturer.unwrap_or_default(),
-                model: d.model.unwrap_or_default(),
-                os_version: d.os_version.unwrap_or_default(),
-                app_version: d.app_version.unwrap_or_default(),
-                app_build: d.app_build.unwrap_or_default(),
-                locale: d.locale.unwrap_or_default(),
-                time_zone: d.time_zone.unwrap_or_default(),
-                ip_address: d.ip_address.unwrap_or_default(),
-                user_agent: d.user_agent.unwrap_or_default(),
-                last_seen_at: d.last_seen_at,
+            items.push(DeviceInfo {
                 logged_in: session.as_ref().is_some_and(|s| s.active(now)),
-                expires_at: session.as_ref().map(|s| s.expires_at),
-                logged_in_at: session.as_ref().map(|s| s.logged_in_at),
-                created_at: d.created_at,
-                updated_at: d.updated_at,
+                device: d,
+                session,
             });
         }
         items.sort_by(|a, b| {
             b.logged_in
                 .cmp(&a.logged_in)
-                .then(b.updated_at.cmp(&a.updated_at))
-                .then(a.device_id.cmp(&b.device_id))
+                .then(b.device.updated_at.cmp(&a.device.updated_at))
+                .then(a.device.device_id.cmp(&b.device.device_id))
         });
         Ok(items)
     }

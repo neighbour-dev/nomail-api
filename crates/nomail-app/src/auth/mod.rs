@@ -1,19 +1,23 @@
 //! Shared community authentication. HTTP, SQL and execution runtimes are adapters.
-mod dto;
+mod claims;
 mod error;
+mod input;
 mod model;
 pub mod password;
 mod repository;
 mod runtime;
 mod service;
 pub mod token;
+mod view;
 
-pub use dto::*;
+pub use claims::Claims;
 pub use error::{AuthError, AuthResult};
+pub use input::{Login, UpdateAccount, check_length};
 pub use model::*;
 pub use repository::*;
 pub use runtime::AuthRuntime;
 pub use service::AuthService;
+pub use view::{AccountInfo, DeviceInfo, SessionTokens};
 
 pub const ACCESS_TTL: i64 = 2 * 60 * 60;
 pub const REFRESH_DAYS: i64 = 7;

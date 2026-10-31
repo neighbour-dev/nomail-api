@@ -50,6 +50,17 @@ fn business_modules_do_not_depend_on_http() {
                     "worker::",
                     "sea_orm",
                     "sqlx::",
+                    "schemars",
+                    "JsonSchema",
+                    "LoginRequest",
+                    "TokenResponse",
+                    "AccountResponse",
+                    "DeviceResponse",
+                    "MessageListItem",
+                    "MessageDetail",
+                    "PaginationQuery",
+                    "CountResponse",
+                    "AffectedResponse",
                 ] {
                     assert!(
                         !source.contains(forbidden),
@@ -64,6 +75,35 @@ fn business_modules_do_not_depend_on_http() {
     for module in ["auth", "message", "webhook", "ingestion"] {
         check(&src.join(module));
     }
+    let pagination = std::fs::read_to_string(src.join("pagination.rs")).unwrap();
+    for forbidden in ["serde", "schemars", "Response", "PaginationQuery"] {
+        assert!(
+            !pagination.contains(forbidden),
+            "business pagination contains {forbidden}"
+        );
+    }
+}
+
+#[test]
+fn application_wire_schemas_are_defined_only_in_the_contract_directory() {
+    fn check(path: &Path) {
+        for entry in std::fs::read_dir(path).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                if path.file_name().is_some_and(|name| name != "contract") {
+                    check(&path);
+                }
+            } else if path.extension().is_some_and(|extension| extension == "rs") {
+                let source = std::fs::read_to_string(&path).unwrap();
+                assert!(
+                    !source.contains("derive(schemars::JsonSchema)"),
+                    "{} defines a wire schema outside contract",
+                    path.display()
+                );
+            }
+        }
+    }
+    check(&Path::new(env!("CARGO_MANIFEST_DIR")).join("src"));
 }
 
 #[test]

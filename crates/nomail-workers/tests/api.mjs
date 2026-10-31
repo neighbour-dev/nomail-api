@@ -75,6 +75,15 @@ test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, a
       assert.equal(current.provider, config.provider);
     }
     const beforeConfigNoop = localSql(`SELECT * FROM webhook_configs WHERE id=${config.id};`)[0];
+    for (const field of ['name', 'provider', 'source', 'secret', 'description']) {
+      await api('PATCH', configPath, { [field]: null }, token, 400);
+      await api('POST', '/api/webhook/configs', { name: 'Invalid', provider: 'generic', [field]: null }, token, 400);
+    }
+    for (const input of [{}, [], ['Name', 'generic'], { name: 'Missing' }, { provider: 'generic' }, { name: '', provider: 'generic' }, { name: 'Name', provider: '' }]) {
+      await api('POST', '/api/webhook/configs', input, token, 400);
+    }
+    assert.equal(localSql('SELECT COUNT(*) AS count FROM webhook_configs;')[0].count, 1);
+    await api('PATCH', configPath, {}, token);
     await api('PATCH', configPath, { name: '', source: '', secret: '', provider: '', description: '' }, token);
     await api('PATCH', configPath, { provider: 'unsupported' }, token, 400);
     assert.deepEqual(localSql(`SELECT * FROM webhook_configs WHERE id=${config.id};`)[0], beforeConfigNoop);
@@ -133,6 +142,10 @@ test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, a
     const list = await api('GET', '/api/messages?query=%E4%B8%96%E7%95%8C&status=unread&level=urgent&pinned=false', undefined, token);
     assert.equal(list.total, 1);
     assert.equal(list.items[0].summary, 'hello 世界');
+    const normalizedList = await api('GET', '/api/messages?query=%20%E4%B8%96%E7%95%8C%20&status=%20unread%20&level=URGENT&pinned=F&page=0&pageSize=999', undefined, token);
+    assert.equal(normalizedList.total, 1);
+    assert.equal(normalizedList.page, 1);
+    assert.equal(normalizedList.pageSize, 100);
     const path = `/api/messages/${created.messageId}`;
     assert.equal((await api('PATCH', path, { status: 'read', pinned: true }, token)).pinned, true);
     assert.equal((await api('GET', '/api/messages/unread-count', undefined, token)).count, 0);
@@ -168,7 +181,7 @@ test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, a
     const boundaryIds = [stateMessage.messageId, ...Array.from({ length: 99 }, (_, i) => `00000000-0000-0000-0000-${(i + 1).toString(16).padStart(12, '0')}`)];
     assert.equal((await api('POST', '/api/messages/batch', { ids: boundaryIds, action: 'pin' }, token)).affected, 1);
     const beforeBadBatch = await api('GET', statePath, undefined, token);
-    for (const body of [{ ids: [stateMessage.messageId, 'invalid'], action: 'unpin' }, { ids: Array(101).fill(stateMessage.messageId), action: 'unpin' }, { ids: [], action: 'pin' }, { ids: [stateMessage.messageId], action: 'invalid' }]) await api('POST', '/api/messages/batch', body, token, 400);
+    for (const body of [{ ids: [stateMessage.messageId, 'invalid'], action: 'unpin' }, { ids: Array(101).fill(stateMessage.messageId), action: 'unpin' }, { ids: [], action: 'pin' }, { ids: [stateMessage.messageId], action: 'invalid' }, { ids: null, action: 'pin' }, { ids: [stateMessage.messageId], action: null }]) await api('POST', '/api/messages/batch', body, token, 400);
     assert.deepEqual(await api('GET', statePath, undefined, token), beforeBadBatch);
     assert.equal((await api('GET', '/api/messages?page=9007199254740994&pageSize=1', undefined, token)).items.length, 0);
     // A second owner is seeded through local admin SQL, not a public signup API.

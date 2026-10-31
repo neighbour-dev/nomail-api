@@ -1,8 +1,5 @@
-use super::{ConfigError, ConfigRequest, ConfigResult, ConfigView};
-use crate::{
-    pagination::{Page, PaginationQuery},
-    webhook::Provider,
-};
+use super::{ConfigError, ConfigResult, ConfigView, CreateConfig, UpdateConfig};
+use crate::{pagination::Page, webhook::Provider};
 use chrono::{DateTime, Utc};
 
 /// No plaintext credentials cross the storage boundary. Deliberately not Debug/Serialize.
@@ -31,9 +28,30 @@ pub enum ConfigMutation {
     Delete,
 }
 pub struct ConfigPage {
-    pub page: u64,
-    pub size: u64,
-    pub offset: u64,
+    page: u64,
+    size: u64,
+    offset: u64,
+}
+impl ConfigPage {
+    pub fn page(&self) -> u64 {
+        self.page
+    }
+    pub fn size(&self) -> u64 {
+        self.size
+    }
+    pub fn offset(&self) -> u64 {
+        self.offset
+    }
+    pub fn new(page: u64, size: u64) -> ConfigResult<Self> {
+        if page == 0 || !(1..=100).contains(&size) {
+            return Err(ConfigError::InvalidInput("invalid pagination".into()));
+        }
+        let offset = (page - 1)
+            .checked_mul(size)
+            .filter(|n| *n <= i64::MAX as u64)
+            .ok_or_else(|| ConfigError::InvalidInput("page is too large".into()))?;
+        Ok(Self { page, size, offset })
+    }
 }
 #[allow(async_fn_in_trait)]
 pub trait WebhookConfigStore {
@@ -71,9 +89,6 @@ fn id(value: &str) -> ConfigResult<i64> {
         .filter(|id| *id > 0)
         .ok_or_else(|| ConfigError::InvalidInput("invalid webhook config id".into()))
 }
-fn supplied(value: String) -> Option<String> {
-    if value.is_empty() { None } else { Some(value) }
-}
 impl<S: WebhookConfigStore, R: WebhookConfigRuntime> WebhookConfigService<S, R> {
     fn encrypt(&self, secret: &str) -> ConfigResult<String> {
         if secret.is_empty() {
@@ -84,21 +99,9 @@ impl<S: WebhookConfigStore, R: WebhookConfigRuntime> WebhookConfigService<S, R> 
         crate::security::encrypt(secret, self.runtime.encryption_key(), &nonce)
             .map_err(|e| ConfigError::Internal(e.into()))
     }
-    pub async fn list(
-        &self,
-        user_id: i64,
-        query: PaginationQuery,
-    ) -> ConfigResult<Page<ConfigView>> {
-        let (page, size) =
-            crate::pagination::pagination(query.page.as_deref(), query.page_size.as_deref());
-        let offset = (page - 1)
-            .checked_mul(size)
-            .filter(|n| *n <= i64::MAX as u64)
-            .ok_or_else(|| ConfigError::InvalidInput("page is too large".into()))?;
-        let (items, total) = self
-            .store
-            .list_owned(user_id, &ConfigPage { page, size, offset })
-            .await?;
+    pub async fn list(&self, user_id: i64, query: ConfigPage) -> ConfigResult<Page<ConfigView>> {
+        let ConfigPage { page, size, .. } = query;
+        let (items, total) = self.store.list_owned(user_id, &query).await?;
         Ok(Page {
             items,
             total,
@@ -112,20 +115,17 @@ impl<S: WebhookConfigStore, R: WebhookConfigRuntime> WebhookConfigService<S, R> 
             .await?
             .ok_or(ConfigError::NotFound)
     }
-    pub async fn create(&self, user_id: i64, body: ConfigRequest) -> ConfigResult<ConfigView> {
-        body.validate(true).map_err(ConfigError::InvalidInput)?;
-        let provider = super::super::service::configured_provider(&body.provider)
-            .map_err(|e| ConfigError::InvalidInput(e.to_string()))?;
+    pub async fn create(&self, user_id: i64, command: CreateConfig) -> ConfigResult<ConfigView> {
         let mut key = [0; 16];
         self.runtime.random_bytes(&mut key)?;
         let config = NewConfig {
             user_id,
-            name: body.name,
+            name: command.name,
             key: hex::encode(key),
-            provider,
-            source: body.source,
-            encrypted_secret: self.encrypt(&body.secret)?,
-            description: body.description,
+            provider: command.provider,
+            source: command.source,
+            encrypted_secret: self.encrypt(&command.secret)?,
+            description: command.description,
             enabled: true,
             at: self.runtime.now(),
         };
@@ -135,38 +135,24 @@ impl<S: WebhookConfigStore, R: WebhookConfigRuntime> WebhookConfigService<S, R> 
         &self,
         user_id: i64,
         value: &str,
-        body: ConfigRequest,
+        command: UpdateConfig,
     ) -> ConfigResult<ConfigView> {
-        body.validate(false).map_err(ConfigError::InvalidInput)?;
         let id = id(value)?;
         // An empty PATCH is a read, including no change to updated_at.
-        if body.name.is_empty()
-            && body.provider.is_empty()
-            && body.source.is_empty()
-            && body.secret.is_empty()
-            && body.description.is_empty()
-        {
+        if command.is_empty() {
             return self
                 .store
                 .get_owned(user_id, id)
                 .await?
                 .ok_or(ConfigError::NotFound);
         }
-        let provider = supplied(body.provider)
-            .map(|p| {
-                super::super::service::configured_provider(&p)
-                    .map_err(|e| ConfigError::InvalidInput(e.to_string()))
-            })
-            .transpose()?;
-        let encrypted_secret = supplied(body.secret)
-            .map(|s| self.encrypt(&s))
-            .transpose()?;
+        let encrypted_secret = command.secret.map(|s| self.encrypt(&s)).transpose()?;
         let patch = ConfigPatch {
-            name: supplied(body.name),
-            provider,
-            source: supplied(body.source),
+            name: command.name,
+            provider: command.provider,
+            source: command.source,
             encrypted_secret,
-            description: supplied(body.description),
+            description: command.description,
         };
         self.mutate(user_id, id, ConfigMutation::Patch(patch)).await
     }
