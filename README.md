@@ -16,6 +16,8 @@
 ## 文档
 
 - [安装与部署](docs/install.md)
+- [更新日志](CHANGELOG.md)
+- [Git Tag 规范](docs/tagging.md)
 - [贡献指南](CONTRIBUTING.md)
 - [HTTP 接口定义（OpenAPI 3.1）](docs/swagger.json)
 - [平台协议库](crates/nomail-core/README.md)

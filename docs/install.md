@@ -96,7 +96,9 @@ docker compose up -d
 docker login ghcr.io --username YOUR_GITHUB_USERNAME
 ```
 
-在密码提示中输入 Token，不要将其写入 `.env`、Compose 或版本库。建议使用 Docker credential helper。仓库 CI 当前仅发布 `linux/amd64` 镜像；其他架构可自行构建。
+在密码提示中输入 Token，不要将其写入 `.env`、Compose 或版本库。建议使用 Docker credential helper。
+
+发布镜像支持 `linux/amd64` 和 `linux/arm64`，Docker 会自动选择当前机器对应的架构。建议使用明确的稳定版本标签；版本变更见[更新日志](../CHANGELOG.md)。
 
 ## 3. 源码运行 Server
 

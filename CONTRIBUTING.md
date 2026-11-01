@@ -72,7 +72,7 @@ cargo run --locked -p nomail-app --features openapi --example export-openapi -- 
 cargo test --locked -p nomail-app --features openapi --lib
 ```
 
-接口变更应同时提交生成文件；CI 会比较文档快照，Workers 测试会校验实际响应的 Schema。用户操作变化更新 `docs/install.md`，贡献流程变化更新本文件，README 仅保留项目简介和文档入口。
+接口变更应同时提交生成文件并核对文档快照，Workers 测试会校验实际响应的 Schema。用户操作变化更新 `docs/install.md`，贡献流程变化更新本文件，README 仅保留项目简介和文档入口。
 
 ## 提交与评审
 
@@ -83,25 +83,15 @@ cargo test --locked -p nomail-app --features openapi --lib
 - 不提交 `.env`、`.dev.vars`、Token、真实 Webhook 原文、数据库、`target/`、`node_modules/` 或构建产物。提交前检查 diff，样例数据应脱敏。
 - 凭据或安全问题不要附带真实密钥公开报告；先通过仓库维护者的私下联系方式协调处理。
 
-## CI 与镜像发布（维护者）
+## 版本维护
 
-工作流位于 `.gitea/workflows/ci.yml`：
+- 项目版本统一定义在根目录 `Cargo.toml` 的 `[workspace.package].version`，四个 crate 继承同一版本。
+- 面向用户的变更记录在 `CHANGELOG.md` 的 `Unreleased` 中。
+- 发布前更新版本，运行 `cargo check` 同步 `Cargo.lock`，将待发布条目整理到对应版本和实际发布日期下，保留 `Unreleased` 区域；检查通过后提交。
+- 按 [Git Tag 规范](docs/tagging.md) 推送与项目版本一致的标签，会自动发布镜像和 GitHub Release；不要补发旧稳定版本，以免覆盖 `latest`。
+- 普通 push / PR 的 CI 只执行格式检查和默认成员的 Rust 测试，不能替代上述完整检查。
 
-- `test` 执行格式、Clippy、原生测试、文档/WASM 检查和发布构建。
-- `integration` 执行本地 Workers D1/DO 测试，可与 `test` 并行。
-- `docker` 等待前两项成功，仅在 `main` 推送、`v*` 标签或手动触发时发布镜像；当前只构建 `linux/amd64`，Runner 需支持对应平台。
-
-GHCR 发布配置：
-
-| 设置 | 用途 |
-|---|---|
-| Secret `GHCR_USERNAME` | 有 Package 发布权限的 GitHub 账号，不是 Gitea 用户名 |
-| Secret `GHCR_TOKEN` | 例如 classic PAT，需具备 `write:packages` 及相应 Package 权限 |
-| Variable `GHCR_NAMESPACE` | 可选，覆盖默认账号命名空间；组织发布需确认授权 |
-
-镜像地址为 `ghcr.io/<namespace>/nomail-api`，`main` 发布 `latest`，版本标签发布语义化标签，另有 SHA 标签。`buildcache` 仅用于构建缓存，不是运行镜像。远程层缓存不等于导出了 Dockerfile 中的 Cargo cache mount。
-
-确认 GHCR Package 的实际可见性；工作流不会将已有公开 Package 自动改为私有。组织 SSO 可能需要额外授权。部署端使用独立的只读凭据，不复用发布 Token；使用方法见[安装指南](docs/install.md)。
+检查工作流为 `.github/workflows/ci.yml`；发布工作流为 `.github/workflows/release.yml`，仅由版本标签触发，复用检查通过后再发布。
 
 ## 贡献授权
 
