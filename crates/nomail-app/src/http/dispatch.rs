@@ -1,7 +1,7 @@
 //! The only binding of API operations to community use cases.
 use super::{
     ApiFailure, AuthRequirement, BodyKind, Environment, HealthCheck, HealthResponse, HttpOutcome,
-    HttpReply, HttpRequest, HttpResult, Operation, RealtimeEffect, bearer_token, check_body_length,
+    HttpRequest, HttpResult, Operation, RealtimeEffect, bearer_token, check_body_length,
     endpoints as e, parse_json, parse_query, resolve, transport::json, webhook::WebhookReply,
 };
 use crate::{
@@ -23,21 +23,8 @@ pub async fn execute(
     let matched = resolve(&head.method, &head.path)?;
     // Health must work without JWT/encryption/initial-account configuration.
     if matched.route.operation == Operation::Health {
-        return match environment.health(head).await? {
-            HealthCheck::Database(healthy) => json::<e::Health>(HealthResponse::database(healthy)),
-            HealthCheck::Throttled { retry_after } => {
-                let body =
-                    serde_json::to_vec(&ApiFailure::new(429, "Too Many Requests").response())
-                        .map_err(|_| ApiFailure::internal())?;
-                let mut outcome = HttpOutcome::response(429, "application/json", body);
-                if let HttpReply::Response(response) = &mut outcome.reply {
-                    response
-                        .headers
-                        .push(("Retry-After".into(), retry_after.to_string()));
-                }
-                Ok(outcome)
-            }
-        };
+        let HealthCheck::Database(healthy) = environment.health(head).await?;
+        return json::<e::Health>(HealthResponse::database(healthy));
     }
     let services = environment.services()?;
     let context = if matched.route.auth == AuthRequirement::Bearer {

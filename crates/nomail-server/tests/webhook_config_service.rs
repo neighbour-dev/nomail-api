@@ -28,7 +28,6 @@ async fn config_service_preserves_sparse_concurrent_updates_credentials_and_scop
         db: database.clone(),
         config,
         realtime: Hub::default(),
-        health_limiter: app::HealthLimiter::default(),
     });
     let app = test::init_service(App::new().app_data(state).configure(app::configure)).await;
     let response = test::call_service(&app, test::TestRequest::post().uri("/api/auth/login").set_json(json!({"username":"admin","password":"password123","deviceId":"a","platform":"ios","deviceType":"phone"})).to_request()).await;

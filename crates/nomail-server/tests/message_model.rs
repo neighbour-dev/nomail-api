@@ -24,7 +24,6 @@ async fn one_message_preserves_platform_detail_level_raw_and_independent_user_st
         db: database.clone(),
         config,
         realtime: Hub::default(),
-        health_limiter: app::HealthLimiter::default(),
     });
     let app = test::init_service(App::new().app_data(state).configure(app::configure)).await;
     let response = test::call_service(&app,test::TestRequest::post().uri("/api/auth/login").set_json(json!({"username":"admin","password":"password123","deviceId":"a","platform":"ios","deviceType":"phone"})).to_request()).await;

@@ -21,7 +21,6 @@ async fn concurrent_logins_and_webhook_deliveries_preserve_limits_and_uniqueness
         db: database.clone(),
         config,
         realtime: Hub::default(),
-        health_limiter: app::HealthLimiter::default(),
     });
     let app = test::init_service(App::new().app_data(state).configure(app::configure)).await;
     let logins = join_all((0..5).map(|id| {

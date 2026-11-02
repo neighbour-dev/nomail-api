@@ -23,7 +23,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         db: database.clone(),
         config,
         realtime: Hub::default(),
-        health_limiter: app::HealthLimiter::default(),
     });
     tracing::info!(port, "NoMail API listening");
     HttpServer::new(move || {

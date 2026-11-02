@@ -32,7 +32,6 @@ async fn core_inventory_controls_routes_authentication_parameters_and_response_d
         db: database.clone(),
         config,
         realtime: Hub::default(),
-        health_limiter: app::HealthLimiter::default(),
     });
     let app = test::init_service(App::new().app_data(state).configure(app::configure)).await;
     for route in api::ROUTES

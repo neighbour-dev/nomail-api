@@ -6,12 +6,6 @@ use nomail_app::{
     auth::RequestMeta,
     http::{self, ApiFailure, HttpReply, HttpResult, RequestHead},
 };
-use std::{
-    collections::HashMap,
-    net::IpAddr,
-    sync::{Arc, Mutex},
-    time::{Duration, Instant},
-};
 
 pub fn configure(config: &mut web::ServiceConfig) {
     config.default_service(web::to(handle));
@@ -71,10 +65,7 @@ impl ActixRequest {
                     })
                     .collect(),
                 metadata: RequestMeta::new(
-                    // Forwarded headers are not trusted on the self-hosted server.
-                    req.peer_addr()
-                        .map(|a| a.ip().to_string())
-                        .unwrap_or_default(),
+                    crate::client_ip::resolve(&req).to_string(),
                     req.headers()
                         .get("User-Agent")
                         .and_then(|v| v.to_str().ok())
@@ -98,21 +89,6 @@ impl http::HttpRequest for ActixRequest {
             bytes.extend_from_slice(&chunk);
         }
         Ok(bytes)
-    }
-}
-
-#[derive(Clone, Default)]
-pub struct HealthLimiter(Arc<Mutex<HashMap<Option<IpAddr>, Instant>>>);
-impl HealthLimiter {
-    pub(crate) fn allow(&self, ip: Option<IpAddr>) -> bool {
-        let now = Instant::now();
-        let mut entries = self.0.lock().expect("health limiter lock");
-        entries.retain(|_, time| now.duration_since(*time) < Duration::from_secs(2));
-        if entries.contains_key(&ip) {
-            return false;
-        }
-        entries.insert(ip, now);
-        true
     }
 }
 

@@ -75,7 +75,15 @@ docker compose logs --tail=100 nomail-api
 curl http://127.0.0.1:3000/api/health
 ```
 
-健康检查正常时，响应的 `data.status` 和 `data.db` 均为 `ok`。若修改了 `PORT`，相应调整访问地址。Server 健康检查按来源 IP 限流，连续请求可能返回 429。
+健康检查正常时，响应的 `data.status` 和 `data.db` 均为 `ok`。若修改了 `PORT`，相应调整访问地址。健康检查不设置应用级请求限流；有需要时可在反向代理或 CDN 配置入口限流。
+
+Server 的设备 IP 在登录或刷新会话时更新，采用零配置、转发头优先的简单规则：
+
+- 固定优先级为 `CF-Connecting-IP` → `X-Forwarded-For` → `X-Real-IP` → `Forwarded`。Cloudflare 来源头优先；没有有效结果再尝试下一个头。
+- 同名头按出现顺序处理，每个逗号分隔的地址链从左向右取首个有效 IP，跳过空白或非法项。`Forwarded` 读取不区分大小写的 `for=` 参数；支持 IPv4、IPv6、引号及带端口的地址。
+- 不判断可信代理，也不筛选公网地址，保留局域网及 Tailscale 地址。所有来源头都无有效结果时回退到连接来源 IP；连接 IP 也不可用时返回 `0.0.0.0`。
+
+不需要 `IP_HEADER` 或 `IP_HEADER_TRUSTED_PROXIES` 配置。转发头可被客户端伪造，因此设备 IP 仅是尽力获取的来源信息，不代表已验证身份，不应作为访问控制依据。反向代理应正确清洗来源头，尤其是高优先级的 `CF-Connecting-IP`；NAT 改写来源且未传递原地址时无法还原。健康检查不设置应用级限流，Workers 继续使用运行环境提供的 `CF-Connecting-IP`。
 
 Compose 将数据库放在 `nomail-data` 卷的 `/data/nomail.db`，覆盖 `.env` 中的 `DATABASE_PATH`；容器根文件系统只读，数据库及 WAL/SHM 文件写入数据卷。不要使用 `docker compose down -v`，除非明确要删除全部数据。
 
@@ -190,7 +198,7 @@ npm run dev
 - 通过 `PATCH /api/auth/account` 修改账号；请求需要 Bearer Token，并提供 `currentPassword` 及 `username`、`newPassword` 中至少一项。改密会撤销全部登录会话。
 - 通过 `/api/webhook/configs` 创建接收配置，将响应中的相对 `url` 拼接到服务公开地址后，配置到上游平台。当前产品只开放 Generic、GitHub、飞书；协议库支持的其他平台不等于已开放接入。
 - **飞书限制：**当前产品只有一个 `secret`，同时用作 Verification Token 和 Encrypt Key。两者不同的配置无法完整接入；普通事件不因签名缺失而回退为 Token 认证。
-- 公网部署应使用 HTTPS，并在反向代理或 Cloudflare 设置请求限流与防滥用措施。Server 不直接信任转发头中的客户端 IP。
+- 公网部署应使用 HTTPS，并在反向代理或 Cloudflare 设置请求限流与防滥用措施。Server 展示的设备 IP 可能来自未经验证的转发头，不应作为可信身份或访问控制依据。
 - 代理 SSE 时关闭响应缓冲，并设置大于 20 秒心跳间隔的读取超时。SSE 仅用于在线更新，无离线投递或重放，重连后应重新查询收件箱。
 
 ## 6. 备份、升级与账号恢复

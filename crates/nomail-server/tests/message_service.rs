@@ -29,7 +29,6 @@ async fn sparse_updates_bulk_limits_scope_and_raw_reads_use_the_shared_service()
         db: database.clone(),
         config,
         realtime: Hub::default(),
-        health_limiter: app::HealthLimiter::default(),
     });
     let app = test::init_service(App::new().app_data(state).configure(app::configure)).await;
     macro_rules! api {

@@ -21,7 +21,7 @@ Actix Web + SeaORM 替换原服务端，保留现有 27 个路由、单用户策
 - 消息等级、3/7/30 天过期时间计算和批量操作维持现有规则。
 - SSE 保留 ready、message.created、auth.expired、20 秒心跳和 32 条订阅缓冲。
 - 配置 PATCH 的空字符串仍忽略，不借迁移改变客户端语义。
-- 健康检查保留每个来源 IP 两秒一次的限流。
+- 迁移时健康检查保留每个来源 IP 两秒一次的限流；当前已移除健康检查的应用级限流，详见[安装与部署](install.md)。
 
 ## 数据库升级
 
@@ -40,7 +40,7 @@ Actix Web + SeaORM 替换原服务端，保留现有 27 个路由、单用户策
 ## 有意保持的边界
 
 不新增 APNs/FCM 发送、队列、过期清理、用户注册或 SQLite。历史 PRD 中这些规划不属于本次等价迁移。
-默认不信任 X-Forwarded-For，来源 IP 取 TCP 对端；反向代理后需要另行配置可信代理策略。
+迁移时来源 IP 仅取 TCP 对端。当前 Server 设备元数据采用零配置的来源头优先策略：`CF-Connecting-IP` → `X-Forwarded-For` → `X-Real-IP` → `Forwarded`，从左向右取首个有效 IP，连接地址兜底；来源未经验证，详见[安装与部署](install.md)。
 
 ## 验证
 

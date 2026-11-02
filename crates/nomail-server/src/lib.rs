@@ -1,5 +1,6 @@
 pub mod app;
 pub mod auth;
+mod client_ip;
 pub mod config;
 pub mod db;
 pub mod entity;
@@ -16,5 +17,4 @@ pub struct AppState {
     pub db: sea_orm::DatabaseConnection,
     pub config: config::Config,
     pub realtime: realtime::Hub,
-    pub health_limiter: app::HealthLimiter,
 }

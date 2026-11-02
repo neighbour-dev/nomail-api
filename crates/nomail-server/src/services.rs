@@ -25,14 +25,7 @@ impl<'a> Environment for NativeEnvironment<'a> {
             auth::auth_config(&state.config),
         ))
     }
-    async fn health(&self, request: &RequestHead) -> HttpResult<HealthCheck> {
-        if !self
-            .0
-            .health_limiter
-            .allow(request.metadata.ip.parse().ok())
-        {
-            return Ok(HealthCheck::Throttled { retry_after: 2 });
-        }
+    async fn health(&self, _: &RequestHead) -> HttpResult<HealthCheck> {
         Ok(HealthCheck::Database(self.0.db.ping().await.is_ok()))
     }
 }

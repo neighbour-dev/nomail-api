@@ -30,7 +30,6 @@ async fn all_api_contracts() {
         db: database.clone(),
         config,
         realtime: Hub::default(),
-        health_limiter: app::HealthLimiter::default(),
     });
     let app =
         test::init_service(App::new().app_data(state.clone()).configure(app::configure)).await;
@@ -396,12 +395,16 @@ async fn all_api_contracts() {
     let request_one = test::TestRequest::post()
         .uri("/api/auth/refresh-token")
         .insert_header(("User-Agent", "nomail-refresh-agent"))
+        .insert_header(("CF-Connecting-IP", "100.101.102.103"))
+        .insert_header(("X-Forwarded-For", "192.168.1.20, 9.9.9.9"))
         .peer_addr("127.0.0.2:1234".parse().unwrap())
         .set_json(json!({"refreshToken": refresh}))
         .to_request();
     let request_two = test::TestRequest::post()
         .uri("/api/auth/refresh-token")
         .insert_header(("User-Agent", "nomail-refresh-agent"))
+        .insert_header(("CF-Connecting-IP", "100.101.102.103"))
+        .insert_header(("X-Forwarded-For", "192.168.1.20, 9.9.9.9"))
         .peer_addr("127.0.0.2:1234".parse().unwrap())
         .set_json(json!({"refreshToken": refresh}))
         .to_request();
@@ -427,7 +430,7 @@ async fn all_api_contracts() {
         .find(|d| d["deviceId"] == "a")
         .unwrap();
     assert_eq!(device["userAgent"], "nomail-refresh-agent");
-    assert_eq!(device["ipAddress"], "127.0.0.2");
+    assert_eq!(device["ipAddress"], "100.101.102.103");
     let new_refresh = valid["data"]["refreshToken"].as_str().unwrap();
     let (status, _) = api!(
         post,
@@ -499,7 +502,7 @@ async fn all_api_contracts() {
         test::TestRequest::get().uri("/api/health").to_request(),
     )
     .await;
-    assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
+    assert_eq!(response.status(), StatusCode::OK);
 
     // Re-running baseline migration never drops existing data.
     use sea_orm_migration::MigratorTrait;

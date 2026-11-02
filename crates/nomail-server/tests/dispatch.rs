@@ -7,7 +7,7 @@ use nomail_app::http::{ApiResponse, MAX_BODY_BYTES};
 use nomail_server::{AppState, app, config::Config, db, realtime::Hub};
 
 #[actix_web::test]
-async fn shared_dispatch_preserves_routing_authentication_body_order_and_health_limits() {
+async fn shared_dispatch_preserves_routing_authentication_and_body_order() {
     let directory = tempfile::tempdir().unwrap();
     let config = Config {
         database_path: directory
@@ -27,7 +27,6 @@ async fn shared_dispatch_preserves_routing_authentication_body_order_and_health_
         db: db::connect(&config).await.unwrap(),
         config,
         realtime: Hub::default(),
-        health_limiter: app::HealthLimiter::default(),
     });
     let app = test::init_service(App::new().app_data(state).configure(app::configure)).await;
     let oversized = vec![b'x'; MAX_BODY_BYTES + 1];
@@ -134,8 +133,7 @@ async fn shared_dispatch_preserves_routing_authentication_body_order_and_health_
         let error: ApiResponse<()> = test::read_body_json(response).await;
         assert_eq!(error.msg, message, "{path}");
     }
-    // GET health does not consume a body, and the transport-only limiter still
-    // produces the exact shared JSON envelope and Retry-After header.
+    // GET health does not consume a body.
     let response = test::call_service(
         &app,
         test::TestRequest::get()
@@ -145,13 +143,4 @@ async fn shared_dispatch_preserves_routing_authentication_body_order_and_health_
     )
     .await;
     assert_eq!(response.status(), StatusCode::OK);
-    let response = test::call_service(
-        &app,
-        test::TestRequest::get().uri("/api/health").to_request(),
-    )
-    .await;
-    assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
-    assert_eq!(response.headers().get("Retry-After").unwrap(), "2");
-    let error: ApiResponse<()> = test::read_body_json(response).await;
-    assert_eq!(error.msg, "Too Many Requests");
 }

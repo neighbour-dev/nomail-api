@@ -4019,43 +4019,6 @@
             },
             "description": "HTTP 413"
           },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "code": {
-                      "format": "uint16",
-                      "maximum": 65535,
-                      "minimum": 0,
-                      "type": "integer"
-                    },
-                    "data": {
-                      "type": "null"
-                    },
-                    "msg": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "code",
-                    "msg",
-                    "data"
-                  ],
-                  "title": "ApiResponse_null",
-                  "type": "object"
-                }
-              }
-            },
-            "description": "容量或请求限流（由部署环境执行）",
-            "headers": {
-              "Retry-After": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
           "500": {
             "content": {
               "application/json": {
