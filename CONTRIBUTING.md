@@ -92,11 +92,3 @@ cargo test --locked -p nomail-app --features openapi --lib
 - 普通 push / PR 的 CI 只执行格式检查和默认成员的 Rust 测试，不能替代上述完整检查。
 
 检查工作流为 `.github/workflows/ci.yml`；发布工作流为 `.github/workflows/release.yml`，仅由版本标签触发，复用检查通过后再发布。
-
-## 贡献授权
-
-项目采用 **AGPL-3.0-only**，完整条款见 [LICENSE](LICENSE)。除另有书面约定外，提交供本项目合并的贡献应按相同许可提供，并确认你拥有提交该贡献所需的权利及必要的雇主授权。
-
-贡献者保留其贡献的版权。提交 PR 不表示转让版权，也不额外授予维护者将贡献用于闭源产品或其他许可下再授权的权利；本项目目前未采用 CLA。
-
-引入第三方代码时，请说明来源及许可，保留必要声明，并确认其与项目许可兼容。

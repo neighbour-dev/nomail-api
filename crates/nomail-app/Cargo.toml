@@ -3,7 +3,7 @@ name = "nomail-app"
 version.workspace = true
 edition = "2024"
 rust-version = "1.99"
-license.workspace = true
+license-file.workspace = true
 description = "NoMail community application and shared HTTP contract"
 
 [features]

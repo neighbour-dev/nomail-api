@@ -25,4 +25,8 @@
 
 ## 许可证
 
-除另有明确声明的文件及第三方组件外，本仓库的代码和文档采用 **GNU Affero General Public License 第 3 版，仅限此版本（`AGPL-3.0-only`）**，详见 [LICENSE](LICENSE)。第三方组件保留其各自的许可。
+除另有明确声明的文件及第三方组件外，本仓库的代码和文档采用 **Functional Source License 1.1，未来许可为 Apache-2.0（`FSL-1.1-ALv2`）**，许可方为 **NEIGHBOUR PTE. LTD.**，详见 [LICENSE](LICENSE)。
+
+FSL 是源码可用许可，并非 OSI 认可的开源许可。它允许内部使用等许可用途，但限制条款所定义的竞争性商业用途。每个版本自许可方提供之日起满两年后，可按 Apache License 2.0 使用；并非整个项目在统一日期转换。
+
+此前已按 AGPL-3.0-only 发布的版本，其既有授权不受本次变更影响。第三方组件保留其各自的许可。

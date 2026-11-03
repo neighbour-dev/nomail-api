@@ -3,7 +3,7 @@ name = "nomail-server"
 version.workspace = true
 edition = "2024"
 rust-version = "1.99"
-license.workspace = true
+license-file.workspace = true
 default-run = "nomail-api"
 
 [[bin]]
