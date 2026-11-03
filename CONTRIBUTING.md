@@ -76,8 +76,59 @@ cargo test --locked -p nomail-app --features openapi --lib
 
 ## 提交与评审
 
+### 提交规范
+
+提交信息采用 Conventional Commits 格式：
+
+```text
+<type>[可选 scope][可选 !]: <英文简短描述>
+
+[可选正文]
+
+[可选脚注]
+```
+
+| 类型 | 用途 |
+|---|---|
+| `feat` | 新功能 |
+| `fix` | 修复问题 |
+| `refactor` | 不改变功能的重构 |
+| `perf` | 性能优化 |
+| `docs` | 文档 |
+| `test` | 测试 |
+| `build` | 构建、打包与依赖 |
+| `ci` | GitHub Actions 等 CI 配置 |
+| `chore` | 不属于以上类型的维护工作 |
+| `revert` | 撤销已有提交 |
+
+- 标题使用英文、动词原形，不加句号，建议不超过 72 字符。
+- scope 可省略；涉及单个 crate 时可使用 `core`、`app`、`server`、`workers`。
 - 一个提交解决一个完整问题；重构与行为变化尽量分开，每一批保持可编译、可验证。
-- 提交信息可使用 `feat:`、`fix:`、`refactor:`、`test:`、`docs:`、`build:` 前缀。
+- 不相关的修改分开提交，避免使用 `update`、`fix bug` 等无法说明目的的标题。
+- 复杂变更在正文说明原因、影响和必要的验证信息，不只重复修改内容。
+- 不兼容变更在类型或 scope 后加 `!`，并在脚注中使用 `BREAKING CHANGE:` 说明影响和迁移方式。
+- 撤销提交时在正文注明被撤销的 commit SHA。
+
+示例：
+
+```text
+feat(core): support a new webhook provider
+fix(server): handle invalid forwarding headers
+ci: publish release binaries
+docs: remove obsolete migration guide
+```
+
+不兼容变更示例：
+
+```text
+feat(app)!: change the pagination response format
+
+BREAKING CHANGE: Replace the total field with hasMore. Clients must update
+their pagination handling before upgrading.
+```
+
+### PR 与评审要求
+
 - PR 说明动机、主要变化、验证命令，以及对接口、数据库、部署和兼容性的影响。
 - 修复应包含能复现原问题的回归测试；影响两种部署的改动应验证两端。
 - 不提交 `.env`、`.dev.vars`、Token、真实 Webhook 原文、数据库、`target/`、`node_modules/` 或构建产物。提交前检查 diff，样例数据应脱敏。
