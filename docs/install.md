@@ -7,6 +7,7 @@ NoMail API 是后端服务，不附带 Web/App 客户端。部署后可通过 AP
 | 方式 | 环境要求 | 数据存储 |
 |---|---|---|
 | Docker Compose | Docker Engine、Compose v2 | 持久化卷中的 SQLite |
+| 发布的二进制 | Linux amd64 或 arm64，glibc 2.39+（如 Ubuntu 24.04） | 本地 SQLite 文件 |
 | 源码运行 | Rust 1.99+、系统编译工具 | 本地 SQLite 文件 |
 | Cloudflare Workers | Rust 1.99+、Node.js 22+、Cloudflare 账号 | D1、Durable Objects |
 
@@ -111,7 +112,31 @@ docker compose up -d --pull never
 
 发布镜像支持 `linux/amd64` 和 `linux/arm64`，Docker 会自动选择当前机器对应的架构。`latest` 跟随稳定版发布更新，不包含预发布版本。生产部署建议将 `compose.yml` 中的 `latest` 替换为明确的稳定版本标签（如 `vX.Y.Z`）；版本变更见[更新日志](../CHANGELOG.md)。
 
-## 3. 源码运行 Server
+## 3. 二进制或源码运行 Server
+
+### 使用发布的二进制
+
+从 [GitHub Releases](https://github.com/neighbour-dev/nomail-api/releases) 下载对应架构的 `nomail-api-<版本>-linux-amd64.tar.gz` 或 `nomail-api-<版本>-linux-arm64.tar.gz`，以及 `SHA256SUMS`，放在同一目录。二进制在 Ubuntu 24.04 上使用 Cargo 原生构建，无需安装 Rust；运行环境要求 glibc 2.39 或更新版本，不适用于默认使用 musl 的 Alpine。当前功能无需额外安装 CA 证书或时区数据。
+
+以下以 amd64 为例，将文件名中的 `vX.Y.Z` 替换为下载的版本：
+
+```bash
+sha256sum --ignore-missing -c SHA256SUMS
+mkdir -p nomail-server
+tar -xzf nomail-api-vX.Y.Z-linux-amd64.tar.gz -C nomail-server
+cd nomail-server
+cp .env.example .env
+```
+
+填写 `.env` 中的密钥和初始账号后启动：
+
+```bash
+./nomail-api
+```
+
+压缩包还包含 `gen-secret-key`、`reset-account` 和许可证。可执行 `./gen-secret-key` 生成凭据加密密钥，使用 `./reset-account` 代替下文源码部署的 `./target/release/reset-account`。数据库默认位于 `./data/nomail.db`；生产环境应通过服务管理器配置工作目录、环境变量及自动重启。
+
+### 从源码构建
 
 安装 Rust 1.99+ 及平台编译工具；无需另外部署数据库服务。
 
