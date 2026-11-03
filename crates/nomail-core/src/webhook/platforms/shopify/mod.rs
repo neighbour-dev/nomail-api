@@ -1,4 +1,5 @@
 //! Shopify HMAC verification, versioned topic payloads and inbox mapping.
+pub mod config;
 #[cfg(test)]
 mod tests;
 use crate::webhook::{

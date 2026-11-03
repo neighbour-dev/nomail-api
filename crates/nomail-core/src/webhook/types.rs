@@ -88,6 +88,7 @@ pub enum Authentication<'a> {
     GitlabToken(&'a str),
     GitlabSigningToken(&'a str),
     StripeSigningSecret(&'a str),
+    StripeSigningSecrets(&'a [String]),
     SlackSigningSecret(&'a str),
     Feishu {
         verification_token: Option<&'a str>,

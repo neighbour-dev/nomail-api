@@ -1,4 +1,5 @@
 //! GitHub webhook authentication, JSON/form decoding, event model and inbox mapping.
+pub mod config;
 #[cfg(test)]
 mod tests;
 use crate::webhook::{

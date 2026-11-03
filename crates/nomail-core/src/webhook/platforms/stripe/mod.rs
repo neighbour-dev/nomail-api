@@ -1,4 +1,5 @@
 //! Stripe signatures, Snapshot/Thin event models and built-in inbox mapping.
+pub mod config;
 #[cfg(test)]
 mod tests;
 use crate::webhook::{
@@ -48,6 +49,16 @@ pub(in crate::webhook) fn receive(
         Authentication::None => {}
         Authentication::StripeSigningSecret(secret) if !secret.is_empty() => {
             verify_signature(config, request, secret)?
+        }
+        Authentication::StripeSigningSecrets(secrets)
+            if !secrets.is_empty() && secrets.iter().all(|s| !s.is_empty()) =>
+        {
+            if !secrets
+                .iter()
+                .any(|secret| verify_signature(config, request, secret).is_ok())
+            {
+                return Err(WebhookError::Unauthorized);
+            }
         }
         _ => return Err(invalid_auth()),
     }

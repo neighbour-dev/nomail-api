@@ -97,6 +97,41 @@ fn timestamp_window_checks_past_and_future() {
 }
 
 #[test]
+fn typed_configuration_accepts_rotation_keys_but_never_unsigned_or_stale_deliveries() {
+    let config = PlatformConfig::Stripe(StripeCredentials {
+        signing_secrets: vec!["whsec_retired".into(), "whsec_literal-not-base64".into()],
+    });
+    let config = config.receiving_config(NOW).unwrap();
+    let body = br#"{"id":"evt_rotation","type":"test","object":"event"}"#;
+    assert!(
+        receive(
+            &config,
+            &WebhookRequest {
+                headers: &stripe_headers(body, NOW),
+                body
+            }
+        )
+        .is_ok()
+    );
+    for headers in [
+        Vec::new(),
+        stripe_headers(body, NOW - 301),
+        stripe_headers(b"{}", NOW),
+    ] {
+        assert!(matches!(
+            receive(
+                &config,
+                &WebhookRequest {
+                    headers: &headers,
+                    body
+                }
+            ),
+            Err(WebhookError::Unauthorized)
+        ));
+    }
+}
+
+#[test]
 fn unknown_envelopes_are_rejected() {
     assert!(matches!(
         receive_with(

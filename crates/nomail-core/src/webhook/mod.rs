@@ -2,6 +2,7 @@
 //!
 //! Provider and authentication policy must come from trusted endpoint configuration,
 //! never from request headers. Pass the original, unmodified request body.
+mod config;
 mod crypto;
 mod error;
 pub mod platforms;
@@ -13,6 +14,7 @@ mod test_support;
 #[cfg(test)]
 mod tests;
 
+pub use config::*;
 pub use error::WebhookError;
 pub use platforms::*;
 pub use types::*;

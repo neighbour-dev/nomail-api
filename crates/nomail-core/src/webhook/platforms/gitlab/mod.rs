@@ -1,4 +1,5 @@
 //! GitLab authentication policies, custom/default payloads and inbox mapping.
+pub mod config;
 #[cfg(test)]
 mod tests;
 use crate::webhook::{

@@ -1,8 +1,8 @@
 # nomail-core
 
-独立的平台协议库，负责 Webhook 验签、解密、解析、控制请求识别、平台事件及通用内容提取。不依赖账号系统、数据库、HTTP 框架、环境变量、系统时钟或异步运行时，可供开源版及未来 SaaS 分别使用。
+独立的平台协议库，负责 Webhook 平台配置类型与校验、验签、解密、解析、控制请求识别、平台事件及通用内容提取。不依赖账号系统、数据库、HTTP 框架、环境变量、系统时钟或异步运行时，可供开源版及未来 SaaS 分别使用。
 
-开源版账号、接收配置、收件箱规则、接收编排、凭据存储加密和 HTTP 契约均在相邻的 [nomail-app](../nomail-app/README.md)。Core 不引用 App，不定义 NoMail API 路由、ACK 包装或 SSE。
+开源版账号、接收配置记录的管理、收件箱规则、接收编排、凭据存储加密和 HTTP 契约均在相邻的 [nomail-app](../nomail-app/README.md)。平台专属配置不属于收件箱业务，由 Core 定义；Core 不引用 App，不定义 NoMail API 路由、ACK 包装或 SSE。
 
 可选 `openapi` feature 只为协议数据派生 JSON Schema，供应用生成自己的 OpenAPI；Core 不生成产品 API 文档。
 
@@ -13,6 +13,7 @@
 ```text
 src/webhook/
 ├── mod.rs                 # 公共 receive 入口与平台分发
+├── config.rs              # 平台判别枚举、统一入口与安全摘要，不堆放平台实现
 ├── types.rs               # 共享请求、配置、结果、消息、错误
 ├── crypto.rs              # 共用密码学工具与时间窗口校验
 ├── support.rs             # 共用 JSON/表单、字段与数据构造工具
@@ -22,7 +23,8 @@ src/webhook/
     ├── mod.rs             # PlatformEvent 信封、PlatformData 枚举、映射分发
     ├── generic/
     ├── github/
-    │   ├── mod.rs         # GitHub 事件类型、验签、解析、内置映射
+     │   ├── mod.rs         # GitHub 事件类型、验签、解析、内置映射
+     │   ├── config.rs      # GitHub 凭据类型、纯校验及认证参数构造
     │   └── tests.rs       # GitHub 样例、签名构造与测试
     ├── gitlab/
     ├── stripe/
@@ -32,7 +34,7 @@ src/webhook/
     └── shopify/
 ```
 
-每个平台目录均包含 `mod.rs` 和 `tests.rs`，修改一个平台只需进入对应目录。认证策略校验由平台自己负责；外层 `Authentication` 仅保留现有配置枚举，不集中实现各平台认证。没有 Parser trait，也不要求各平台采用相同的内部流程。
+每个平台目录均包含 `mod.rs`、`config.rs` 和 `tests.rs`，修改一个平台只需进入对应目录。配置类型、凭据校验与认证参数构造由平台自己负责；公共 `PlatformConfig` 仅按 provider 分发，不集中实现各平台认证。没有 Parser trait，也不要求各平台采用相同的内部流程。
 
 `PlatformEvent` 是解析结果，`PlatformData` 枚举承载平台专有模型。平台模型的 `to_message_content(metadata, raw)` 执行基础映射，外部使用 `event.to_message_content()` 得到 `MessageContent`，它只表示平台内容，不是带 NoMail 管理状态的完整消息。持久化和产品规则由调用方决定。`nomail_core::webhook::GithubEvent` 等公开路径仍可用，也可按 `nomail_core::webhook::platforms::github::GithubEvent` 定位。
 
@@ -119,6 +121,9 @@ GitLab 自定义模板、Shopify 字段裁剪不要求完整资源。Stripe Thin
 
 ## 配置与安全边界
 
+- `PlatformConfig` 用 `provider` + `credentials` 的带标签枚举自动反序列化，平台凭据位于 `platforms/<provider>/config.rs`。严格拒绝未知字段、跨平台凭据和位置数组；`validate()` 执行纯凭据校验，`receiving_config(now)` 同时推导 Provider 和 Authentication，避免调用方独立组合错误的平台与认证。
+- 秘密配置不实现 Debug；Serialize 仅用于调用方的加密存储，不能用于公开响应。`summary()` 返回无秘密的 `PlatformSummary`（provider、authentication）。密文存储格式、数据库和密钥管理仍由调用方负责。
+- 新强类型配置只允许 Generic 显式 `credentials.type=none`；其他平台必须提供对应凭据。低层 `WebhookConfig` / `Authentication` 继续可供协议测试和独立调用方使用，但不会使产品配置接口自动接受匿名平台配置。
 - Provider 和认证方式必须来自可信端点配置，不能由请求头决定；认证失败不降级。
 - `Authentication::None` 是明确允许不认证的策略，不是“自动探测”。生产环境有 Secret 时应显式配置对应认证方式。
 - 同一端点只有一种预期认证策略。GitLab 新版签名缺失不回退旧 Token。

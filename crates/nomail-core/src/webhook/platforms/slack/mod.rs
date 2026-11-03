@@ -1,4 +1,5 @@
 //! Slack authentication, Events API/interactions/commands and inbox mapping.
+pub mod config;
 #[cfg(test)]
 mod tests;
 use crate::webhook::{

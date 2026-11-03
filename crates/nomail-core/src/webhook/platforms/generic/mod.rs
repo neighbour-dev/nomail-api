@@ -1,5 +1,6 @@
 //! NoMail's custom Generic protocol. JSON fields and text header fields are inputs,
 //! not defaults shared with other platforms.
+pub mod config;
 #[cfg(test)]
 mod tests;
 use crate::webhook::{

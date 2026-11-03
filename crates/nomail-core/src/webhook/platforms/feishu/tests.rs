@@ -73,6 +73,32 @@ fn encrypted_v2_and_nested_text() {
         receive_with(Provider::Feishu, feishu_auth(), &Vec::new(), plain).unwrap_err(),
         WebhookError::Unauthorized
     );
+    let configured = PlatformConfig::Feishu(FeishuCredentials {
+        verification_token: "verification-token".into(),
+        encrypt_key: Some("encrypt-key".into()),
+    });
+    let configured = configured.receiving_config(NOW).unwrap();
+    assert!(
+        receive(
+            &configured,
+            &WebhookRequest {
+                headers: &h,
+                body: &body
+            }
+        )
+        .is_ok()
+    );
+    // Even a correctly signed plaintext event cannot disable configured encryption.
+    assert!(matches!(
+        receive(
+            &configured,
+            &WebhookRequest {
+                headers: &feishu_headers(plain),
+                body: plain
+            }
+        ),
+        Err(WebhookError::Unauthorized)
+    ));
 }
 
 #[test]

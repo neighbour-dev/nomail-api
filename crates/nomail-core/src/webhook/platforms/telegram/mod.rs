@@ -1,4 +1,5 @@
 //! Telegram Bot API authentication, Update model and inbox mapping.
+pub mod config;
 #[cfg(test)]
 mod tests;
 use crate::webhook::{

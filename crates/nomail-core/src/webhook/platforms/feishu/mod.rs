@@ -1,4 +1,5 @@
 //! Feishu credential policy, signature/decryption, control requests and inbox mapping.
+pub mod config;
 #[cfg(test)]
 mod tests;
 use crate::webhook::{
@@ -105,7 +106,7 @@ pub(in crate::webhook) fn receive(
         return challenge(&payload);
     }
     if encrypt_key.is_some() {
-        if !signed {
+        if !signed || object(request.body)?.get("encrypt").is_none() {
             return Err(WebhookError::Unauthorized);
         }
     } else if let Some(token) = verification_token {
