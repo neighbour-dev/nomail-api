@@ -6,10 +6,12 @@
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-04
+
 ### 新增
 
 - Webhook 配置开放 GitLab、Stripe、Slack、Telegram 和 Shopify，与 Generic、GitHub、飞书统一使用 Core 的强类型平台配置。
-- 后续标签发布流程新增 Linux AMD64、ARM64 原生可执行程序压缩包及 SHA-256 校验文件，包含服务端、密钥生成和账号重置工具；补充无需 Docker 的二进制安装说明。
+- 标签发布流程新增 Linux AMD64、ARM64 原生可执行程序压缩包及 SHA-256 校验文件，包含服务端、密钥生成和账号重置工具；补充无需 Docker 的二进制安装说明。
 
 ### 变更
 
