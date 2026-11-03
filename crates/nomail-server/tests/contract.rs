@@ -112,7 +112,7 @@ async fn core_inventory_controls_routes_authentication_parameters_and_response_d
         test::TestRequest::post()
             .uri(api::Operation::CreateConfig.route().path)
             .insert_header(authorization.clone())
-            .set_json(json!({"name":"Test","provider":"generic"}))
+            .set_json(json!({"name":"Test","platform":{"provider":"generic","credentials":{"type":"none"}}}))
             .to_request(),
     )
     .await;

@@ -18,15 +18,15 @@ fn storage(error: DbErr) -> ConfigError {
         ConfigError::Internal(error.to_string())
     }
 }
-fn response(c: webhook::Model) -> ConfigResult<ConfigView> {
-    Ok(ConfigView::new(
+fn response(c: webhook::Model) -> ConfigResult<ConfigRecord> {
+    Ok(ConfigRecord::new(
         c.id,
         c.name,
         c.key,
         c.provider
             .parse()
             .map_err(|e: nomail_app::webhook::WebhookError| ConfigError::Internal(e.to_string()))?,
-        c.source.unwrap_or_default(),
+        c.encrypted_platform,
         c.enabled,
         c.description.unwrap_or_default(),
     ))
@@ -36,7 +36,11 @@ fn owned(user_id: i64) -> sea_orm::Select<webhook::Entity> {
         .filter(webhook::Column::UserId.eq(user_id))
         .filter(webhook::Column::DeletedAt.is_null())
 }
-async fn get(db: &impl ConnectionTrait, user_id: i64, id: i64) -> ConfigResult<Option<ConfigView>> {
+async fn get(
+    db: &impl ConnectionTrait,
+    user_id: i64,
+    id: i64,
+) -> ConfigResult<Option<ConfigRecord>> {
     owned(user_id)
         .filter(webhook::Column::Id.eq(id))
         .one(db)
@@ -50,7 +54,7 @@ impl WebhookConfigStore for Store<'_> {
         &self,
         user_id: i64,
         page: &ConfigPage,
-    ) -> ConfigResult<(Vec<ConfigView>, u64)> {
+    ) -> ConfigResult<(Vec<ConfigRecord>, u64)> {
         let tx = self.0.begin().await.map_err(storage)?;
         let total = owned(user_id).count(&tx).await.map_err(storage)?;
         let items = owned(user_id)
@@ -66,18 +70,17 @@ impl WebhookConfigStore for Store<'_> {
         tx.commit().await.map_err(storage)?;
         Ok((items, total))
     }
-    async fn get_owned(&self, user_id: i64, id: i64) -> ConfigResult<Option<ConfigView>> {
+    async fn get_owned(&self, user_id: i64, id: i64) -> ConfigResult<Option<ConfigRecord>> {
         get(self.0, user_id, id).await
     }
-    async fn insert(&self, c: &NewConfig) -> ConfigResult<ConfigView> {
+    async fn insert(&self, c: &NewConfig) -> ConfigResult<ConfigRecord> {
         response(
             webhook::ActiveModel {
                 user_id: Set(c.user_id),
                 name: Set(c.name.clone()),
                 key: Set(c.key.clone()),
                 provider: Set(c.provider.as_str().into()),
-                source: Set(Some(c.source.clone())),
-                encrypted_secret: Set(Some(c.encrypted_secret.clone())),
+                encrypted_platform: Set(c.encrypted_platform.clone()),
                 enabled: Set(c.enabled),
                 description: Set(Some(c.description.clone())),
                 created_at: Set(c.at),
@@ -96,7 +99,7 @@ impl WebhookConfigStore for Store<'_> {
         id: i64,
         command: &ConfigMutation,
         at: DateTime<Utc>,
-    ) -> ConfigResult<Option<ConfigView>> {
+    ) -> ConfigResult<Option<ConfigRecord>> {
         let tx = db::write_transaction(self.0).await.map_err(storage)?;
         let before = if matches!(command, ConfigMutation::Delete) {
             get(&tx, user_id, id).await?
@@ -116,15 +119,13 @@ impl WebhookConfigStore for Store<'_> {
                 if let Some(v) = &patch.name {
                     update = update.col_expr(webhook::Column::Name, Expr::value(v.clone()));
                 }
-                if let Some(v) = patch.provider {
-                    update = update.col_expr(webhook::Column::Provider, Expr::value(v.as_str()));
-                }
-                if let Some(v) = &patch.source {
-                    update = update.col_expr(webhook::Column::Source, Expr::value(v.clone()));
-                }
-                if let Some(v) = &patch.encrypted_secret {
-                    update =
-                        update.col_expr(webhook::Column::EncryptedSecret, Expr::value(v.clone()));
+                if let Some(v) = &patch.platform {
+                    update = update
+                        .col_expr(webhook::Column::Provider, Expr::value(v.provider.as_str()))
+                        .col_expr(
+                            webhook::Column::EncryptedPlatform,
+                            Expr::value(v.ciphertext.clone()),
+                        );
                 }
                 if let Some(v) = &patch.description {
                     update = update.col_expr(webhook::Column::Description, Expr::value(v.clone()));

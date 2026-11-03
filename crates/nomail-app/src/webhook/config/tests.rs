@@ -36,13 +36,18 @@ struct Store {
     mutation: RefCell<Option<ConfigMutation>>,
     deleted: Cell<bool>,
 }
-fn fixture() -> ConfigView {
-    ConfigView::new(
+fn fixture() -> ConfigRecord {
+    ConfigRecord::new(
         1,
         "Name".into(),
         "key".into(),
         Provider::Generic,
-        "source".into(),
+        crate::security::encrypt(
+            r#"{"provider":"generic","credentials":{"type":"none"}}"#,
+            &[9; 32],
+            &[0; 12],
+        )
+        .unwrap(),
         true,
         "description".into(),
     )
@@ -52,7 +57,7 @@ impl WebhookConfigStore for Store {
         &self,
         user_id: i64,
         page: &ConfigPage,
-    ) -> ConfigResult<(Vec<ConfigView>, u64)> {
+    ) -> ConfigResult<(Vec<ConfigRecord>, u64)> {
         assert_eq!(page.offset(), (page.page() - 1) * page.size());
         Ok(if user_id == 7 && !self.deleted.get() {
             (vec![fixture()], 1)
@@ -60,21 +65,21 @@ impl WebhookConfigStore for Store {
             (vec![], 0)
         })
     }
-    async fn get_owned(&self, user_id: i64, id: i64) -> ConfigResult<Option<ConfigView>> {
+    async fn get_owned(&self, user_id: i64, id: i64) -> ConfigResult<Option<ConfigRecord>> {
         Ok((user_id == 7 && id == 1 && !self.deleted.get()).then(fixture))
     }
-    async fn insert(&self, c: &NewConfig) -> ConfigResult<ConfigView> {
+    async fn insert(&self, c: &NewConfig) -> ConfigResult<ConfigRecord> {
         assert_eq!(c.user_id, 7);
         assert_eq!(c.at, now());
         assert!(c.enabled);
         self.writes.set(self.writes.get() + 1);
-        *self.encrypted.borrow_mut() = c.encrypted_secret.clone();
-        Ok(ConfigView::new(
+        *self.encrypted.borrow_mut() = c.encrypted_platform.clone();
+        Ok(ConfigRecord::new(
             1,
             c.name.clone(),
             c.key.clone(),
             c.provider,
-            c.source.clone(),
+            c.encrypted_platform.clone(),
             c.enabled,
             c.description.clone(),
         ))
@@ -85,7 +90,7 @@ impl WebhookConfigStore for Store {
         id: i64,
         mutation: &ConfigMutation,
         at: DateTime<Utc>,
-    ) -> ConfigResult<Option<ConfigView>> {
+    ) -> ConfigResult<Option<ConfigRecord>> {
         assert_eq!(at, now());
         let Some(row) = self.get_owned(user_id, id).await? else {
             return Ok(None);
@@ -94,9 +99,10 @@ impl WebhookConfigStore for Store {
         *self.mutation.borrow_mut() = Some(match mutation {
             ConfigMutation::Patch(p) => ConfigMutation::Patch(ConfigPatch {
                 name: p.name.clone(),
-                provider: p.provider,
-                source: p.source.clone(),
-                encrypted_secret: p.encrypted_secret.clone(),
+                platform: p.platform.as_ref().map(|p| EncryptedPlatform {
+                    provider: p.provider,
+                    ciphertext: p.ciphertext.clone(),
+                }),
                 description: p.description.clone(),
             }),
             ConfigMutation::Enabled(enabled) => ConfigMutation::Enabled(*enabled),
@@ -118,14 +124,10 @@ fn service() -> WebhookConfigService<Store, Runtime> {
     }
 }
 fn body() -> CreateConfig {
-    CreateConfig::new(
-        "Name".into(),
-        "generic".into(),
-        String::new(),
-        "credential".into(),
-        String::new(),
-    )
-    .unwrap()
+    CreateConfig::new("Name".into(), platform("credential"), String::new()).unwrap()
+}
+fn platform(secret: &str) -> crate::webhook::PlatformConfig {
+    serde_json::from_value(serde_json::json!({"provider":"generic","credentials":{"type":"hmacSha256","secret":secret}})).unwrap()
 }
 #[tokio::test]
 async fn creation_defaults_key_encryption_and_public_projection_are_shared() {
@@ -136,14 +138,18 @@ async fn creation_defaults_key_encryption_and_public_projection_are_shared() {
     let encrypted = s.store.encrypted.borrow().clone();
     assert_ne!(encrypted, "credential");
     assert_eq!(
-        crate::security::decrypt(&encrypted, &[9; 32]).unwrap(),
+        serde_json::from_str::<serde_json::Value>(
+            &crate::security::decrypt(&encrypted, &[9; 32]).unwrap()
+        )
+        .unwrap()["credentials"]["secret"],
         "credential"
     );
     let mut empty = body();
-    empty.secret.clear();
+    empty.platform =
+        crate::webhook::PlatformConfig::Generic(crate::webhook::GenericCredentials::None {});
     s.create(7, empty).await.unwrap();
-    assert!(s.store.encrypted.borrow().is_empty());
-    assert_eq!(s.runtime.random_calls.get(), 3); // key+nonce, then key only
+    assert!(!s.store.encrypted.borrow().is_empty());
+    assert_eq!(s.runtime.random_calls.get(), 4); // key+nonce for each complete configuration
 }
 #[tokio::test]
 async fn patches_are_sparse_empty_is_read_and_secret_never_crosses_store_in_plaintext() {
@@ -153,7 +159,7 @@ async fn patches_are_sparse_empty_is_read_and_secret_never_crosses_store_in_plai
     s.update(
         7,
         id(),
-        UpdateConfig::new(Some("New".into()), None, None, None, None).unwrap(),
+        UpdateConfig::new(Some("New".into()), None, None).unwrap(),
     )
     .await
     .unwrap();
@@ -163,17 +169,12 @@ async fn patches_are_sparse_empty_is_read_and_secret_never_crosses_store_in_plai
             panic!()
         };
         assert_eq!(p.name.as_deref(), Some("New"));
-        assert!(
-            p.provider.is_none()
-                && p.source.is_none()
-                && p.encrypted_secret.is_none()
-                && p.description.is_none()
-        );
+        assert!(p.platform.is_none() && p.description.is_none());
     }
     s.update(
         7,
         id(),
-        UpdateConfig::new(None, None, None, Some("replacement".into()), None).unwrap(),
+        UpdateConfig::new(None, Some(platform("replacement")), None).unwrap(),
     )
     .await
     .unwrap();
@@ -182,7 +183,10 @@ async fn patches_are_sparse_empty_is_read_and_secret_never_crosses_store_in_plai
         panic!()
     };
     assert_eq!(
-        crate::security::decrypt(p.encrypted_secret.as_ref().unwrap(), &[9; 32]).unwrap(),
+        serde_json::from_str::<serde_json::Value>(
+            &crate::security::decrypt(&p.platform.as_ref().unwrap().ciphertext, &[9; 32]).unwrap()
+        )
+        .unwrap()["credentials"]["secret"],
         "replacement"
     );
     assert!(p.name.is_none());
@@ -191,17 +195,11 @@ async fn patches_are_sparse_empty_is_read_and_secret_never_crosses_store_in_plai
 async fn validation_scope_soft_deletion_and_runtime_failure_precede_writes() {
     let s = service();
     assert!(matches!(
-        CreateConfig::new(
-            String::new(),
-            String::new(),
-            String::new(),
-            String::new(),
-            String::new()
-        ),
+        CreateConfig::new(String::new(), platform("secret"), String::new()),
         Err(ConfigError::InvalidInput(_))
     ));
     assert!(matches!(
-        UpdateConfig::new(None, Some("unknown".into()), None, None, None),
+        UpdateConfig::new(None, Some(platform("")), None),
         Err(ConfigError::InvalidInput(_))
     ));
     for value in [0, -1, i64::MIN] {
@@ -217,7 +215,7 @@ async fn validation_scope_soft_deletion_and_runtime_failure_precede_writes() {
             s.update(
                 uid,
                 id(),
-                UpdateConfig::new(Some("Other".into()), None, None, None, None).unwrap()
+                UpdateConfig::new(Some("Other".into()), None, None).unwrap()
             )
             .await,
             Err(ConfigError::NotFound)

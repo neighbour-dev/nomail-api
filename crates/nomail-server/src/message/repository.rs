@@ -286,8 +286,7 @@ impl IngestionStore for Store<'_> {
                         .provider
                         .parse()
                         .map_err(|_| IngestionError::Internal("invalid stored provider".into()))?,
-                    source: row.source,
-                    encrypted_secret: row.encrypted_secret,
+                    encrypted_platform: row.encrypted_platform,
                 })
             })
             .transpose()

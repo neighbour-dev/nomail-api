@@ -116,7 +116,7 @@ async fn all_api_contracts() {
     let (status, created) = api!(
         post,
         "/api/webhook/configs/",
-        json!({"name":"Monitor","provider":" Generic ","description":"test"}),
+        json!({"name":"Monitor","platform":{"provider":"generic","credentials":{"type":"none"}},"description":"test"}),
         Some(&token)
     );
     assert_eq!(status, StatusCode::OK, "{created}");
@@ -230,6 +230,12 @@ async fn all_api_contracts() {
         name: Set("private".into()),
         key: Set("private-key".into()),
         provider: Set("generic".into()),
+        encrypted_platform: Set(nomail_app::security::encrypt(
+            r#"{"provider":"generic","credentials":{"type":"none"}}"#,
+            &[7; 32],
+            &[0; 12],
+        )
+        .unwrap()),
         enabled: Set(true),
         created_at: Set(now),
         updated_at: Set(now),

@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS webhook_configs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     created_at TEXT NOT NULL, updated_at TEXT NOT NULL, deleted_at TEXT,
     user_id BIGINT NOT NULL, name VARCHAR(100) NOT NULL, key VARCHAR(64) NOT NULL,
-    provider VARCHAR(32) NOT NULL, source VARCHAR(255), encrypted_secret TEXT,
+    provider VARCHAR(32) NOT NULL, encrypted_platform TEXT NOT NULL,
     enabled BOOLEAN NOT NULL DEFAULT TRUE, description VARCHAR(500)
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_webhook_configs_key ON webhook_configs(key);
@@ -63,7 +63,6 @@ CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
 CREATE INDEX IF NOT EXISTS idx_sessions_logged_in_at ON sessions(logged_in_at);
 CREATE INDEX IF NOT EXISTS idx_webhook_configs_deleted_at ON webhook_configs(deleted_at);
 CREATE INDEX IF NOT EXISTS idx_webhook_configs_provider ON webhook_configs(provider);
-CREATE INDEX IF NOT EXISTS idx_webhook_configs_source ON webhook_configs(source);
 CREATE INDEX IF NOT EXISTS idx_notify_messages_deleted_at ON notify_messages(deleted_at);
 CREATE INDEX IF NOT EXISTS idx_notify_messages_level ON notify_messages(level);
 CREATE INDEX IF NOT EXISTS idx_notify_messages_pinned ON notify_messages(pinned);

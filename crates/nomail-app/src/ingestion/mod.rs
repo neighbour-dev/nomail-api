@@ -4,9 +4,7 @@ pub use error::{IngestionError, IngestionResult};
 
 use crate::{
     message::{Acceptance, InsertOutcome, Message, MessageAccepted, MessageError, MessageResult},
-    webhook::{
-        self, ProtocolResponse, Provider, ReceiveOutcome, WebhookConfig, WebhookRequest, service,
-    },
+    webhook::{self, ProtocolResponse, Provider, ReceiveOutcome, WebhookRequest},
 };
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
@@ -16,8 +14,7 @@ pub struct ReceivingConfig {
     pub id: i64,
     pub user_id: i64,
     pub provider: Provider,
-    pub source: Option<String>,
-    pub encrypted_secret: Option<String>,
+    pub encrypted_platform: String,
 }
 
 #[allow(async_fn_in_trait)]
@@ -59,25 +56,14 @@ impl<S: IngestionStore, R: IngestionRuntime> IngestionService<S, R> {
             .receiving_config(key)
             .await?
             .ok_or(IngestionError::ConfigNotFound)?;
-        let provider = service::configured_provider(config.provider.as_str())
-            .map_err(|_| IngestionError::Internal("webhook provider is not configured".into()))?;
-        let secret = match config.encrypted_secret.as_deref().filter(|s| !s.is_empty()) {
-            Some(value) => {
-                crate::security::decrypt(value, self.runtime.encryption_key()).map_err(|_| {
-                    IngestionError::Internal("webhook credential decryption failed".into())
-                })?
-            }
-            None => String::new(),
-        };
+        let platform = webhook::config::decode_platform(
+            &config.encrypted_platform,
+            config.provider,
+            self.runtime.encryption_key(),
+        )
+        .map_err(|_| IngestionError::Internal("invalid stored platform configuration".into()))?;
         let now = self.runtime.now();
-        let outcome = webhook::receive(
-            &WebhookConfig::new(
-                provider,
-                service::authentication(provider, &secret),
-                now.timestamp(),
-            ),
-            request,
-        )?;
+        let outcome = webhook::receive(&platform.receiving_config(now.timestamp())?, request)?;
         match outcome {
             ReceiveOutcome::Respond(response) => Ok(IngestionOutcome::Control(response)),
             ReceiveOutcome::Ignored { .. } => Ok(IngestionOutcome::Ignored),
@@ -85,7 +71,6 @@ impl<S: IngestionStore, R: IngestionRuntime> IngestionService<S, R> {
                 let message = Message::from_received_event(
                     config.id,
                     *event,
-                    config.source.as_deref(),
                     self.runtime.message_id(now)?,
                     now,
                 )?;

@@ -34,6 +34,21 @@
         ],
         "type": "object"
       },
+      "AuthenticationMode": {
+        "enum": [
+          "none",
+          "hmacSha256",
+          "gitlabSigningToken",
+          "gitlabSecretToken",
+          "stripeSigningSecrets",
+          "slackSigningSecret",
+          "feishuToken",
+          "feishuEncrypted",
+          "telegramSecretToken",
+          "shopifyClientSecret"
+        ],
+        "type": "string"
+      },
       "ConfigResponse": {
         "properties": {
           "description": {
@@ -52,11 +67,8 @@
           "name": {
             "type": "string"
           },
-          "provider": {
-            "$ref": "#/components/schemas/Provider"
-          },
-          "source": {
-            "type": "string"
+          "platform": {
+            "$ref": "#/components/schemas/PlatformSummary"
           },
           "url": {
             "type": "string"
@@ -66,8 +78,7 @@
           "id",
           "name",
           "key",
-          "provider",
-          "source",
+          "platform",
           "enabled",
           "description",
           "url"
@@ -201,6 +212,24 @@
         "type": "object"
       },
       "EmptyEvent": {
+        "type": "object"
+      },
+      "FeishuCredentials": {
+        "additionalProperties": false,
+        "properties": {
+          "encryptKey": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "verificationToken": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "verificationToken"
+        ],
         "type": "object"
       },
       "FeishuEvent": {
@@ -391,6 +420,40 @@
         ],
         "type": "object"
       },
+      "GenericCredentials": {
+        "oneOf": [
+          {
+            "additionalProperties": false,
+            "properties": {
+              "type": {
+                "const": "none",
+                "type": "string"
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "secret": {
+                "type": "string"
+              },
+              "type": {
+                "const": "hmacSha256",
+                "type": "string"
+              }
+            },
+            "required": [
+              "type",
+              "secret"
+            ],
+            "type": "object"
+          }
+        ]
+      },
       "GenericEvent": {
         "oneOf": [
           {
@@ -557,6 +620,18 @@
           "html_url",
           "user",
           "created_at"
+        ],
+        "type": "object"
+      },
+      "GithubCredentials": {
+        "additionalProperties": false,
+        "properties": {
+          "secret": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "secret"
         ],
         "type": "object"
       },
@@ -928,6 +1003,44 @@
           "run_number"
         ],
         "type": "object"
+      },
+      "GitlabCredentials": {
+        "oneOf": [
+          {
+            "additionalProperties": false,
+            "properties": {
+              "signingToken": {
+                "type": "string"
+              },
+              "type": {
+                "const": "signingToken",
+                "type": "string"
+              }
+            },
+            "required": [
+              "type",
+              "signingToken"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "secretToken": {
+                "type": "string"
+              },
+              "type": {
+                "const": "secretToken",
+                "type": "string"
+              }
+            },
+            "required": [
+              "type",
+              "secretToken"
+            ],
+            "type": "object"
+          }
+        ]
       },
       "GitlabEvent": {
         "properties": {
@@ -1305,6 +1418,147 @@
         ],
         "type": "object"
       },
+      "PlatformConfig": {
+        "description": "Contains secrets: never implement Debug or use directly as an API response.\nSerialize is for the caller's encrypted persistence, not public presentation.",
+        "oneOf": [
+          {
+            "additionalProperties": false,
+            "properties": {
+              "credentials": {
+                "$ref": "#/components/schemas/GenericCredentials"
+              },
+              "provider": {
+                "const": "generic",
+                "type": "string"
+              }
+            },
+            "required": [
+              "provider",
+              "credentials"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "credentials": {
+                "$ref": "#/components/schemas/GithubCredentials"
+              },
+              "provider": {
+                "const": "github",
+                "type": "string"
+              }
+            },
+            "required": [
+              "provider",
+              "credentials"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "credentials": {
+                "$ref": "#/components/schemas/GitlabCredentials"
+              },
+              "provider": {
+                "const": "gitlab",
+                "type": "string"
+              }
+            },
+            "required": [
+              "provider",
+              "credentials"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "credentials": {
+                "$ref": "#/components/schemas/StripeCredentials"
+              },
+              "provider": {
+                "const": "stripe",
+                "type": "string"
+              }
+            },
+            "required": [
+              "provider",
+              "credentials"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "credentials": {
+                "$ref": "#/components/schemas/SlackCredentials"
+              },
+              "provider": {
+                "const": "slack",
+                "type": "string"
+              }
+            },
+            "required": [
+              "provider",
+              "credentials"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "credentials": {
+                "$ref": "#/components/schemas/FeishuCredentials"
+              },
+              "provider": {
+                "const": "feishu",
+                "type": "string"
+              }
+            },
+            "required": [
+              "provider",
+              "credentials"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "credentials": {
+                "$ref": "#/components/schemas/TelegramCredentials"
+              },
+              "provider": {
+                "const": "telegram",
+                "type": "string"
+              }
+            },
+            "required": [
+              "provider",
+              "credentials"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "credentials": {
+                "$ref": "#/components/schemas/ShopifyCredentials"
+              },
+              "provider": {
+                "const": "shopify",
+                "type": "string"
+              }
+            },
+            "required": [
+              "provider",
+              "credentials"
+            ],
+            "type": "object"
+          }
+        ]
+      },
       "PlatformData": {
         "oneOf": [
           {
@@ -1437,6 +1691,23 @@
           }
         ]
       },
+      "PlatformSummary": {
+        "additionalProperties": false,
+        "description": "Safe public projection. The mode also indicates which credentials are configured.",
+        "properties": {
+          "authentication": {
+            "$ref": "#/components/schemas/AuthenticationMode"
+          },
+          "provider": {
+            "$ref": "#/components/schemas/Provider"
+          }
+        },
+        "required": [
+          "provider",
+          "authentication"
+        ],
+        "type": "object"
+      },
       "Provider": {
         "enum": [
           "generic",
@@ -1493,6 +1764,18 @@
           }
         ],
         "description": "NoMail HTTP acknowledgement. Platform controls keep their protocol response."
+      },
+      "ShopifyCredentials": {
+        "additionalProperties": false,
+        "properties": {
+          "clientSecret": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "clientSecret"
+        ],
+        "type": "object"
       },
       "ShopifyEvent": {
         "properties": {
@@ -1601,6 +1884,18 @@
         ],
         "type": "object"
       },
+      "SlackCredentials": {
+        "additionalProperties": false,
+        "properties": {
+          "signingSecret": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "signingSecret"
+        ],
+        "type": "object"
+      },
       "SlackEvent": {
         "oneOf": [
           {
@@ -1673,6 +1968,21 @@
           "user_id",
           "actions",
           "text"
+        ],
+        "type": "object"
+      },
+      "StripeCredentials": {
+        "additionalProperties": false,
+        "properties": {
+          "signingSecrets": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "signingSecrets"
         ],
         "type": "object"
       },
@@ -1792,6 +2102,18 @@
         "required": [
           "created",
           "related_object"
+        ],
+        "type": "object"
+      },
+      "TelegramCredentials": {
+        "additionalProperties": false,
+        "properties": {
+          "secretToken": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "secretToken"
         ],
         "type": "object"
       },
@@ -6397,6 +6719,7 @@
           "content": {
             "application/json": {
               "schema": {
+                "additionalProperties": false,
                 "properties": {
                   "description": {
                     "default": "",
@@ -6405,21 +6728,13 @@
                   "name": {
                     "type": "string"
                   },
-                  "provider": {
-                    "type": "string"
-                  },
-                  "secret": {
-                    "default": "",
-                    "type": "string"
-                  },
-                  "source": {
-                    "default": "",
-                    "type": "string"
+                  "platform": {
+                    "$ref": "#/components/schemas/PlatformConfig"
                   }
                 },
                 "required": [
                   "name",
-                  "provider"
+                  "platform"
                 ],
                 "title": "CreateConfigRequest",
                 "type": "object"
@@ -7145,26 +7460,16 @@
           "content": {
             "application/json": {
               "schema": {
+                "additionalProperties": false,
                 "properties": {
                   "description": {
-                    "default": "",
                     "type": "string"
                   },
                   "name": {
-                    "default": "",
                     "type": "string"
                   },
-                  "provider": {
-                    "default": "",
-                    "type": "string"
-                  },
-                  "secret": {
-                    "default": "",
-                    "type": "string"
-                  },
-                  "source": {
-                    "default": "",
-                    "type": "string"
+                  "platform": {
+                    "$ref": "#/components/schemas/PlatformConfig"
                   }
                 },
                 "title": "UpdateConfigRequest",
@@ -7417,6 +7722,7 @@
           "content": {
             "application/json": {
               "schema": {
+                "additionalProperties": false,
                 "properties": {
                   "enabled": {
                     "type": "boolean"

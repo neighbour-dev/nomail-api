@@ -28,7 +28,7 @@ npm test
 - `src/webhook/configs/repository.rs` 原子更新配置并返回不含 URL/凭据的 ConfigView，App HTTP 层构造公开响应；空 PATCH 不写入。
 - 查配置、解密、验签及入箱由 App IngestionService 完成，App HTTP 执行器转换 ACK 和 SSE 效果，Workers 只写响应和尽力而为地广播。D1 错误先转为存储/业务错误，不依赖 HTTP 状态码。
 - SSE 为每用户一个 DO，单实例最多 32 个订阅、每订阅 32 条缓冲，20 秒心跳，到访问令牌过期时关闭。无重放、无离线投递，慢客户端可能丢事件；重新连接后应刷新列表。
-- Core 支持的平台多于 HTTP 配置，目前只开放 Generic/GitHub/飞书。飞书仍使用一个 secret 同时作为 Token/Encrypt Key，不能自动降级认证。
+- HTTP 配置开放 Generic 及 GitHub/GitLab/Stripe/Slack/飞书/Telegram/Shopify，使用 Core 按平台目录定义的严格 platform 配置；飞书的 Token/Encrypt Key 独立，Generic 匿名需显式选择。App 整体加密配置并返回无秘密的平台摘要，D1 原子更新 provider 与 encrypted_platform；配置不再有 source。旧数据库不迁移，需备份后使用新数据库基线。
 - 本地测试不代表免费套餐 CPU 可满足 bcrypt cost=10。发布前用实际套餐测试登录开销；SSE 会产生 DO 使用费用。没有请求级应用限流，生产需要在 Cloudflare 配置入口限流与防滥用措施。
 - 不包含通知推送或通知中转功能，没有推送接口、状态字段或 Token 存储；SSE 只负责在线收件箱更新，不接入 APNs/FCM/厂商通知。
 - 没有持久化推送任务、队列、自动过期清理，也没有旧 PostgreSQL 数据迁移。

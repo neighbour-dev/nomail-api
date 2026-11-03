@@ -224,11 +224,54 @@ npm run dev
 ## 5. 部署后的配置
 
 - 通过 `PATCH /api/auth/account` 修改账号；请求需要 Bearer Token，并提供 `currentPassword` 及 `username`、`newPassword` 中至少一项。改密会撤销全部登录会话。
-- 通过 `/api/webhook/configs` 创建接收配置，将响应中的相对 `url` 拼接到服务公开地址后，配置到上游平台。当前产品只开放 Generic、GitHub、飞书；协议库支持的其他平台不等于已开放接入。
-- **飞书限制：**当前产品只有一个 `secret`，同时用作 Verification Token 和 Encrypt Key。两者不同的配置无法完整接入；普通事件不因签名缺失而回退为 Token 认证。
+- 通过 `/api/webhook/configs` 创建接收配置，将响应中的相对 `url` 拼接到服务公开地址后，配置到上游平台。支持 Generic、GitHub、GitLab、Stripe、Slack、飞书、Telegram 和 Shopify；创建 NoMail 配置不会自动创建平台侧订阅。
+- 平台配置使用严格的 `platform.provider` + `platform.credentials`，不再接受旧顶层 `provider`、`secret` 或配置 `source`。平台详细设置见 [接收协议与配置协议参考](webhook-platform-reference-2026-10-30.md)。
 - 公网部署应使用 HTTPS，并在反向代理或 Cloudflare 设置请求限流与防滥用措施。
 - 通过反向代理部署时，应正确设置并清洗客户端 IP 转发头；设备 IP 仅用于展示，不应作为访问控制依据。
 - 代理 SSE 时关闭响应缓冲，并设置大于 20 秒心跳间隔的读取超时。SSE 仅用于在线更新，无离线投递或重放，重连后应重新查询收件箱。
+
+### 创建和修改 Webhook 配置
+
+配置管理接口要求 `Authorization: Bearer <accessToken>`。例如创建飞书加密接收配置：
+
+```http
+POST /api/webhook/configs
+Content-Type: application/json
+Authorization: Bearer <accessToken>
+```
+
+```json
+{
+  "name": "Feishu events",
+  "description": "Work notifications",
+  "platform": {
+    "provider": "feishu",
+    "credentials": {
+      "verificationToken": "example-verification-token",
+      "encryptKey": "example-encryption-key"
+    }
+  }
+}
+```
+
+`name` 必填，1–100 字符；`description` 可省略，最多 500 字符；创建时默认启用。平台及认证模式使用下表的精确大小写，不接受未知字段或位置数组。通用秘密字段要求非空白且最多 500 字符，这是接收端的限制，不是上游平台统一规定。
+
+| provider | credentials 示例 | 约束 |
+|---|---|---|
+| `generic` | `{"type":"none"}` 或 `{"type":"hmacSha256","secret":"example-secret"}` | 仅 Generic 允许显式无认证；none 不接受 secret |
+| `github` | `{"secret":"example-secret"}` | 必须配置与 GitHub Webhook 一致的 Secret |
+| `gitlab` | `{"type":"signingToken","signingToken":"whsec_ZXhhbXBsZS1rZXk="}` 或 `{"type":"secretToken","secretToken":"example-token"}` | 两种模式互斥；Signing Token 去前缀后须为非空 Base64 密钥，不能因签名缺失回退旧 Token |
+| `stripe` | `{"signingSecrets":["whsec_example"]}` | 接收端允许 1–5 个密钥用于轮换；使用端点/环境对应的密钥原文，不采用 GitLab 的解码方式；轮换完成后主动移除旧密钥 |
+| `slack` | `{"signingSecret":"example-secret"}` | 不是 Bot Token、Client Secret 或旧 Verification Token |
+| `feishu` | `{"verificationToken":"example-token","encryptKey":"example-key"}` | 两个独立值；省略 encryptKey 或设为 null 表示仅 Token 模式，非空 Encrypt Key 启用加密事件模式 |
+| `telegram` | `{"secretToken":"example_token"}` | 1–256 字符，只允许英文字母、数字、下划线和短横线；不是 Bot Token |
+| `shopify` | `{"clientSecret":"example-secret"}` | 应用 Client Secret，不是店铺 Admin API Access Token |
+
+平台配置整体加密存储，响应只返回安全摘要，例如 `platform: {"provider":"feishu","authentication":"feishuEncrypted"}`，不会回显 credentials 或秘密值。响应还包含 id、name、key、enabled、description 和相对 url。请在安全的外部凭据管理中保存原值，不要依赖查询接口找回。
+
+`PATCH /api/webhook/configs/{id}` 中省略字段表示保留；`{}` 不写库、不改变更新时间。传入 `platform` 时必须提供完整的新平台配置并整体替换，不能只传 provider 或单个秘密字段。顶层字段不接受 null；description 可以用 `""` 清除，name 不允许空字符串。切换平台会影响后续接收，不会重写已有消息的平台快照，接收 key 保持不变；切换 Telegram Bot 应创建新配置以隔离去重作用域。
+
+启停仍用 `PATCH /api/webhook/configs/{id}/enabled` 和 `{"enabled":false}`；删除仍为软删除。平台事件自带的消息 source 保留，缺少时用平台名兜底，不再从接收配置取默认来源。
 
 ## 6. 备份、升级与账号恢复
 
@@ -238,6 +281,7 @@ npm run dev
 - D1：在更新前使用 Cloudflare 提供的导出或恢复能力保存备份，并确认恢复流程。
 - 同时安全保存 `JWT_SECRET`、`JWT_ISSUER` 和 `SECRET_ENCRYPTION_KEY`。升级时保持它们稳定；更换加密密钥会导致旧配置无法解密。
 - 当前建表脚本是新安装基线，不负责转换历史版本数据库。升级前核对目标版本说明并备份；程序不会自动清空已有开发数据。
+- **强类型 Webhook 配置是不兼容更新：**新基线移除了 webhook_configs.source/encrypted_secret，改为 encrypted_platform，不提供旧数据库或旧配置迁移。仅重新提交旧请求不能修复旧 Schema。应在备份后使用新的 SQLite 路径/数据卷或新的 D1 数据库，按对应部署步骤初始化并重新创建接收配置；旧账号、消息等不会自动导入。Server 会拒绝缺少新配置列的旧 Schema，Workers 同样不能复用旧 D1 基线。不要为升级直接删除原数据库或生产卷。
 - Server 与 Workers 的数据库编码不同，不支持直接交换 SQLite/D1 数据库文件。
 - Docker 升级时构建/拉取目标版本，再重新执行 `docker compose up -d`；源码部署则重新构建并重启服务。不要为升级删除数据卷。
 

@@ -47,7 +47,7 @@ impl Store {
         }
     }
     fn seed(&self, config_id: i64, event: PlatformEvent, id: Uuid) {
-        let message = Message::from_received_event(config_id, event, None, id, now()).unwrap();
+        let message = Message::from_received_event(config_id, event, id, now()).unwrap();
         self.rows.borrow_mut().insert(id, message);
     }
 }
@@ -188,14 +188,14 @@ fn received_message_factory_preserves_platform_content_and_sets_inbox_defaults()
     let raw = event(Some("key"), "high");
     let original = raw.clone();
     let id = Uuid::from_u128(1);
-    let record = Message::from_received_event(1, raw, Some("source"), id, now()).unwrap();
+    let record = Message::from_received_event(1, raw, id, now()).unwrap();
     let created = MessageAccepted::from(&record);
     assert_eq!(created.id, id);
     assert_eq!(created.level, MessageLevel::High);
     assert!(!created.pinned);
     assert_eq!(created.status, "unread");
     assert_eq!(record.common.title, "Title");
-    assert_eq!(record.common.source.as_deref(), Some("source"));
+    assert_eq!(record.common.source.as_deref(), Some("generic"));
     assert_eq!(record.webhook_config_id, 1);
     assert_eq!(record.provider, original.provider());
     assert_eq!(record.metadata, original.metadata);
@@ -216,7 +216,7 @@ fn received_message_factory_preserves_platform_content_and_sets_inbox_defaults()
 #[test]
 fn received_message_factory_rejects_an_unrepresentable_expiry() {
     assert!(matches!(
-        Message::from_received_event(1, event(None, "normal"), None, Uuid::from_u128(1), DateTime::<Utc>::MAX_UTC),
+        Message::from_received_event(1, event(None, "normal"), Uuid::from_u128(1), DateTime::<Utc>::MAX_UTC),
         Err(MessageError::Internal(message)) if message == "invalid message expiry"
     ));
 }
@@ -442,21 +442,16 @@ fn received_message_factory_preserves_full_deduplication_metadata() {
             value: key.clone(),
         });
         let message =
-            Message::from_received_event(1, value, None, Uuid::from_u128(index as u128 + 1), now())
+            Message::from_received_event(1, value, Uuid::from_u128(index as u128 + 1), now())
                 .unwrap();
         let stored_key = message.metadata.deduplication_key.unwrap();
         assert_eq!(stored_key.scope, scope);
         assert_eq!(stored_key.value, key);
     }
     for id in [3, 4] {
-        let message = Message::from_received_event(
-            1,
-            event(None, "normal"),
-            None,
-            Uuid::from_u128(id),
-            now(),
-        )
-        .unwrap();
+        let message =
+            Message::from_received_event(1, event(None, "normal"), Uuid::from_u128(id), now())
+                .unwrap();
         assert!(message.metadata.deduplication_key.is_none());
         assert_eq!(message.id, Uuid::from_u128(id));
     }

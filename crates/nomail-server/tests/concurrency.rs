@@ -56,7 +56,7 @@ async fn concurrent_logins_and_webhook_deliveries_preserve_limits_and_uniqueness
         test::TestRequest::post()
             .uri("/api/webhook/configs")
             .insert_header(authorization.clone())
-            .set_json(json!({"name":"Test","provider":"generic"}))
+            .set_json(json!({"name":"Test","platform":{"provider":"generic","credentials":{"type":"none"}}}))
             .to_request(),
     )
     .await;

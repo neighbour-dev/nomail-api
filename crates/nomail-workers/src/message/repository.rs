@@ -277,7 +277,7 @@ impl MessageStore for Store<'_> {
 impl IngestionStore for Store<'_> {
     async fn receiving_config(&self, key: &str) -> IngestionResult<Option<ReceivingConfig>> {
         self.0.rows(
-            "SELECT id,user_id,provider,source,encrypted_secret FROM webhook_configs WHERE key=? AND enabled=1 AND deleted_at IS NULL",
+            "SELECT id,user_id,provider,encrypted_platform FROM webhook_configs WHERE key=? AND enabled=1 AND deleted_at IS NULL",
             vec![json!(key)],
         ).await.map_err(|e| IngestionError::Internal(e.to_string()))?
             .into_iter().next().map(|row| {
@@ -286,8 +286,7 @@ impl IngestionStore for Store<'_> {
                     id: row["id"].as_i64().ok_or_else(invalid)?,
                     user_id: row["user_id"].as_i64().ok_or_else(invalid)?,
                     provider: row["provider"].as_str().ok_or_else(invalid)?.parse().map_err(|_| invalid())?,
-                    source: row["source"].as_str().map(str::to_owned),
-                    encrypted_secret: row["encrypted_secret"].as_str().map(str::to_owned),
+                    encrypted_platform: row["encrypted_platform"].as_str().ok_or_else(|| IngestionError::Internal("missing platform configuration".into()))?.to_owned(),
                 })
             }).transpose()
     }

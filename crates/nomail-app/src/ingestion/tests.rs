@@ -40,8 +40,7 @@ impl IngestionStore for Store {
             id,
             user_id: 7,
             provider: self.provider,
-            source: Some("Configured source".into()),
-            encrypted_secret: self.secret.clone(),
+            encrypted_platform: self.secret.clone().unwrap(),
         }))
     }
     async fn insert_once(&self, message: &Message) -> MessageResult<InsertOutcome> {
@@ -71,14 +70,29 @@ fn service(provider: Provider, secret: Option<&str>) -> IngestionService<Store, 
     IngestionService {
         store: Store {
             provider,
-            secret: secret
-                .map(|value| crate::security::encrypt(value, &[7; 32], &[3; 12]).unwrap()),
+            secret: Some(encrypted(provider, secret)),
             rows: RefCell::new(HashMap::new()),
             fail_write: false,
             forced_outcome: None,
         },
         runtime: Runtime(Cell::new(0)),
     }
+}
+fn encrypted(provider: Provider, secret: Option<&str>) -> String {
+    let platform = match provider {
+        Provider::Generic => json!({"provider":"generic","credentials":match secret {
+            Some(s) => json!({"type":"hmacSha256","secret":s}),
+            None => json!({"type":"none"}),
+        }}),
+        Provider::Github => {
+            json!({"provider":"github","credentials":{"secret":secret.unwrap_or("secret")}})
+        }
+        Provider::Feishu => {
+            json!({"provider":"feishu","credentials":{"verificationToken":secret.unwrap(),"encryptKey":"separate-encryption-key"}})
+        }
+        _ => panic!("unexpected fixture provider"),
+    };
+    crate::security::encrypt(&platform.to_string(), &[7; 32], &[3; 12]).unwrap()
 }
 fn accepted(outcome: IngestionOutcome) -> Acceptance {
     let IngestionOutcome::Accepted {
@@ -123,7 +137,7 @@ async fn application_owns_acceptance_defaults_and_duplicate_effects() {
     );
     let event = acceptance.created_event.unwrap();
     assert_eq!(event.title, "Alert");
-    assert_eq!(event.source, "Configured source");
+    assert_eq!(event.source, "generic");
     assert_eq!(event.level, MessageLevel::High);
     assert_eq!(event.status, "unread");
     assert!(!event.pinned);
@@ -190,9 +204,14 @@ async fn deduplication_keeps_configuration_scopes_full_keys_and_null_key_indepen
     // Reconfiguring a source must not collapse equal identifiers from different
     // protocol scopes into the same delivery.
     service.store.provider = Provider::Github;
+    service.store.secret = Some(encrypted(Provider::Github, Some("secret")));
     let headers = vec![
         ("X-GitHub-Event".into(), "issues".into()),
         ("X-GitHub-Delivery".into(), key.clone()),
+        (
+            "X-Hub-Signature-256".into(),
+            "sha256=02849cb8a3f27f99a4aa460476e3715fa5104b10acfbf6c2d80e3e3a9bfa8c7f".into(),
+        ),
     ];
     let github = accepted(
         service
@@ -225,6 +244,7 @@ async fn deduplication_keeps_configuration_scopes_full_keys_and_null_key_indepen
     }
 
     service.store.provider = Provider::Generic;
+    service.store.secret = Some(encrypted(Provider::Generic, None));
     for _ in 0..2 {
         let acceptance = receive_json(&service, "enabled", json!({"title":"No delivery id"})).await;
         assert!(!acceptance.outcome.duplicate());
@@ -293,7 +313,7 @@ async fn missing_invalid_credentials_and_failed_writes_never_acknowledge() {
         service.receive("enabled", &request).await,
         Err(IngestionError::Internal(_))
     ));
-    service.store.secret = None;
+    service.store.secret = Some(encrypted(Provider::Generic, None));
     service.store.fail_write = true;
     assert!(matches!(
         service.receive("enabled", &request).await,

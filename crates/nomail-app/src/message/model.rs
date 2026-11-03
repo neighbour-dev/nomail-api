@@ -54,13 +54,12 @@ impl Message {
     pub fn from_received_event(
         config_id: i64,
         event: PlatformEvent,
-        configured_source: Option<&str>,
         id: Uuid,
         received_at: DateTime<Utc>,
     ) -> MessageResult<Self> {
         let provider = event.provider();
         let mut common = event.to_message_content();
-        apply_inbox_rules(&mut common, configured_source, provider);
+        apply_inbox_rules(&mut common, provider);
         let expires_at = received_at
             .checked_add_signed(Duration::days(DEFAULT_RETENTION_DAYS))
             .ok_or_else(|| MessageError::Internal("invalid message expiry".into()))?;

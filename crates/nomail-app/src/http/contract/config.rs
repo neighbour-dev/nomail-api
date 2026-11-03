@@ -1,72 +1,55 @@
-//! Configuration wire inputs and presentation. Use cases receive validated commands.
+//! Product wire envelope around Core's strictly typed platform protocol configuration.
 use crate::webhook::{
-    Provider,
+    PlatformConfig, PlatformSummary,
     config::{ConfigError, ConfigResult, ConfigView, CreateConfig, UpdateConfig},
 };
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 
-// Required fields plus flattened options retain the object-only creation body
-// without a second JSON parse. All string fields remain strict about null/types.
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize)]
 #[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct CreateConfigRequest {
     pub name: String,
-    pub provider: String,
-    #[serde(flatten)]
-    options: CreateConfigOptions,
-}
-#[derive(Deserialize, Serialize)]
-#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
-struct CreateConfigOptions {
-    #[serde(default)]
-    pub source: String,
-    #[serde(default)]
-    pub secret: String,
+    pub platform: PlatformConfig,
     #[serde(default)]
     pub description: String,
 }
 impl TryFrom<CreateConfigRequest> for CreateConfig {
     type Error = ConfigError;
     fn try_from(request: CreateConfigRequest) -> ConfigResult<Self> {
-        Self::new(
-            request.name,
-            request.provider,
-            request.options.source,
-            request.options.secret,
-            request.options.description,
-        )
+        Self::new(request.name, request.platform, request.description)
     }
 }
 
-#[derive(Default, Deserialize, Serialize)]
-#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
-#[serde(rename_all = "camelCase")]
-pub struct UpdateConfigRequest {
-    #[serde(default)]
-    pub name: String,
-    #[serde(default)]
-    pub provider: String,
-    #[serde(default)]
-    pub source: String,
-    #[serde(default)]
-    pub secret: String,
-    #[serde(default)]
-    pub description: String,
+// Missing means keep; explicit null is not a valid replacement.
+fn present<'de, D: Deserializer<'de>, T: Deserialize<'de>>(d: D) -> Result<Option<T>, D::Error> {
+    T::deserialize(d).map(Some)
 }
-fn supplied(value: String) -> Option<String> {
-    (!value.is_empty()).then_some(value)
+
+#[cfg(feature = "openapi")]
+fn omit_missing_default(schema: &mut schemars::Schema) {
+    // Rust's Option::None means an omitted PATCH field, not a JSON null default.
+    schema.remove("default");
+}
+
+#[derive(Default, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct UpdateConfigRequest {
+    #[serde(default, deserialize_with = "present")]
+    #[cfg_attr(feature = "openapi", schemars(with = "String", transform = omit_missing_default))]
+    pub name: Option<String>,
+    #[serde(default, deserialize_with = "present")]
+    #[cfg_attr(feature = "openapi", schemars(with = "PlatformConfig", transform = omit_missing_default))]
+    pub platform: Option<PlatformConfig>,
+    #[serde(default, deserialize_with = "present")]
+    #[cfg_attr(feature = "openapi", schemars(with = "String", transform = omit_missing_default))]
+    pub description: Option<String>,
 }
 impl TryFrom<UpdateConfigRequest> for UpdateConfig {
     type Error = ConfigError;
     fn try_from(request: UpdateConfigRequest) -> ConfigResult<Self> {
-        Self::new(
-            supplied(request.name),
-            supplied(request.provider),
-            supplied(request.source),
-            supplied(request.secret),
-            supplied(request.description),
-        )
+        Self::new(request.name, request.platform, request.description)
     }
 }
 
@@ -77,8 +60,7 @@ pub struct ConfigResponse {
     pub id: i64,
     pub name: String,
     pub key: String,
-    pub provider: Provider,
-    pub source: String,
+    pub platform: PlatformSummary,
     pub enabled: bool,
     pub description: String,
     pub url: String,
@@ -90,8 +72,7 @@ impl From<ConfigView> for ConfigResponse {
             id: config.id,
             name: config.name,
             key: config.key,
-            provider: config.provider,
-            source: config.source,
+            platform: config.platform,
             enabled: config.enabled,
             description: config.description,
         }
@@ -100,6 +81,7 @@ impl From<ConfigView> for ConfigResponse {
 
 #[derive(Deserialize, Serialize)]
 #[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
 pub struct EnabledRequest {
     pub enabled: bool,
 }

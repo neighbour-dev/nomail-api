@@ -12,8 +12,7 @@ pub struct Model {
     pub name: String,
     pub key: String,
     pub provider: String,
-    pub source: Option<String>,
-    pub encrypted_secret: Option<String>,
+    pub encrypted_platform: String,
     pub enabled: bool,
     pub description: Option<String>,
 }

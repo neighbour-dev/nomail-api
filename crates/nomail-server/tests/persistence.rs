@@ -70,6 +70,35 @@ async fn database_startup_failures_preserve_the_stage_and_source_not_http_status
 }
 
 #[tokio::test]
+async fn old_single_secret_schema_is_rejected_without_clearing_existing_data() {
+    let directory = tempfile::tempdir().unwrap();
+    let config = config(&directory);
+    let database = db::connect(&config).await.unwrap();
+    database.execute_unprepared("INSERT INTO webhook_configs (user_id,name,key,provider,encrypted_platform,created_at,updated_at) VALUES (1,'Existing','old-key','generic','test-ciphertext','2026-01-01','2026-01-01')").await.unwrap();
+    database
+        .execute_unprepared(
+            "ALTER TABLE webhook_configs RENAME COLUMN encrypted_platform TO encrypted_secret",
+        )
+        .await
+        .unwrap();
+    database.close().await.unwrap();
+    let error = db::connect(&config).await.err().unwrap();
+    assert!(matches!(error, db::ConnectError::Migration(_)));
+    let options = sqlx::sqlite::SqliteConnectOptions::new().filename(&config.database_path);
+    let pool = sqlx::sqlite::SqlitePoolOptions::new()
+        .connect_with(options)
+        .await
+        .unwrap();
+    let row: (String, String) =
+        sqlx::query_as("SELECT name,encrypted_secret FROM webhook_configs WHERE key='old-key'")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(row, ("Existing".into(), "test-ciphertext".into()));
+    pool.close().await;
+}
+
+#[tokio::test]
 async fn file_persistence_wal_foreign_keys_and_atomic_initialization() {
     let directory = tempfile::tempdir().unwrap();
     let config = config(&directory);

@@ -171,14 +171,23 @@ mod tests {
             ["application/json"]["schema"];
         let update_schema = &document["paths"]["/api/webhook/configs/{id}"]["patch"]["requestBody"]
             ["content"]["application/json"]["schema"];
-        assert_eq!(create_schema["required"], json!(["name", "provider"]));
+        assert_eq!(create_schema["required"], json!(["name", "platform"]));
         assert!(create_schema["properties"]["name"].get("default").is_none());
         assert!(
-            create_schema["properties"]["provider"]
+            create_schema["properties"]["platform"]
                 .get("default")
                 .is_none()
         );
         assert!(update_schema.get("required").is_none());
+        for field in ["name", "description", "platform"] {
+            assert!(update_schema["properties"][field].get("default").is_none());
+            assert!(update_schema["properties"][field].get("anyOf").is_none());
+        }
+        assert_eq!(create_schema["additionalProperties"], false);
+        assert_eq!(update_schema["additionalProperties"], false);
+        assert!(create_schema["properties"].get("source").is_none());
+        let platform = &document["components"]["schemas"]["PlatformConfig"];
+        assert_eq!(platform["oneOf"].as_array().unwrap().len(), 8);
         fn references(value: &Value, root: &Value) {
             match value {
                 Value::Object(object) => {

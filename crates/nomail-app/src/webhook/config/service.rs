@@ -1,5 +1,10 @@
-use super::{ConfigError, ConfigId, ConfigResult, ConfigView, CreateConfig, UpdateConfig};
-use crate::{pagination::Page, webhook::Provider};
+use super::{
+    ConfigError, ConfigId, ConfigRecord, ConfigResult, ConfigView, CreateConfig, UpdateConfig,
+};
+use crate::{
+    pagination::Page,
+    webhook::{PlatformConfig, Provider},
+};
 use chrono::{DateTime, Utc};
 
 /// No plaintext credentials cross the storage boundary. Deliberately not Debug/Serialize.
@@ -8,8 +13,7 @@ pub struct NewConfig {
     pub name: String,
     pub key: String,
     pub provider: Provider,
-    pub source: String,
-    pub encrypted_secret: String,
+    pub encrypted_platform: String,
     pub description: String,
     pub enabled: bool,
     pub at: DateTime<Utc>,
@@ -17,10 +21,13 @@ pub struct NewConfig {
 #[derive(Default)]
 pub struct ConfigPatch {
     pub name: Option<String>,
-    pub provider: Option<Provider>,
-    pub source: Option<String>,
-    pub encrypted_secret: Option<String>,
+    pub platform: Option<EncryptedPlatform>,
     pub description: Option<String>,
+}
+/// Provider and encrypted configuration must be replaced atomically.
+pub struct EncryptedPlatform {
+    pub provider: Provider,
+    pub ciphertext: String,
 }
 pub enum ConfigMutation {
     Patch(ConfigPatch),
@@ -55,9 +62,9 @@ pub trait WebhookConfigStore {
         &self,
         user_id: i64,
         page: &ConfigPage,
-    ) -> ConfigResult<(Vec<ConfigView>, u64)>;
-    async fn get_owned(&self, user_id: i64, id: i64) -> ConfigResult<Option<ConfigView>>;
-    async fn insert(&self, config: &NewConfig) -> ConfigResult<ConfigView>;
+    ) -> ConfigResult<(Vec<ConfigRecord>, u64)>;
+    async fn get_owned(&self, user_id: i64, id: i64) -> ConfigResult<Option<ConfigRecord>>;
+    async fn insert(&self, config: &NewConfig) -> ConfigResult<ConfigRecord>;
     /// Atomically enforce ownership/visibility, write only selected columns and
     /// read the resulting projection. Delete returns the pre-deletion projection.
     async fn mutate_owned(
@@ -66,7 +73,7 @@ pub trait WebhookConfigStore {
         id: i64,
         mutation: &ConfigMutation,
         at: DateTime<Utc>,
-    ) -> ConfigResult<Option<ConfigView>>;
+    ) -> ConfigResult<Option<ConfigRecord>>;
 }
 pub trait WebhookConfigRuntime {
     fn now(&self) -> DateTime<Utc>;
@@ -78,30 +85,50 @@ pub struct WebhookConfigService<S, R> {
     pub runtime: R,
 }
 impl<S: WebhookConfigStore, R: WebhookConfigRuntime> WebhookConfigService<S, R> {
-    fn encrypt(&self, secret: &str) -> ConfigResult<String> {
-        if secret.is_empty() {
-            return Ok(String::new());
-        }
+    fn encrypt(&self, platform: &PlatformConfig) -> ConfigResult<String> {
+        let encoded = serde_json::to_string(platform)
+            .map_err(|_| ConfigError::Internal("platform encoding failed".into()))?;
         let mut nonce = [0; 12];
         self.runtime.random_bytes(&mut nonce)?;
-        crate::security::encrypt(secret, self.runtime.encryption_key(), &nonce)
+        crate::security::encrypt(&encoded, self.runtime.encryption_key(), &nonce)
             .map_err(|e| ConfigError::Internal(e.into()))
+    }
+    fn view(&self, record: ConfigRecord) -> ConfigResult<ConfigView> {
+        let platform = super::decode_platform(
+            &record.encrypted_platform,
+            record.provider,
+            self.runtime.encryption_key(),
+        )
+        .map_err(|_| ConfigError::Internal("invalid stored platform configuration".into()))?;
+        Ok(ConfigView {
+            id: record.id,
+            name: record.name,
+            key: record.key,
+            platform: platform.summary(),
+            enabled: record.enabled,
+            description: record.description,
+        })
     }
     pub async fn list(&self, user_id: i64, query: ConfigPage) -> ConfigResult<Page<ConfigView>> {
         let ConfigPage { page, size, .. } = query;
         let (items, total) = self.store.list_owned(user_id, &query).await?;
         Ok(Page {
-            items,
+            items: items
+                .into_iter()
+                .map(|record| self.view(record))
+                .collect::<ConfigResult<_>>()?,
             total,
             page,
             page_size: size,
         })
     }
     pub async fn get(&self, user_id: i64, id: ConfigId) -> ConfigResult<ConfigView> {
-        self.store
+        let record = self
+            .store
             .get_owned(user_id, id.get())
             .await?
-            .ok_or(ConfigError::NotFound)
+            .ok_or(ConfigError::NotFound)?;
+        self.view(record)
     }
     pub async fn create(&self, user_id: i64, command: CreateConfig) -> ConfigResult<ConfigView> {
         let mut key = [0; 16];
@@ -110,14 +137,13 @@ impl<S: WebhookConfigStore, R: WebhookConfigRuntime> WebhookConfigService<S, R> 
             user_id,
             name: command.name,
             key: hex::encode(key),
-            provider: command.provider,
-            source: command.source,
-            encrypted_secret: self.encrypt(&command.secret)?,
+            provider: command.platform.provider(),
+            encrypted_platform: self.encrypt(&command.platform)?,
             description: command.description,
             enabled: true,
             at: self.runtime.now(),
         };
-        self.store.insert(&config).await
+        self.view(self.store.insert(&config).await?)
     }
     pub async fn update(
         &self,
@@ -127,18 +153,20 @@ impl<S: WebhookConfigStore, R: WebhookConfigRuntime> WebhookConfigService<S, R> 
     ) -> ConfigResult<ConfigView> {
         // An empty PATCH is a read, including no change to updated_at.
         if command.is_empty() {
-            return self
-                .store
-                .get_owned(user_id, id.get())
-                .await?
-                .ok_or(ConfigError::NotFound);
+            return self.get(user_id, id).await;
         }
-        let encrypted_secret = command.secret.map(|s| self.encrypt(&s)).transpose()?;
+        let platform = command
+            .platform
+            .map(|p| {
+                Ok(EncryptedPlatform {
+                    provider: p.provider(),
+                    ciphertext: self.encrypt(&p)?,
+                })
+            })
+            .transpose()?;
         let patch = ConfigPatch {
             name: command.name,
-            provider: command.provider,
-            source: command.source,
-            encrypted_secret,
+            platform,
             description: command.description,
         };
         self.mutate(user_id, id, ConfigMutation::Patch(patch)).await
@@ -149,10 +177,12 @@ impl<S: WebhookConfigStore, R: WebhookConfigRuntime> WebhookConfigService<S, R> 
         id: ConfigId,
         mutation: ConfigMutation,
     ) -> ConfigResult<ConfigView> {
-        self.store
+        let record = self
+            .store
             .mutate_owned(user_id, id.get(), &mutation, self.runtime.now())
             .await?
-            .ok_or(ConfigError::NotFound)
+            .ok_or(ConfigError::NotFound)?;
+        self.view(record)
     }
     pub async fn enabled(
         &self,
@@ -164,7 +194,15 @@ impl<S: WebhookConfigStore, R: WebhookConfigRuntime> WebhookConfigService<S, R> 
             .await
     }
     pub async fn delete(&self, user_id: i64, id: ConfigId) -> ConfigResult<()> {
-        self.mutate(user_id, id, ConfigMutation::Delete).await?;
+        self.store
+            .mutate_owned(
+                user_id,
+                id.get(),
+                &ConfigMutation::Delete,
+                self.runtime.now(),
+            )
+            .await?
+            .ok_or(ConfigError::NotFound)?;
         Ok(())
     }
 }

@@ -24,7 +24,7 @@ CREATE TABLE webhook_configs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     created_at TEXT NOT NULL, updated_at TEXT NOT NULL, deleted_at TEXT,
     user_id INTEGER NOT NULL, name TEXT NOT NULL, key TEXT NOT NULL UNIQUE,
-    provider TEXT NOT NULL, source TEXT, encrypted_secret TEXT,
+    provider TEXT NOT NULL, encrypted_platform TEXT NOT NULL,
     enabled INTEGER NOT NULL DEFAULT 1, description TEXT
 );
 CREATE TABLE notify_messages (

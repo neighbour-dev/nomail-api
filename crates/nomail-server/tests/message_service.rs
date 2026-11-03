@@ -54,7 +54,7 @@ async fn sparse_updates_bulk_limits_scope_and_raw_reads_use_the_shared_service()
     let (_, config) = api!(
         post,
         "/api/webhook/configs",
-        json!({"name":"Own","provider":"generic"}),
+        json!({"name":"Own","platform":{"provider":"generic","credentials":{"type":"none"}}}),
         Some(token)
     );
     let receive = config["data"]["url"].as_str().unwrap();
@@ -148,6 +148,12 @@ async fn sparse_updates_bulk_limits_scope_and_raw_reads_use_the_shared_service()
         name: Set("Foreign".into()),
         key: Set("foreign-key".into()),
         provider: Set("generic".into()),
+        encrypted_platform: Set(nomail_app::security::encrypt(
+            r#"{"provider":"generic","credentials":{"type":"none"}}"#,
+            &[7; 32],
+            &[0; 12],
+        )
+        .unwrap()),
         enabled: Set(true),
         created_at: Set(now),
         updated_at: Set(now),

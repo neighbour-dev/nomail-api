@@ -6,8 +6,8 @@ use serde_json::{Value, json};
 
 pub(crate) struct Store<'a>(pub &'a db::Store);
 const OWNED: &str = "id=? AND user_id=? AND deleted_at IS NULL";
-// Never project encrypted credentials into an HTTP view.
-const COLUMNS: &str = "id,name,key,provider,source,enabled,description";
+// Internal storage projection; the application decrypts and redacts before HTTP.
+const COLUMNS: &str = "id,name,key,provider,encrypted_platform,enabled,description";
 fn storage(error: db::StorageError) -> ConfigError {
     match error {
         db::StorageError::Conflict => ConfigError::Conflict,
@@ -20,9 +20,9 @@ fn d1(error: worker::Error) -> ConfigError {
 fn invalid(message: &str) -> ConfigError {
     ConfigError::Internal(message.into())
 }
-fn response(row: Value) -> ConfigResult<ConfigView> {
+fn response(row: Value) -> ConfigResult<ConfigRecord> {
     let text = |key: &str| row[key].as_str().unwrap_or_default().to_owned();
-    Ok(ConfigView::new(
+    Ok(ConfigRecord::new(
         row["id"]
             .as_i64()
             .ok_or_else(|| invalid("invalid config id"))?,
@@ -31,7 +31,7 @@ fn response(row: Value) -> ConfigResult<ConfigView> {
         text("provider")
             .parse()
             .map_err(|_| invalid("invalid stored provider"))?,
-        text("source"),
+        text("encrypted_platform"),
         row["enabled"].as_i64() == Some(1),
         text("description"),
     ))
@@ -41,7 +41,7 @@ impl WebhookConfigStore for Store<'_> {
         &self,
         user_id: i64,
         page: &ConfigPage,
-    ) -> ConfigResult<(Vec<ConfigView>, u64)> {
+    ) -> ConfigResult<(Vec<ConfigRecord>, u64)> {
         let results = self.0.0.batch(vec![
             self.0.statement("SELECT COUNT(*) AS total FROM webhook_configs WHERE user_id=? AND deleted_at IS NULL", vec![json!(user_id)]).map_err(storage)?,
             self.0.statement(&format!("SELECT {COLUMNS} FROM webhook_configs WHERE user_id=? AND deleted_at IS NULL ORDER BY created_at DESC LIMIT ? OFFSET ?"), vec![json!(user_id), json!(page.size()), json!(page.offset().to_string())]).map_err(storage)?,
@@ -60,7 +60,7 @@ impl WebhookConfigStore for Store<'_> {
             .collect::<ConfigResult<Vec<_>>>()?;
         Ok((items, total))
     }
-    async fn get_owned(&self, user_id: i64, id: i64) -> ConfigResult<Option<ConfigView>> {
+    async fn get_owned(&self, user_id: i64, id: i64) -> ConfigResult<Option<ConfigRecord>> {
         self.0
             .rows(
                 &format!("SELECT {COLUMNS} FROM webhook_configs WHERE {OWNED}"),
@@ -73,10 +73,10 @@ impl WebhookConfigStore for Store<'_> {
             .map(response)
             .transpose()
     }
-    async fn insert(&self, c: &NewConfig) -> ConfigResult<ConfigView> {
+    async fn insert(&self, c: &NewConfig) -> ConfigResult<ConfigRecord> {
         let at = time::format(c.at.timestamp_millis());
-        let rows = self.0.rows(&format!("INSERT INTO webhook_configs (user_id,name,key,provider,source,encrypted_secret,description,enabled,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?) RETURNING {COLUMNS}"),
-            vec![json!(c.user_id), json!(c.name), json!(c.key), json!(c.provider), json!(c.source), json!(c.encrypted_secret), json!(c.description), json!(c.enabled), json!(at), json!(at)]).await.map_err(storage)?;
+        let rows = self.0.rows(&format!("INSERT INTO webhook_configs (user_id,name,key,provider,encrypted_platform,description,enabled,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?) RETURNING {COLUMNS}"),
+            vec![json!(c.user_id), json!(c.name), json!(c.key), json!(c.provider), json!(c.encrypted_platform), json!(c.description), json!(c.enabled), json!(at), json!(at)]).await.map_err(storage)?;
         response(
             rows.into_iter()
                 .next()
@@ -89,7 +89,7 @@ impl WebhookConfigStore for Store<'_> {
         id: i64,
         command: &ConfigMutation,
         at: DateTime<Utc>,
-    ) -> ConfigResult<Option<ConfigView>> {
+    ) -> ConfigResult<Option<ConfigRecord>> {
         let mut sets = vec!["updated_at=?"];
         let mut values = vec![json!(time::format(at.timestamp_millis()))];
         match command {
@@ -104,8 +104,6 @@ impl WebhookConfigStore for Store<'_> {
             ConfigMutation::Patch(patch) => {
                 for (column, value) in [
                     ("name=?", &patch.name),
-                    ("source=?", &patch.source),
-                    ("encrypted_secret=?", &patch.encrypted_secret),
                     ("description=?", &patch.description),
                 ] {
                     if let Some(value) = value {
@@ -113,9 +111,9 @@ impl WebhookConfigStore for Store<'_> {
                         values.push(json!(value));
                     }
                 }
-                if let Some(provider) = patch.provider {
-                    sets.push("provider=?");
-                    values.push(json!(provider));
+                if let Some(platform) = &patch.platform {
+                    sets.extend(["provider=?", "encrypted_platform=?"]);
+                    values.extend([json!(platform.provider), json!(platform.ciphertext)]);
                 }
             }
         }

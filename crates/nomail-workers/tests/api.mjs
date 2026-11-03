@@ -4,7 +4,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createHmac } from 'node:crypto';
+import { createHmac, createHash, createCipheriv } from 'node:crypto';
 import { validateResponse, validateSse, protectedRoutes } from './contract.mjs';
 
 test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, async () => {
@@ -66,7 +66,9 @@ test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, a
       assert.equal(failure.data, null);
     }
     assert.equal(login.user.requiresAccountSetup, true);
-    const config = await api('POST', '/api/webhook/configs/', { name: 'Monitor', provider: 'generic', secret: 'test-webhook-secret' }, token);
+    const signedGeneric = secret => ({ provider: 'generic', credentials: { type: 'hmacSha256', secret } });
+    const anonymousGeneric = { provider: 'generic', credentials: { type: 'none' } };
+    const config = await api('POST', '/api/webhook/configs/', { name: 'Monitor', platform: signedGeneric('test-webhook-secret') }, token);
     const configPath = `/api/webhook/configs/${config.id}`;
     assert.equal((await api('GET', configPath, undefined, token)).name, 'Monitor');
     assert.equal((await api('GET', `/api/webhook/configs/%2B${config.id}`, undefined, token)).id, config.id);
@@ -89,36 +91,48 @@ test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, a
       assert.equal(current.name, `Name ${i}`);
       assert.equal(current.description, `Description ${i}`);
       assert.equal(current.key, config.key);
-      assert.equal(current.provider, config.provider);
+       assert.deepEqual(current.platform, config.platform);
     }
     const beforeConfigNoop = localSql(`SELECT * FROM webhook_configs WHERE id=${config.id};`)[0];
-    for (const field of ['name', 'provider', 'source', 'secret', 'description']) {
+    for (const field of ['name', 'platform', 'description', 'provider', 'source', 'secret']) {
       await api('PATCH', configPath, { [field]: null }, token, 400);
-      await api('POST', '/api/webhook/configs', { name: 'Invalid', provider: 'generic', [field]: null }, token, 400);
+      await api('POST', '/api/webhook/configs', { name: 'Invalid', platform: anonymousGeneric, [field]: null }, token, 400);
     }
     for (const input of [{}, [], ['Name', 'generic'], { name: 'Missing' }, { provider: 'generic' }, { name: '', provider: 'generic' }, { name: 'Name', provider: '' }]) {
       await api('POST', '/api/webhook/configs', input, token, 400);
     }
     assert.equal(localSql('SELECT COUNT(*) AS count FROM webhook_configs;')[0].count, 1);
+    for (const platform of [
+      { provider: 'github', credentials: { secret: 'valid', unknown: true } },
+      { provider: 'github', credentials: ['positional-secret'] },
+      ['github', { secret: 'positional-secret' }],
+      { provider: 'generic', credentials: { type: 'none', secret: 'must-not-be-ignored' } },
+      { provider: 'telegram', credentials: { secretToken: 'invalid:bot-token' } },
+      { provider: 'gitlab', credentials: { type: 'signingToken', signingToken: 'whsec_!' } },
+      { provider: 'stripe', credentials: { signingSecrets: [] } },
+    ]) await api('POST', '/api/webhook/configs', { name: 'Rejected', platform }, token, 400);
     await api('PATCH', configPath, {}, token);
-    await api('PATCH', configPath, { name: '', source: '', secret: '', provider: '', description: '' }, token);
+    await api('PATCH', configPath, { name: '', source: '', secret: '', provider: '', description: '' }, token, 400);
     await api('PATCH', configPath, { provider: 'unsupported' }, token, 400);
     assert.deepEqual(localSql(`SELECT * FROM webhook_configs WHERE id=${config.id};`)[0], beforeConfigNoop);
-    assert.notEqual(beforeConfigNoop.encrypted_secret, 'test-webhook-secret');
+    assert.notEqual(beforeConfigNoop.encrypted_platform, 'test-webhook-secret');
+    assert.equal(config.source, undefined);
+    assert.equal(config.platform.credentials, undefined);
     // Signed deliveries below verify the freshly encrypted credential remains usable.
-    await api('PATCH', configPath, { secret: 'test-webhook-secret' }, token);
+    await api('PATCH', configPath, { platform: signedGeneric('test-webhook-secret') }, token);
     const afterSecret = localSql(`SELECT * FROM webhook_configs WHERE id=${config.id};`)[0];
-    assert.notEqual(afterSecret.encrypted_secret, beforeConfigNoop.encrypted_secret);
+    assert.notEqual(afterSecret.encrypted_platform, beforeConfigNoop.encrypted_platform);
     assert.equal(afterSecret.key, beforeConfigNoop.key);
     assert.equal(afterSecret.created_at, beforeConfigNoop.created_at);
     await api('PATCH', configPath, { name: 'Updated' }, token);
     assert.equal((await api('GET', '/api/webhook/configs?page=9007199254740994&pageSize=1', undefined, token)).items.length, 0);
     await api('GET', '/api/webhook/configs?page=9223372036854775807&pageSize=100', undefined, token, 400);
-    const disposable = await api('POST', '/api/webhook/configs', { name: 'Disposable', provider: 'generic' }, token);
+    const disposable = await api('POST', '/api/webhook/configs', { name: 'Disposable', platform: anonymousGeneric }, token);
+    const anonymousCiphertext = localSql(`SELECT encrypted_platform FROM webhook_configs WHERE id=${disposable.id};`)[0].encrypted_platform;
     const disposablePath = `/api/webhook/configs/${disposable.id}`;
     assert.equal((await api('PATCH', disposablePath + '/enabled', { enabled: false }, token)).enabled, false);
     assert.equal((await api('PATCH', disposablePath + '/enabled', { enabled: true }, token)).enabled, true);
-    localSql(`UPDATE webhook_configs SET encrypted_secret='sensitive-error-probe' WHERE id=${disposable.id};`);
+    localSql(`UPDATE webhook_configs SET encrypted_platform='sensitive-error-probe' WHERE id=${disposable.id};`);
     // An internal credential decoding error stays generic in the real runtime,
     // including its logs; ordinary API error statuses retain their contract.
     await api('POST', disposable.url, { title: 'error probe' }, undefined, 500);
@@ -203,7 +217,7 @@ test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, a
     assert.equal((await api('GET', '/api/messages?page=9007199254740994&pageSize=1', undefined, token)).items.length, 0);
     // A second owner is seeded through local admin SQL, not a public signup API.
     // This uses the isolated test DB and never touches any remote/user database.
-    const seed = spawnSync('wrangler', ['d1', 'execute', 'DB', '--local', '--persist-to', state, '--command', "INSERT INTO users(username,password_hash,created_at,updated_at) VALUES ('scope-other','not-used',strftime('%Y-%m-%dT%H:%M:%fZ','now'),strftime('%Y-%m-%dT%H:%M:%fZ','now')); INSERT INTO webhook_configs(user_id,name,key,provider,enabled,created_at,updated_at) SELECT id,'Foreign','foreign-scope-key','generic',1,strftime('%Y-%m-%dT%H:%M:%fZ','now'),strftime('%Y-%m-%dT%H:%M:%fZ','now') FROM users WHERE username='scope-other';"], { encoding: 'utf8', env: { ...process.env, CI: 'true' } });
+    const seed = spawnSync('wrangler', ['d1', 'execute', 'DB', '--local', '--persist-to', state, '--command', `INSERT INTO users(username,password_hash,created_at,updated_at) VALUES ('scope-other','not-used',strftime('%Y-%m-%dT%H:%M:%fZ','now'),strftime('%Y-%m-%dT%H:%M:%fZ','now')); INSERT INTO webhook_configs(user_id,name,key,provider,encrypted_platform,enabled,created_at,updated_at) SELECT id,'Foreign','foreign-scope-key','generic','${anonymousCiphertext}',1,strftime('%Y-%m-%dT%H:%M:%fZ','now'),strftime('%Y-%m-%dT%H:%M:%fZ','now') FROM users WHERE username='scope-other';`], { encoding: 'utf8', env: { ...process.env, CI: 'true' } });
     assert.equal(seed.status, 0, seed.stdout + seed.stderr);
     const foreignConfig = localSql("SELECT * FROM webhook_configs WHERE key='foreign-scope-key';")[0];
     const foreignConfigPath = `/api/webhook/configs/${foreignConfig.id}`;
@@ -255,7 +269,7 @@ test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, a
     }
     // A message keeps common fields, structured platform details and raw content
     // together, while NoMail state changes independently.
-    const github = await api('POST', '/api/webhook/configs', { name: 'GitHub', provider: 'github', secret: 'github-secret' }, token);
+    const github = await api('POST', '/api/webhook/configs', { name: 'GitHub', platform: { provider: 'github', credentials: { secret: 'github-secret' } } }, token);
     async function githubReceive(payload, event, delivery) {
       const raw = JSON.stringify(payload);
       const signature = 'sha256=' + createHmac('sha256', 'github-secret').update(raw).digest('hex');
@@ -299,7 +313,7 @@ test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, a
     assert.equal(buildDetail.platformData.event.workflow_run.conclusion, 'failure');
     assert.equal(buildDetail.platformData.event.workflow_run.head_branch, 'main');
     assert.equal(Date.parse(buildDetail.expireAt) - Date.parse(buildDetail.createdAt), 3 * 86_400_000);
-    await api('PATCH', `/api/webhook/configs/${github.id}`, { provider: 'generic' }, token);
+    await api('PATCH', `/api/webhook/configs/${github.id}`, { platform: signedGeneric('github-secret') }, token);
     const genericRaw = JSON.stringify({ id: longId, title: 'same value, different scope' });
     const genericResult = await fetch(origin + github.url, { method: 'POST', body: genericRaw, headers: { 'Content-Type': 'application/json', 'X-NoMail-Signature': 'sha256=' + createHmac('sha256', 'github-secret').update(genericRaw).digest('hex') } });
     const scoped = (await genericResult.json()).data;
@@ -308,14 +322,73 @@ test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, a
     const historical = await api('GET', replyPath, undefined, token);
     assert.equal(historical.provider, 'github');
     assert.deepEqual(historical.platformData, before.platformData);
-    const feishu = await api('POST', '/api/webhook/configs', { name: 'Feishu', provider: 'feishu' }, token);
-    const feishuPayload = { schema: '2.0', header: { event_id: 'f-1', event_type: 'im.message.receive_v1' }, event: { sender: { sender_id: { open_id: 'user-open-id' }, sender_type: 'user' }, message: { message_id: 'm-1', message_type: 'text', chat_id: 'chat-1', content: JSON.stringify({ text: 'hello', unknown: true }) } } };
+    const feishu = await api('POST', '/api/webhook/configs', { name: 'Feishu', platform: { provider: 'feishu', credentials: { verificationToken: 'feishu-token' } } }, token);
+    const feishuPayload = { schema: '2.0', header: { token: 'feishu-token', event_id: 'f-1', event_type: 'im.message.receive_v1' }, event: { sender: { sender_id: { open_id: 'user-open-id' }, sender_type: 'user' }, message: { message_id: 'm-1', message_type: 'text', chat_id: 'chat-1', content: JSON.stringify({ text: 'hello', unknown: true }) } } };
     const feishuMessage = await api('POST', feishu.url, feishuPayload);
     const feishuDetail = await api('GET', `/api/messages/${feishuMessage.messageId}`, undefined, token);
     assert.equal(feishuDetail.metadata.version, '2.0');
     assert.equal(feishuDetail.platformData.event.V2.message.content_json.text, 'hello');
     assert.equal(feishuDetail.platformData.event.V2.message.content_json.unknown, true);
     assert.equal(feishuDetail.platformData.event.V2.sender.open_id, 'user-open-id');
+    // Both credentials must remain independent through D1 storage/decryption.
+    const encryptedFeishu = await api('POST', '/api/webhook/configs', { name: 'Encrypted Feishu', platform: { provider: 'feishu', credentials: { verificationToken: 'verification-token', encryptKey: 'different-encryption-key' } } }, token);
+    const iv = Buffer.alloc(16, 7);
+    const cipher = createCipheriv('aes-256-cbc', createHash('sha256').update('different-encryption-key').digest(), iv);
+    const ciphertext = Buffer.concat([iv, cipher.update(JSON.stringify({ type: 'url_verification', token: 'verification-token', challenge: 'test-challenge' })), cipher.final()]);
+    const challenge = await fetch(origin + encryptedFeishu.url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ encrypt: ciphertext.toString('base64') }) });
+    assert.equal(challenge.status, 200);
+    assert.deepEqual(await challenge.json(), { challenge: 'test-challenge' });
+    assert.equal(encryptedFeishu.platform.authentication, 'feishuEncrypted');
+    for (const platform of [
+      { provider: 'gitlab', credentials: { type: 'signingToken', signingToken: 'whsec_cGxhdGZvcm0tc2VjcmV0' } },
+      { provider: 'gitlab', credentials: { type: 'secretToken', secretToken: 'platform-secret' } },
+      { provider: 'stripe', credentials: { signingSecrets: ['whsec_retired', 'whsec_platform-secret'] } },
+      { provider: 'slack', credentials: { signingSecret: 'platform-secret' } },
+      { provider: 'telegram', credentials: { secretToken: 'platform-secret' } },
+      { provider: 'shopify', credentials: { clientSecret: 'platform-secret' } },
+    ]) {
+      const item = await api('POST', '/api/webhook/configs', { name: 'Platform test', platform }, token);
+      const path = `/api/webhook/configs/${item.id}`;
+      assert.equal(item.platform.provider, platform.provider);
+      assert.equal(item.platform.credentials, undefined);
+      assert.ok(!JSON.stringify(item).includes('platform-secret'));
+      assert.deepEqual(await api('GET', path, undefined, token), item);
+      const payloads = {
+        gitlab: { object_kind: 'issue', object_attributes: { title: 'Test' } },
+        stripe: { id: 'evt_matrix', object: 'event', type: 'payment_intent.succeeded', data: { object: { id: 'pi_test' } } },
+        slack: { type: 'event_callback', event_id: 'EvMatrix', event: { type: 'message', text: 'Test' } },
+        telegram: { update_id: 123, message: { message_id: 1, chat: { id: 1, type: 'private' }, text: 'Test' } },
+        shopify: { id: 123, title: 'Test' },
+      };
+      const raw = JSON.stringify(payloads[platform.provider]);
+      const time = Math.floor(Date.now() / 1000).toString();
+      const sign = (key, input, encoding = 'hex') => createHmac('sha256', key).update(input).digest(encoding);
+      let headers;
+      switch (platform.provider) {
+        case 'gitlab':
+          headers = platform.credentials.type === 'signingToken'
+            ? { 'X-Gitlab-Event': 'Issue Hook', 'webhook-id': 'matrix', 'webhook-timestamp': time, 'webhook-signature': 'v1,' + sign('platform-secret', `matrix.${time}.${raw}`, 'base64') }
+            : { 'X-Gitlab-Event': 'Issue Hook', 'X-Gitlab-Token': 'platform-secret' };
+          break;
+        case 'stripe': headers = { 'Stripe-Signature': `t=${time},v1=${sign('whsec_platform-secret', `${time}.${raw}`)}` }; break;
+        case 'slack': headers = { 'X-Slack-Request-Timestamp': time, 'X-Slack-Signature': 'v0=' + sign('platform-secret', `v0:${time}:${raw}`) }; break;
+        case 'telegram': headers = { 'X-Telegram-Bot-Api-Secret-Token': 'platform-secret' }; break;
+        case 'shopify': headers = { 'X-Shopify-Topic': 'products/create', 'X-Shopify-Shop-Domain': 'test.myshopify.com', 'X-Shopify-API-Version': '2026-10', 'X-Shopify-Hmac-Sha256': sign('platform-secret', raw, 'base64') }; break;
+      }
+      const response = await fetch(origin + item.url, { method: 'POST', body: raw, headers: { 'Content-Type': 'application/json', ...headers } });
+      const ack = await response.json();
+      assert.equal(response.status, 200, JSON.stringify(ack));
+      validateResponse('POST', item.url, 200, ack);
+      assert.equal((await api('GET', `/api/messages/${ack.data.messageId}`, undefined, token)).provider, platform.provider);
+      await api('POST', item.url, { title: 'unauthenticated' }, undefined, 401);
+      await api('PATCH', path, { platform: { provider: 'github' } }, token, 400);
+      assert.deepEqual(await api('GET', path, undefined, token), item);
+      const switched = await api('PATCH', path, { platform: anonymousGeneric }, token);
+      assert.equal(switched.platform.authentication, 'none');
+      assert.equal(switched.key, item.key);
+      await api('POST', item.url, { title: 'explicit anonymous' });
+      await api('DELETE', path, undefined, token);
+    }
     for (const item of (await api('GET', '/api/messages', undefined, token)).items) {
       assert.equal(typeof item.level, 'string');
       assert.equal(Object.hasOwn(item, 'platformData'), false);

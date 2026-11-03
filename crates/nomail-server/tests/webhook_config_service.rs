@@ -1,5 +1,7 @@
 use actix_web::{App, http::StatusCode, test, web};
+use base64::{Engine, engine::general_purpose::STANDARD};
 use chrono::Utc;
+use hmac::{Hmac, Mac};
 use nomail_server::{
     AppState, app, auth,
     config::Config,
@@ -9,6 +11,7 @@ use nomail_server::{
 };
 use sea_orm::{ActiveModelTrait, EntityTrait, Set};
 use serde_json::{Value, json};
+use sha2::Sha256;
 
 #[actix_web::test]
 async fn config_service_preserves_sparse_concurrent_updates_credentials_and_scope() {
@@ -52,7 +55,7 @@ async fn config_service_preserves_sparse_concurrent_updates_credentials_and_scop
     let (status, created) = api!(
         post,
         "/api/webhook/configs",
-        json!({"name":"Original","provider":"generic","secret":"original-secret","source":"original-source","description":"original-description"})
+        json!({"name":"Original","platform":{"provider":"generic","credentials":{"type":"hmacSha256","secret":"original-secret"}},"description":"original-description"})
     );
     assert_eq!(status, StatusCode::OK);
     assert_eq!(created["enabled"], true);
@@ -66,28 +69,28 @@ async fn config_service_preserves_sparse_concurrent_updates_credentials_and_scop
         .unwrap()
         .unwrap();
     assert_eq!(
-        nomail_app::security::decrypt(initial.encrypted_secret.as_deref().unwrap(), &[7; 32])
-            .unwrap(),
+        serde_json::from_str::<Value>(
+            &nomail_app::security::decrypt(&initial.encrypted_platform, &[7; 32]).unwrap()
+        )
+        .unwrap()["credentials"]["secret"],
         "original-secret"
     );
     assert_eq!(api!(patch, &path, json!({})).1, created);
-    assert_eq!(
-        api!(
-            patch,
-            &path,
-            json!({"name":"","provider":"","source":"","secret":"","description":""})
-        )
-        .1,
-        created
-    );
-    for field in ["name", "provider", "source", "secret", "description"] {
+    for field in [
+        "name",
+        "platform",
+        "description",
+        "provider",
+        "source",
+        "secret",
+    ] {
         let mut invalid_update = json!({});
         invalid_update[field] = Value::Null;
         assert_eq!(
             api!(patch, &path, invalid_update).0,
             StatusCode::BAD_REQUEST
         );
-        let mut invalid_create = json!({"name":"Invalid", "provider":"generic"});
+        let mut invalid_create = json!({"name":"Invalid", "platform":{"provider":"generic","credentials":{"type":"none"}}});
         invalid_create[field] = Value::Null;
         assert_eq!(
             api!(post, "/api/webhook/configs", invalid_create).0,
@@ -126,28 +129,28 @@ async fn config_service_preserves_sparse_concurrent_updates_credentials_and_scop
             .insert_header(("Authorization", format!("Bearer {token}")))
             .set_json(json!({"name":format!("Name {i}")}))
             .to_request();
-        let source = test::TestRequest::patch()
+        let description = test::TestRequest::patch()
             .uri(&path)
             .insert_header(("Authorization", format!("Bearer {token}")))
-            .set_json(json!({"source":format!("Source {i}")}))
+            .set_json(json!({"description":format!("Description {i}")}))
             .to_request();
-        let (rename, source) = tokio::join!(
+        let (rename, description) = tokio::join!(
             test::call_service(&app, rename),
-            test::call_service(&app, source)
+            test::call_service(&app, description)
         );
         assert_eq!(rename.status(), StatusCode::OK);
-        assert_eq!(source.status(), StatusCode::OK);
+        assert_eq!(description.status(), StatusCode::OK);
         let (_, current) = api!(get, &path, json!({}));
         assert_eq!(current["name"], format!("Name {i}"));
-        assert_eq!(current["source"], format!("Source {i}"));
+        assert_eq!(current["description"], format!("Description {i}"));
+        assert!(current.get("source").is_none());
         assert_eq!(current["key"], created["key"]);
-        assert_eq!(current["description"], created["description"]);
         let row = webhook::Entity::find_by_id(id)
             .one(&database)
             .await
             .unwrap()
             .unwrap();
-        assert_eq!(row.encrypted_secret, initial.encrypted_secret);
+        assert_eq!(row.encrypted_platform, initial.encrypted_platform);
         assert_eq!(row.created_at, initial.created_at);
     }
     let before = webhook::Entity::find_by_id(id)
@@ -155,11 +158,7 @@ async fn config_service_preserves_sparse_concurrent_updates_credentials_and_scop
         .await
         .unwrap()
         .unwrap();
-    api!(
-        patch,
-        &path,
-        json!({"name":"","source":"","secret":"","provider":"","description":""})
-    );
+    api!(patch, &path, json!({}));
     assert_eq!(
         webhook::Entity::find_by_id(id)
             .one(&database)
@@ -180,16 +179,22 @@ async fn config_service_preserves_sparse_concurrent_updates_credentials_and_scop
             .unwrap(),
         before
     );
-    api!(patch, &path, json!({"secret":"replacement-secret"}));
+    api!(
+        patch,
+        &path,
+        json!({"platform":{"provider":"generic","credentials":{"type":"hmacSha256","secret":"replacement-secret"}}})
+    );
     let replaced = webhook::Entity::find_by_id(id)
         .one(&database)
         .await
         .unwrap()
         .unwrap();
-    assert_ne!(replaced.encrypted_secret, initial.encrypted_secret);
+    assert_ne!(replaced.encrypted_platform, initial.encrypted_platform);
     assert_eq!(
-        nomail_app::security::decrypt(replaced.encrypted_secret.as_deref().unwrap(), &[7; 32])
-            .unwrap(),
+        serde_json::from_str::<Value>(
+            &nomail_app::security::decrypt(&replaced.encrypted_platform, &[7; 32]).unwrap()
+        )
+        .unwrap()["credentials"]["secret"],
         "replacement-secret"
     );
     assert_eq!(replaced.key, initial.key);
@@ -218,6 +223,7 @@ async fn config_service_preserves_sparse_concurrent_updates_credentials_and_scop
         name: Set("Foreign".into()),
         key: Set("foreign-config-key".into()),
         provider: Set("generic".into()),
+        encrypted_platform: Set(initial.encrypted_platform.clone()),
         enabled: Set(true),
         created_at: Set(now),
         updated_at: Set(now),
@@ -298,5 +304,170 @@ async fn config_service_preserves_sparse_concurrent_updates_credentials_and_scop
         deleted
     );
     assert_eq!(api!(get, "/api/webhook/configs", json!({})).1["total"], 0);
+    // Every exposed provider survives encrypted persistence and feeds the actual
+    // receiving path. These are synthetic payloads and credentials only.
+    for platform in [
+        json!({"provider":"generic","credentials":{"type":"hmacSha256","secret":"platform-secret"}}),
+        json!({"provider":"github","credentials":{"secret":"platform-secret"}}),
+        json!({"provider":"gitlab","credentials":{"type":"signingToken","signingToken":"whsec_cGxhdGZvcm0tc2VjcmV0"}}),
+        json!({"provider":"gitlab","credentials":{"type":"secretToken","secretToken":"platform-secret"}}),
+        json!({"provider":"stripe","credentials":{"signingSecrets":["whsec_retired","whsec_platform-secret"]}}),
+        json!({"provider":"slack","credentials":{"signingSecret":"platform-secret"}}),
+        json!({"provider":"feishu","credentials":{"verificationToken":"platform-secret"}}),
+        json!({"provider":"telegram","credentials":{"secretToken":"platform-secret"}}),
+        json!({"provider":"shopify","credentials":{"clientSecret":"platform-secret"}}),
+    ] {
+        let provider = platform["provider"].as_str().unwrap();
+        let (status, created) = api!(
+            post,
+            "/api/webhook/configs",
+            json!({"name":"Platform test","platform":platform})
+        );
+        assert_eq!(status, StatusCode::OK, "{provider}: {created}");
+        assert_eq!(created["platform"]["provider"], provider);
+        assert!(created["platform"].get("credentials").is_none());
+        assert!(!created.to_string().contains("platform-secret"));
+        let config_path = format!("/api/webhook/configs/{}", created["id"]);
+        let receive_path = created["url"].as_str().unwrap();
+        assert_eq!(api!(get, &config_path, json!({})).1, created);
+        let (raw, headers) = platform_delivery(provider, &platform);
+        let mut request = test::TestRequest::post()
+            .uri(receive_path)
+            .insert_header(("Content-Type", "application/json"));
+        for (name, value) in &headers {
+            request = request.insert_header((name.as_str(), value.as_str()));
+        }
+        let response = test::call_service(&app, request.set_payload(raw).to_request()).await;
+        assert_eq!(response.status(), StatusCode::OK, "{provider}");
+        let received: Value = test::read_body_json(response).await;
+        assert!(
+            received["data"]["messageId"].is_string(),
+            "{provider}: {received}"
+        );
+        let message_path = format!(
+            "/api/messages/{}",
+            received["data"]["messageId"].as_str().unwrap()
+        );
+        assert_eq!(api!(get, &message_path, json!({})).1["provider"], provider);
+        // Missing authentication never falls back to a weaker mode.
+        let response = test::call_service(
+            &app,
+            test::TestRequest::post()
+                .uri(receive_path)
+                .set_json(json!({"title":"unauthenticated"}))
+                .to_request(),
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED, "{provider}");
+        // A partial platform replacement cannot reuse credentials from storage.
+        assert_eq!(
+            api!(
+                patch,
+                &config_path,
+                json!({"platform":{"provider":"github"}})
+            )
+            .0,
+            StatusCode::BAD_REQUEST
+        );
+        assert_eq!(api!(get, &config_path, json!({})).1, created);
+        // Switching provider replaces provider + ciphertext in one mutation.
+        let replacement = json!({"provider":"generic","credentials":{"type":"none"}});
+        let updated = api!(
+            patch,
+            &config_path,
+            json!({"platform":replacement,"description":""})
+        );
+        assert_eq!(updated.0, StatusCode::OK);
+        assert_eq!(updated.1["platform"]["authentication"], "none");
+        assert_eq!(updated.1["key"], created["key"]);
+        assert_eq!(
+            api!(post, receive_path, json!({"title":"explicit anonymous"})).0,
+            StatusCode::OK
+        );
+        assert_eq!(api!(delete, &config_path, json!({})).0, StatusCode::OK);
+    }
     database.close().await.unwrap();
+}
+
+fn platform_delivery(provider: &str, platform: &Value) -> (String, Vec<(String, String)>) {
+    let time = Utc::now().timestamp().to_string();
+    let body = match provider {
+        "generic" => json!({"id":"matrix","title":"Test"}),
+        "github" => json!({"action":"opened","issue":{"title":"Test"}}),
+        "gitlab" => json!({"object_kind":"issue","object_attributes":{"title":"Test"}}),
+        "stripe" => json!({"id":"evt_matrix","object":"event","type":"payment_intent.succeeded","data":{"object":{"id":"pi_test"}}}),
+        "slack" => json!({"type":"event_callback","event_id":"EvMatrix","event":{"type":"message","text":"Test"}}),
+        "feishu" => json!({"schema":"2.0","header":{"token":"platform-secret","event_id":"matrix","event_type":"im.message.receive_v1"},"event":{"message":{"message_type":"text","content":"{\"text\":\"Test\"}"}}}),
+        "telegram" => json!({"update_id":123,"message":{"message_id":1,"chat":{"id":1,"type":"private"},"text":"Test"}}),
+        "shopify" => json!({"id":123,"title":"Test"}),
+        _ => unreachable!(),
+    }.to_string();
+    let sign = |key: &[u8], input: &str| {
+        let mut mac = Hmac::<Sha256>::new_from_slice(key).unwrap();
+        mac.update(input.as_bytes());
+        mac.finalize().into_bytes()
+    };
+    let headers = match provider {
+        "generic" => vec![(
+            "X-NoMail-Signature",
+            format!("sha256={}", hex::encode(sign(b"platform-secret", &body))),
+        )],
+        "github" => vec![
+            ("X-GitHub-Event", "issues".into()),
+            ("X-GitHub-Delivery", "matrix".into()),
+            (
+                "X-Hub-Signature-256",
+                format!("sha256={}", hex::encode(sign(b"platform-secret", &body))),
+            ),
+        ],
+        "gitlab" if platform["credentials"]["type"] == "signingToken" => vec![
+            ("X-Gitlab-Event", "Issue Hook".into()),
+            ("webhook-id", "matrix".into()),
+            ("webhook-timestamp", time.clone()),
+            (
+                "webhook-signature",
+                format!(
+                    "v1,{}",
+                    STANDARD.encode(sign(b"platform-secret", &format!("matrix.{time}.{body}")))
+                ),
+            ),
+        ],
+        "gitlab" => vec![
+            ("X-Gitlab-Event", "Issue Hook".into()),
+            ("X-Gitlab-Token", "platform-secret".into()),
+        ],
+        "stripe" => vec![(
+            "Stripe-Signature",
+            format!(
+                "t={time},v1={}",
+                hex::encode(sign(b"whsec_platform-secret", &format!("{time}.{body}")))
+            ),
+        )],
+        "slack" => vec![
+            ("X-Slack-Request-Timestamp", time.clone()),
+            (
+                "X-Slack-Signature",
+                format!(
+                    "v0={}",
+                    hex::encode(sign(b"platform-secret", &format!("v0:{time}:{body}")))
+                ),
+            ),
+        ],
+        "feishu" => vec![],
+        "telegram" => vec![("X-Telegram-Bot-Api-Secret-Token", "platform-secret".into())],
+        "shopify" => vec![
+            ("X-Shopify-Topic", "products/create".into()),
+            ("X-Shopify-Shop-Domain", "test.myshopify.com".into()),
+            ("X-Shopify-API-Version", "2026-10".into()),
+            (
+                "X-Shopify-Hmac-Sha256",
+                STANDARD.encode(sign(b"platform-secret", &body)),
+            ),
+        ],
+        _ => unreachable!(),
+    };
+    (
+        body,
+        headers.into_iter().map(|(k, v)| (k.into(), v)).collect(),
+    )
 }

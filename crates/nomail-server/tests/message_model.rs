@@ -37,7 +37,7 @@ async fn one_message_preserves_platform_detail_level_raw_and_independent_user_st
         test::TestRequest::post()
             .uri("/api/webhook/configs")
             .insert_header(authorization.clone())
-            .set_json(json!({"name":"GitHub","provider":"github","secret":"secret"}))
+            .set_json(json!({"name":"GitHub","platform":{"provider":"github","credentials":{"secret":"secret"}}}))
             .to_request(),
     )
     .await;
@@ -180,7 +180,7 @@ async fn one_message_preserves_platform_detail_level_raw_and_independent_user_st
         test::TestRequest::patch()
             .uri(&config_path)
             .insert_header(authorization.clone())
-            .set_json(json!({"provider":"generic"}))
+            .set_json(json!({"platform":{"provider":"generic","credentials":{"type":"hmacSha256","secret":"secret"}}}))
             .to_request(),
     )
     .await;

@@ -59,6 +59,11 @@ pub async fn connect(config: &Config) -> Result<DatabaseConnection, ConnectError
     Migrator::up(&db, None)
         .await
         .map_err(ConnectError::Migration)?;
+    // No legacy configuration migration is provided. Fail at startup rather
+    // than silently accepting old single-secret schemas or deleting user data.
+    db.execute_unprepared("SELECT encrypted_platform FROM webhook_configs LIMIT 0")
+        .await
+        .map_err(ConnectError::Migration)?;
     Ok(db)
 }
 

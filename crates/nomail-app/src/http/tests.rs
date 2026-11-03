@@ -535,7 +535,9 @@ fn configuration_inputs_preserve_required_fields_empty_patch_and_strict_null_beh
         decode::<endpoints::UpdateConfig>(value)
             .and_then(|request| UpdateConfig::try_from(request).map_err(ApiFailure::from))
     };
-    assert!(create(json!({"name":"Name", "provider":" GitHub ", "futureField":true})).is_ok());
+    let platform = json!({"provider":"github","credentials":{"secret":"test-secret"}});
+    assert!(create(json!({"name":"Name", "platform":platform})).is_ok());
+    assert!(create(json!({"name":"Name", "platform":platform, "futureField":true})).is_err());
     for input in [
         json!({}),
         json!({"name":"Name"}),
@@ -547,20 +549,12 @@ fn configuration_inputs_preserve_required_fields_empty_patch_and_strict_null_beh
         assert_eq!(create(input).err().unwrap().status, 400);
     }
     assert!(update(json!({})).unwrap().is_empty());
-    assert!(
-        update(json!({"name":"", "provider":"", "source":"", "secret":"", "description":""}))
-            .unwrap()
-            .is_empty()
-    );
-    assert!(
-        !update(json!({"name":" ", "source":" "}))
-            .unwrap()
-            .is_empty()
-    );
+    assert!(update(json!({"name":""})).is_err());
+    assert!(!update(json!({"description":""})).unwrap().is_empty());
     assert_eq!(update(json!({"provider":" "})).err().unwrap().status, 400);
-    for field in ["name", "provider", "source", "secret", "description"] {
+    for field in ["name", "platform", "description"] {
         for invalid in [serde_json::Value::Null, json!(42)] {
-            let mut input = json!({"name":"Name", "provider":"generic"});
+            let mut input = json!({"name":"Name", "platform":platform});
             input[field] = invalid.clone();
             assert_eq!(create(input).err().unwrap().status, 400, "create {field}");
             let mut input = json!({});
@@ -568,13 +562,8 @@ fn configuration_inputs_preserve_required_fields_empty_patch_and_strict_null_beh
             assert_eq!(update(input).err().unwrap().status, 400, "update {field}");
         }
     }
-    for (field, limit) in [
-        ("name", 100),
-        ("source", 255),
-        ("secret", 500),
-        ("description", 500),
-    ] {
-        let mut input = json!({"name":"Name", "provider":"generic"});
+    for (field, limit) in [("name", 100), ("description", 500)] {
+        let mut input = json!({"name":"Name", "platform":platform});
         input[field] = json!("中".repeat(limit));
         assert!(create(input.clone()).is_ok(), "{field} limit");
         input[field] = json!("中".repeat(limit + 1));
@@ -592,9 +581,9 @@ fn configuration_inputs_preserve_required_fields_empty_patch_and_strict_null_beh
         );
     }
     for body in [
-        br#"{"name":"a","name":"b","provider":"generic"}"#.as_slice(),
-        br#"{"name":"a","provider":"generic","provider":"github"}"#.as_slice(),
-        br#"{"name":"a","provider":"generic","secret":"one","secret":"two"}"#.as_slice(),
+        br#"{"name":"a","name":"b","platform":{"provider":"github","credentials":{"secret":"one"}}}"#.as_slice(),
+        br#"{"name":"a","platform":{"provider":"github","provider":"generic","credentials":{"secret":"one"}}}"#.as_slice(),
+        br#"{"name":"a","platform":{"provider":"github","credentials":{"secret":"one","secret":"two"}}}"#.as_slice(),
         br#"[]"#.as_slice(),
         br#"["Name","generic"]"#.as_slice(),
         br#"["Name","generic","","",""]"#.as_slice(),
