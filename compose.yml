@@ -1,7 +1,6 @@
 services:
   nomail-api:
-    # Replace your-github-username with the lowercase account or organization used by CI.
-    image: ghcr.io/your-github-username/nomail-api:latest
+    image: ghcr.io/neighbour-dev/nomail-api:latest
     container_name: nomail-api
     restart: unless-stopped
     env_file:

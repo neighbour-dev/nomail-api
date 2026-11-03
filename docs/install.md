@@ -10,10 +10,10 @@ NoMail API 是后端服务，不附带 Web/App 客户端。部署后可通过 AP
 | 源码运行 | Rust 1.99+、系统编译工具 | 本地 SQLite 文件 |
 | Cloudflare Workers | Rust 1.99+、Node.js 22+、Cloudflare 账号 | D1、Durable Objects |
 
-以下 Server 命令从仓库根目录执行，Workers 命令会明确切换目录。请先获取源码；仓库地址替换为实际地址：
+以下 Server 命令从仓库根目录执行，Workers 命令会明确切换目录。请先获取源码：
 
 ```bash
-git clone <仓库地址> nomail-api
+git clone https://github.com/neighbour-dev/nomail-api.git
 cd nomail-api
 ```
 
@@ -44,10 +44,23 @@ Server 在首次启动时初始化账号；Workers 在首次登录时初始化�
 
 ## 2. Docker Compose
 
-### 构建镜像
+### 准备配置
+
+默认使用 GHCR 发布的镜像，无需本地构建。`compose.yml` 已配置：
+
+```yaml
+image: ghcr.io/neighbour-dev/nomail-api:latest
+```
+
+也可单独拉取镜像（不会启动服务）：
 
 ```bash
-docker build -t nomail-api:local .
+docker pull ghcr.io/neighbour-dev/nomail-api:latest
+```
+
+首次安装时创建配置文件：
+
+```bash
 cp .env.example .env
 ```
 
@@ -59,54 +72,44 @@ PORT=3000
 RUST_LOG=info
 ```
 
-再编辑 `compose.yml`，将 `image` 改为刚构建的本地镜像：
-
-```yaml
-image: nomail-api:local
-```
-
-仓库中的默认镜像地址含 `your-github-username` 占位符，不能直接拉取。使用本地构建不需要 GHCR 凭据。
-
 ### 启动与检查
 
 ```bash
-docker compose up -d --pull never
+docker compose pull
+docker compose up -d
 docker compose logs --tail=100 nomail-api
 curl http://127.0.0.1:3000/api/health
 ```
 
 健康检查正常时，响应的 `data.status` 和 `data.db` 均为 `ok`。若修改了 `PORT`，相应调整访问地址。健康检查不设置应用级请求限流；有需要时可在反向代理或 CDN 配置入口限流。
 
-Server 的设备 IP 在登录或刷新会话时更新，采用零配置、转发头优先的简单规则：
-
-- 固定优先级为 `CF-Connecting-IP` → `X-Forwarded-For` → `X-Real-IP` → `Forwarded`。Cloudflare 来源头优先；没有有效结果再尝试下一个头。
-- 同名头按出现顺序处理，每个逗号分隔的地址链从左向右取首个有效 IP，跳过空白或非法项。`Forwarded` 读取不区分大小写的 `for=` 参数；支持 IPv4、IPv6、引号及带端口的地址。
-- 不判断可信代理，也不筛选公网地址，保留局域网及 Tailscale 地址。所有来源头都无有效结果时回退到连接来源 IP；连接 IP 也不可用时返回 `0.0.0.0`。
-
-不需要 `IP_HEADER` 或 `IP_HEADER_TRUSTED_PROXIES` 配置。转发头可被客户端伪造，因此设备 IP 仅是尽力获取的来源信息，不代表已验证身份，不应作为访问控制依据。反向代理应正确清洗来源头，尤其是高优先级的 `CF-Connecting-IP`；NAT 改写来源且未传递原地址时无法还原。健康检查不设置应用级限流，Workers 继续使用运行环境提供的 `CF-Connecting-IP`。
-
 Compose 将数据库放在 `nomail-data` 卷的 `/data/nomail.db`，覆盖 `.env` 中的 `DATABASE_PATH`；容器根文件系统只读，数据库及 WAL/SHM 文件写入数据卷。不要使用 `docker compose down -v`，除非明确要删除全部数据。
 
 修改 `.env` 后重新执行 `docker compose up -d` 以应用环境变量变化。首次登录改密后，再移除初始密码并重新执行该命令。
 
-### 使用已有镜像
+### 可选：本地构建
 
-若你有可访问的镜像，无需执行前面的 `docker build`，但仍需创建并填写 `.env`。将 `compose.yml` 的 `image` 改为实际地址和版本，然后运行：
-
-```bash
-docker compose pull
-docker compose up -d
-```
-
-如果是私有 GHCR 镜像，先用有权读取该 Package 的账号登录；Token 需具备相应读取权限，例如 classic PAT 的 `read:packages`：
+如需部署本地修改，可自行构建镜像：
 
 ```bash
-docker login ghcr.io --username YOUR_GITHUB_USERNAME
+docker build -t nomail-api:local .
 ```
 
-在密码提示中输入 Token，不要将其写入 `.env`、Compose 或版本库。建议使用 Docker credential helper。
+将 `compose.yml` 的 `image` 改为：
 
-发布镜像支持 `linux/amd64` 和 `linux/arm64`，Docker 会自动选择当前机器对应的架构。建议使用明确的稳定版本标签；版本变更见[更新日志](../CHANGELOG.md)。
+```yaml
+image: nomail-api:local
+```
+
+同样需要创建并填写 `.env`，然后启动（不要执行 `docker compose pull`）：
+
+```bash
+docker compose up -d --pull never
+```
+
+### 镜像版本
+
+发布镜像支持 `linux/amd64` 和 `linux/arm64`，Docker 会自动选择当前机器对应的架构。`latest` 跟随稳定版发布更新，不包含预发布版本。生产部署建议将 `compose.yml` 中的 `latest` 替换为明确的稳定版本标签（如 `vX.Y.Z`）；版本变更见[更新日志](../CHANGELOG.md)。
 
 ## 3. 源码运行 Server
 
@@ -198,7 +201,8 @@ npm run dev
 - 通过 `PATCH /api/auth/account` 修改账号；请求需要 Bearer Token，并提供 `currentPassword` 及 `username`、`newPassword` 中至少一项。改密会撤销全部登录会话。
 - 通过 `/api/webhook/configs` 创建接收配置，将响应中的相对 `url` 拼接到服务公开地址后，配置到上游平台。当前产品只开放 Generic、GitHub、飞书；协议库支持的其他平台不等于已开放接入。
 - **飞书限制：**当前产品只有一个 `secret`，同时用作 Verification Token 和 Encrypt Key。两者不同的配置无法完整接入；普通事件不因签名缺失而回退为 Token 认证。
-- 公网部署应使用 HTTPS，并在反向代理或 Cloudflare 设置请求限流与防滥用措施。Server 展示的设备 IP 可能来自未经验证的转发头，不应作为可信身份或访问控制依据。
+- 公网部署应使用 HTTPS，并在反向代理或 Cloudflare 设置请求限流与防滥用措施。
+- 通过反向代理部署时，应正确设置并清洗客户端 IP 转发头；设备 IP 仅用于展示，不应作为访问控制依据。
 - 代理 SSE 时关闭响应缓冲，并设置大于 20 秒心跳间隔的读取超时。SSE 仅用于在线更新，无离线投递或重放，重连后应重新查询收件箱。
 
 ## 6. 备份、升级与账号恢复
