@@ -167,6 +167,9 @@ test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, a
     const createdEvent = decoder.decode((await reader.read()).value);
     assert.match(createdEvent, /event: message.created/);
     validateSse(createdEvent);
+    const createdDetail = await api('GET', `/api/messages/${created.messageId}`, undefined, token);
+    assert.equal(createdEvent, `id: ${created.messageId}\nevent: message.created\ndata: ${JSON.stringify({ id: created.messageId, receivedAt: createdDetail.createdAt })}\n\n`);
+    assert.equal(createdDetail.content, 'hello\n 世界');
     await reader.cancel();
     const duplicates = await Promise.all(Array.from({ length: 5 }, () => receive({ id: 'event-1', title: 'Disk' })));
     assert.ok(duplicates.every(item => item.duplicate && item.messageId === created.messageId));

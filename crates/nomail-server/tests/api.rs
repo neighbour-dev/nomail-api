@@ -273,7 +273,7 @@ async fn all_api_contracts() {
     );
     assert_eq!(body["data"]["affected"], 0);
 
-    // SSE is authenticated, sends ready immediately and publishes newly persisted messages.
+    // SSE only notifies; the message is already queryable when the notification arrives.
     use actix_web::body::{BoxBody, MessageBody};
     use std::future::poll_fn;
     use std::pin::Pin;
@@ -310,11 +310,28 @@ async fn all_api_contracts() {
         .await
         .unwrap()
         .unwrap();
-    assert!(
-        std::str::from_utf8(&event)
-            .unwrap()
-            .contains("message.created")
+    let (status, detail) = api!(
+        get,
+        &format!("/api/messages/{second_id}"),
+        json!({}),
+        Some(&token)
     );
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(detail["data"]["content"], "event");
+    let notification = json!({"id": second_id, "receivedAt": detail["data"]["createdAt"]});
+    let event = std::str::from_utf8(&event).unwrap();
+    assert!(event.starts_with(&format!("id: {second_id}\nevent: message.created\ndata: ")));
+    assert!(event.ends_with("\n\n"));
+    let data: serde_json::Value = serde_json::from_str(
+        event
+            .lines()
+            .nth(2)
+            .unwrap()
+            .strip_prefix("data: ")
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(data, notification);
     drop(stream);
 
     let short_claims = nomail_app::auth::Claims {

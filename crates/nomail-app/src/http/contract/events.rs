@@ -1,5 +1,5 @@
 //! Public online event protocol. Connections/fanout/timers remain adapters.
-use crate::{message::MessageAccepted, webhook::MessageLevel};
+use crate::message::MessageAccepted;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -18,27 +18,14 @@ pub struct EmptyEvent {}
 #[serde(rename_all = "camelCase")]
 pub struct MessageCreated {
     pub id: Uuid,
-    pub title: String,
-    pub source: String,
-    pub level: MessageLevel,
-    pub status: String,
-    pub pinned: bool,
-    pub webhook_config_id: i64,
-    pub created_at: DateTime<Utc>,
-    pub expire_at: Option<DateTime<Utc>>,
+    /// Server receipt time of the message, not the SSE delivery time (UTC).
+    pub received_at: DateTime<Utc>,
 }
 impl From<MessageAccepted> for MessageCreated {
     fn from(message: MessageAccepted) -> Self {
         Self {
             id: message.id,
-            title: message.title,
-            source: message.source,
-            level: message.level,
-            status: message.status,
-            pinned: message.pinned,
-            webhook_config_id: message.webhook_config_id,
-            created_at: message.received_at,
-            expire_at: message.expires_at,
+            received_at: message.received_at,
         }
     }
 }
@@ -78,18 +65,15 @@ mod tests {
         let id = Uuid::from_u128(1);
         let event = SseEvent::MessageCreated(MessageCreated {
             id,
-            title: "line\nnot-an-event".into(),
-            source: String::new(),
-            level: MessageLevel::High,
-            status: "read".into(),
-            pinned: true,
-            webhook_config_id: 1,
-            created_at: now,
-            expire_at: None,
+            received_at: now,
         });
         let text = encode(&event);
-        assert!(text.starts_with(&format!("id: {id}\nevent: message.created\ndata: ")));
-        assert_eq!(text.lines().count(), 4);
+        assert_eq!(
+            text,
+            format!(
+                "id: {id}\nevent: message.created\ndata: {{\"id\":\"{id}\",\"receivedAt\":\"1970-01-01T00:16:40Z\"}}\n\n"
+            )
+        );
         let decoded: SseEvent =
             serde_json::from_value(serde_json::to_value(event).unwrap()).unwrap();
         assert_eq!(decoded.event_name(), "message.created");
