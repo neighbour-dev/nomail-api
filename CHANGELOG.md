@@ -6,6 +6,10 @@
 
 ## [Unreleased]
 
+### 新增
+
+- 新增 `GET /api/messages/cursor`，支持 `before` 加载历史、`after` 升序分批获取新增消息，复用消息列表筛选及预览结构，返回首尾及续查游标，不统计总数。原 `page` 分页接口保持不变；Server 和 Workers 通过新增迁移创建游标查询复合索引。
+
 ### 变更
 
 - **SSE API 不兼容变更：**`message.created` 的 `data` 仅携带消息 `id` 和服务端接收时间 `receivedAt`（UTC，与消息接口的 `createdAt` 一致），不再携带标题、来源、级别、状态等消息字段。客户端收到通知后应通过消息列表或详情接口获取数据；连接恢复后仍需重新查询收件箱，不支持事件重放。
