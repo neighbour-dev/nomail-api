@@ -234,6 +234,13 @@ fn authentication_and_non_json_contracts_are_declared_once() {
 #[test]
 fn static_routes_win_and_unknown_methods_are_not_authenticated_or_reinterpreted() {
     assert_eq!(
+        resolve("GET", "/api/messages/cursor")
+            .unwrap()
+            .route
+            .operation,
+        Operation::CursorMessages
+    );
+    assert_eq!(
         resolve("POST", "/api/webhook/configs")
             .unwrap()
             .route
@@ -258,6 +265,7 @@ fn static_routes_win_and_unknown_methods_are_not_authenticated_or_reinterpreted(
         ("POST", "/api/health"),
         ("GET", "/api/messages/batch"),
         ("DELETE", "/api/messages/stream"),
+        ("DELETE", "/api/messages/cursor"),
         ("GET", "/api//messages"),
         ("GET", "/api/unknown"),
         ("POST", "/api/push/devices"),

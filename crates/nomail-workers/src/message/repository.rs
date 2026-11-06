@@ -74,8 +74,7 @@ fn decode_item(row: Value) -> MessageResult<MessagePreview> {
         expires_at: row.expire_at,
     })
 }
-fn filter(user_id: i64, q: &MessageQuery) -> (String, Vec<Value>) {
-    let q = q.filters();
+fn filter(user_id: i64, q: &MessageFilters) -> (String, Vec<Value>) {
     let mut clause = OWNED.to_owned();
     let mut values = vec![json!(user_id)];
     if let Some(text) = &q.text {
@@ -135,12 +134,53 @@ fn mutation(command: &MessageMutation) -> (String, Vec<Value>) {
     (sets.join(","), values)
 }
 impl MessageStore for Store<'_> {
+    async fn cursor_owned(
+        &self,
+        user_id: i64,
+        q: &MessageCursorQuery,
+    ) -> MessageResult<Vec<MessagePreview>> {
+        let (mut clause, mut values) = filter(user_id, q.filters());
+        let order = if q.window().ascending() {
+            "ASC"
+        } else {
+            "DESC"
+        };
+        match q.window() {
+            MessageWindow::Before(position) | MessageWindow::After(position) => {
+                // D1 stores fixed millisecond UTC times. A boundary between
+                // milliseconds falls strictly after every ID in its floor ms.
+                if position
+                    .received_at
+                    .timestamp_subsec_nanos()
+                    .is_multiple_of(1_000_000)
+                {
+                    clause.push_str(if q.window().ascending() {
+                        " AND (created_at,id)>(?,?)"
+                    } else {
+                        " AND (created_at,id)<(?,?)"
+                    });
+                    values.extend([json!(date(position.received_at)), json!(position.id)]);
+                } else {
+                    clause.push_str(if q.window().ascending() {
+                        " AND created_at>?"
+                    } else {
+                        " AND created_at<=?"
+                    });
+                    values.push(json!(date(position.received_at)));
+                }
+            }
+            MessageWindow::Latest => (),
+        }
+        values.push(json!(q.fetch_limit()));
+        self.0.rows(&format!("SELECT id,title,content,source,level,status,pinned,webhook_config_id,created_at,expire_at FROM notify_messages WHERE {clause} ORDER BY created_at {order},id {order} LIMIT ?"), values)
+            .await.map_err(storage)?.into_iter().map(decode_item).collect()
+    }
     async fn list_owned(
         &self,
         user_id: i64,
         q: &MessageQuery,
     ) -> MessageResult<(Vec<MessagePreview>, u64)> {
-        let (clause, values) = filter(user_id, q);
+        let (clause, values) = filter(user_id, q.filters());
         let mut page_values = values.clone();
         // Bind OFFSET as text so SQLite can convert its exact i64 value without
         // an intermediate JS Number losing integer precision.

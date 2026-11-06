@@ -16,6 +16,14 @@ pub struct ListMessagesQuery {
     pub page: Option<String>,
     #[cfg_attr(feature = "openapi", schemars(with = "Option<u64>"))]
     pub page_size: Option<String>,
+    #[serde(flatten)]
+    pub filters: MessageFilterQuery,
+}
+
+#[derive(Default, Deserialize, Serialize)]
+#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct MessageFilterQuery {
     pub query: Option<String>,
     pub status: Option<String>,
     #[cfg_attr(feature = "openapi", schemars(with = "Option<MessageLevel>"))]
@@ -44,9 +52,9 @@ fn time(value: Option<&str>, name: &str) -> MessageResult<Option<DateTime<Utc>>>
         })
         .transpose()
 }
-impl TryFrom<ListMessagesQuery> for MessageQuery {
+impl TryFrom<MessageFilterQuery> for MessageFilters {
     type Error = MessageError;
-    fn try_from(q: ListMessagesQuery) -> MessageResult<Self> {
+    fn try_from(q: MessageFilterQuery) -> MessageResult<Self> {
         let status = trimmed(q.status.as_deref())
             .map(ReadStatus::parse)
             .transpose()?;
@@ -75,20 +83,23 @@ impl TryFrom<ListMessagesQuery> for MessageQuery {
             .transpose()?;
         let from = time(q.from.as_deref(), "from")?;
         let to = time(q.to.as_deref(), "to")?;
+        Ok(MessageFilters {
+            text: q.query,
+            status,
+            level,
+            webhook_config_id,
+            pinned,
+            from,
+            to,
+        })
+    }
+}
+impl TryFrom<ListMessagesQuery> for MessageQuery {
+    type Error = MessageError;
+    fn try_from(q: ListMessagesQuery) -> MessageResult<Self> {
+        let filters = q.filters.try_into()?;
         let (page, size) = super::parse_pagination(q.page.as_deref(), q.page_size.as_deref());
-        Self::new(
-            MessageFilters {
-                text: q.query,
-                status,
-                level,
-                webhook_config_id,
-                pinned,
-                from,
-                to,
-            },
-            page,
-            size,
-        )
+        Self::new(filters, page, size)
     }
 }
 

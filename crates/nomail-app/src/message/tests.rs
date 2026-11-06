@@ -62,6 +62,50 @@ fn patch(m: &mut Message, p: &StatePatch) {
     m.updated_at = p.updated_at;
 }
 impl MessageStore for Store {
+    async fn cursor_owned(
+        &self,
+        user_id: i64,
+        q: &MessageCursorQuery,
+    ) -> MessageResult<Vec<MessagePreview>> {
+        let rows = self.rows.borrow();
+        let mut selected: Vec<_> = rows
+            .values()
+            .filter(|m| {
+                if !self.visible(user_id, m) {
+                    return false;
+                }
+                let position = MessagePosition {
+                    received_at: m.received_at,
+                    id: m.id,
+                };
+                match q.window() {
+                    MessageWindow::Latest => true,
+                    MessageWindow::Before(boundary) => position < boundary,
+                    MessageWindow::After(boundary) => position > boundary,
+                }
+            })
+            .collect();
+        selected.sort_by_key(|m| (m.received_at, m.id));
+        if !q.window().ascending() {
+            selected.reverse();
+        }
+        Ok(selected
+            .into_iter()
+            .take(q.fetch_limit() as usize)
+            .map(|m| MessagePreview {
+                id: m.id,
+                title: m.common.title.clone(),
+                summary: crate::pagination::summarize(&m.common.content),
+                source: m.common.source.clone(),
+                level: m.common.level,
+                status: m.status.clone(),
+                pinned: m.pinned,
+                webhook_config_id: m.webhook_config_id,
+                received_at: m.received_at,
+                expires_at: m.expires_at,
+            })
+            .collect())
+    }
     async fn list_owned(
         &self,
         user_id: i64,
@@ -165,6 +209,68 @@ impl MessageStore for Store {
 }
 fn now() -> DateTime<Utc> {
     DateTime::from_timestamp(1000, 0).unwrap()
+}
+
+#[tokio::test]
+async fn cursor_service_builds_continuations_in_storage_order_without_counting() {
+    let service = MessageService {
+        store: Store::new(),
+    };
+    for i in 1..=5 {
+        service
+            .store
+            .seed(1, event(None, "normal"), Uuid::from_u128(i));
+    }
+    let query = |window| MessageCursorQuery::new(MessageFilters::default(), window, 2).unwrap();
+    let first = service
+        .cursor(7, query(MessageWindow::Latest))
+        .await
+        .unwrap();
+    assert_eq!(
+        first.items.iter().map(|m| m.id).collect::<Vec<_>>(),
+        vec![Uuid::from_u128(5), Uuid::from_u128(4)]
+    );
+    assert!(first.has_more);
+    assert_eq!(first.next, first.end);
+    assert_eq!(first.start.unwrap().id, Uuid::from_u128(5));
+    service.delete(7, Uuid::from_u128(4), now()).await.unwrap();
+    let older = service
+        .cursor(7, query(MessageWindow::Before(first.end.unwrap())))
+        .await
+        .unwrap();
+    assert_eq!(
+        older.items.iter().map(|m| m.id).collect::<Vec<_>>(),
+        vec![Uuid::from_u128(3), Uuid::from_u128(2)]
+    );
+    let added = service
+        .cursor(
+            7,
+            query(MessageWindow::After(MessagePosition {
+                received_at: now(),
+                id: Uuid::from_u128(2),
+            })),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        added.items.iter().map(|m| m.id).collect::<Vec<_>>(),
+        vec![Uuid::from_u128(3), Uuid::from_u128(5)]
+    );
+    assert!(!added.has_more);
+    assert!(added.next.is_none());
+    let empty = service
+        .cursor(8, query(MessageWindow::Latest))
+        .await
+        .unwrap();
+    assert!(empty.items.is_empty());
+    assert!(!empty.has_more);
+    assert!(empty.next.is_none() && empty.start.is_none() && empty.end.is_none());
+    for limit in [0, 101, u64::MAX] {
+        assert!(
+            MessageCursorQuery::new(MessageFilters::default(), MessageWindow::Latest, limit)
+                .is_err()
+        );
+    }
 }
 fn event(id: Option<&str>, level: &str) -> PlatformEvent {
     let body=json!({"id":id,"title":" Title ","content":"hello\n 世界","level":level,"unknown":{"keep":true}}).to_string();

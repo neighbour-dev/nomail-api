@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHmac, createHash, createCipheriv } from 'node:crypto';
 import { validateResponse, validateSse, protectedRoutes } from './contract.mjs';
+import { testMessageCursors } from './cursor.mjs';
 
 test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, async () => {
   const state = await mkdtemp(join(tmpdir(), 'nomail-worker-test-'));
@@ -180,6 +181,7 @@ test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, a
     assert.equal(normalizedList.total, 1);
     assert.equal(normalizedList.page, 1);
     assert.equal(normalizedList.pageSize, 100);
+    await testMessageCursors(api, localSql, token);
     const path = `/api/messages/${created.messageId}`;
     assert.equal((await api('PATCH', path, { status: 'read', pinned: true }, token)).pinned, true);
     assert.equal((await api('GET', '/api/messages/unread-count', undefined, token)).count, 0);

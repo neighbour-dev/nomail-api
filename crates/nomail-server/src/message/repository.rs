@@ -83,8 +83,7 @@ fn owned_ids(user_id: i64) -> sea_orm::sea_query::SelectStatement {
         .column(message::Column::Id)
         .into_query()
 }
-fn filtered(user_id: i64, q: &MessageQuery) -> Select<message::Entity> {
-    let q = q.filters();
+fn filtered(user_id: i64, q: &MessageFilters) -> Select<message::Entity> {
     let mut query = owned(user_id);
     if let Some(text) = &q.text {
         // Preserve existing substring/wildcard search semantics; no new search engine.
@@ -165,13 +164,63 @@ fn mutation(command: &MessageMutation) -> UpdateMany<message::Entity> {
     update
 }
 impl MessageStore for Store<'_> {
+    async fn cursor_owned(
+        &self,
+        user_id: i64,
+        q: &MessageCursorQuery,
+    ) -> MessageResult<Vec<MessagePreview>> {
+        let mut query = filtered(user_id, q.filters());
+        match q.window() {
+            MessageWindow::Before(position) | MessageWindow::After(position) => {
+                let columns = Expr::tuple([
+                    Expr::col(message::Column::CreatedAt).into(),
+                    Expr::col(message::Column::Id).into(),
+                ]);
+                let boundary =
+                    Expr::tuple([Expr::value(position.received_at), Expr::value(position.id)]);
+                query = query.filter(if q.window().ascending() {
+                    columns.gt(boundary)
+                } else {
+                    columns.lt(boundary)
+                });
+            }
+            MessageWindow::Latest => (),
+        }
+        let order = if q.window().ascending() {
+            sea_orm::Order::Asc
+        } else {
+            sea_orm::Order::Desc
+        };
+        let rows = query
+            .select_only()
+            .columns([
+                message::Column::Id,
+                message::Column::Title,
+                message::Column::Content,
+                message::Column::Source,
+                message::Column::Level,
+                message::Column::Status,
+                message::Column::Pinned,
+                message::Column::WebhookConfigId,
+                message::Column::CreatedAt,
+                message::Column::ExpireAt,
+            ])
+            .order_by(message::Column::CreatedAt, order.clone())
+            .order_by(message::Column::Id, order)
+            .limit(q.fetch_limit())
+            .into_model::<ListRow>()
+            .all(self.0)
+            .await
+            .map_err(storage)?;
+        rows.into_iter().map(TryInto::try_into).collect()
+    }
     async fn list_owned(
         &self,
         user_id: i64,
         q: &MessageQuery,
     ) -> MessageResult<(Vec<MessagePreview>, u64)> {
         let tx = self.0.begin().await.map_err(storage)?;
-        let query = filtered(user_id, q);
+        let query = filtered(user_id, q.filters());
         let total = query.clone().count(&tx).await.map_err(storage)?;
         let rows = query
             .select_only()

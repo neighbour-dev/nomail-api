@@ -11,6 +11,14 @@ fn missing() -> MessageError {
 }
 
 impl<S: MessageStore> MessageService<S> {
+    pub async fn cursor(
+        &self,
+        user_id: i64,
+        query: MessageCursorQuery,
+    ) -> MessageResult<MessageCursorPage> {
+        let items = self.store.cursor_owned(user_id, &query).await?;
+        Ok(query.into_page(items))
+    }
     pub async fn list(
         &self,
         user_id: i64,

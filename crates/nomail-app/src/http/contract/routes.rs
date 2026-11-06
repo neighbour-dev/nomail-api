@@ -123,6 +123,7 @@ endpoints! {
     EnableConfig => ("enableWebhookConfig",Patch,"/api/webhook/configs/{id}/enabled",Bearer,Json,Json,false,ConfigId,EnabledRequest,(),ConfigResponse,"Webhook Configs","启停接收配置"),
     ReceiveWebhook => ("receiveWebhook",Post,"/api/webhook/{key}",Webhook,Raw,Webhook,false,WebhookKey,Vec<u8>,(),ReceiveResponse,"Webhook","接收平台消息或控制请求"),
     ListMessages => ("listMessages",Get,"/api/messages",Bearer,None,Json,true,None,(),ListMessagesQuery,Page<MessageListItem>,"Messages","消息列表"),
+    CursorMessages => ("cursorMessages",Get,"/api/messages/cursor",Bearer,None,Json,true,None,(),CursorMessagesQuery,MessageCursorResponse,"Messages","消息游标查询：默认/历史降序，新增升序；非可靠同步日志"),
     UnreadCount => ("unreadCount",Get,"/api/messages/unread-count",Bearer,None,Json,false,None,(),(),CountResponse,"Messages","未读数量"),
     StreamMessages => ("streamMessages",Get,"/api/messages/stream",Bearer,None,Sse,false,None,(),(),(),"Messages","在线 SSE 事件流"),
     BatchMessages => ("batchMessages",Post,"/api/messages/batch",Bearer,Json,Json,false,None,BatchMessagesRequest,(),AffectedResponse,"Messages","批量修改消息"),

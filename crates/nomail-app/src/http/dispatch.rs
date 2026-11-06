@@ -200,6 +200,16 @@ pub async fn execute(
                 .await?
                 .into(),
         ),
+        Operation::CursorMessages => json::<e::CursorMessages>(
+            services
+                .messages
+                .cursor(
+                    user!(),
+                    parse_query::<e::CursorMessages>(&head.query)?.try_into()?,
+                )
+                .await?
+                .into(),
+        ),
         Operation::UnreadCount => json::<e::UnreadCount>(super::CountResponse {
             count: services.messages.unread_count(user!()).await?,
         }),

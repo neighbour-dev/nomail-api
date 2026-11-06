@@ -1,5 +1,6 @@
 use super::{
-    MessagePreview, MessageQuery, MessageResult, MessageWithConfig, RawContent, ReadStatus,
+    MessageCursorQuery, MessagePreview, MessageQuery, MessageResult, MessageWithConfig, RawContent,
+    ReadStatus,
 };
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
@@ -50,6 +51,13 @@ impl MessageMutation {
 /// Lists must NOT load platform JSON/raw. Expiry is not an implicit filter.
 #[allow(async_fn_in_trait)]
 pub trait MessageStore {
+    /// Return at most fetch_limit rows, ordered by (receipt time, ID). After is
+    /// ascending; latest/before are descending. Apply the same scope as lists.
+    async fn cursor_owned(
+        &self,
+        user_id: i64,
+        query: &MessageCursorQuery,
+    ) -> MessageResult<Vec<MessagePreview>>;
     async fn list_owned(
         &self,
         user_id: i64,
