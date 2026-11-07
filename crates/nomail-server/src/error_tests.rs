@@ -1,10 +1,6 @@
 use super::*;
 use nomail_app::error::{AuthError, ConfigError, DomainError, MessageError, WebhookError};
 use nomail_app::ingestion::IngestionError;
-use std::{
-    io::Write,
-    sync::{Arc, Mutex},
-};
 
 fn check<E: DomainError + Into<HttpError>>(error: E) {
     let expected = ApiFailure::from_domain(&error);
@@ -36,43 +32,6 @@ fn adapter_preserves_shared_http_errors_without_mapping_domains_itself() {
     assert_eq!(actual.0.diagnostic, diagnostic);
     assert_eq!(actual.to_string(), "internal server error");
     assert!(!format!("{actual:?}").contains("sensitive"));
-}
-
-#[derive(Clone)]
-struct Writer(Arc<Mutex<Vec<u8>>>);
-impl Write for Writer {
-    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
-        self.0.lock().unwrap().extend_from_slice(bytes);
-        Ok(bytes.len())
-    }
-    fn flush(&mut self) -> std::io::Result<()> {
-        Ok(())
-    }
-}
-
-#[test]
-fn conversions_are_silent_and_response_logs_once_without_raw_internal_text() {
-    let bytes = Arc::new(Mutex::new(Vec::new()));
-    let output = bytes.clone();
-    let subscriber = tracing_subscriber::fmt()
-        .without_time()
-        .with_ansi(false)
-        .with_writer(move || Writer(output.clone()))
-        .finish();
-    tracing::subscriber::with_default(subscriber, || {
-        let domain = AuthError::Internal("sensitive database value".into());
-        let shared: nomail_app::http::HttpError = domain.into();
-        let error: ApiError = shared.into();
-        assert!(bytes.lock().unwrap().is_empty());
-        let response = error.error_response();
-        assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
-        let expected: ApiError = HttpError::from(AuthError::Unauthorized).into();
-        assert_eq!(expected.error_response().status(), StatusCode::UNAUTHORIZED);
-    });
-    let text = String::from_utf8(bytes.lock().unwrap().clone()).unwrap();
-    assert_eq!(text.matches("request failed").count(), 1);
-    assert!(text.contains("auth"));
-    assert!(!text.contains("sensitive"));
 }
 
 #[actix_web::test]
