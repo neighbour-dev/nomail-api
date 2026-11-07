@@ -280,8 +280,8 @@ Authorization: Bearer <accessToken>
 - SQLite：停止服务后备份整个数据目录/卷，或使用 SQLite 在线备份工具。WAL 模式下不能在运行时只复制主数据库文件。
 - D1：在更新前使用 Cloudflare 提供的导出或恢复能力保存备份，并确认恢复流程。
 - 同时安全保存 `JWT_SECRET`、`JWT_ISSUER` 和 `SECRET_ENCRYPTION_KEY`。升级时保持它们稳定；更换加密密钥会导致旧配置无法解密。
-- 当前建表脚本是新安装基线，不负责转换历史版本数据库。升级前核对目标版本说明并备份；程序不会自动清空已有开发数据。
-- **强类型 Webhook 配置是不兼容更新：**新基线移除了 webhook_configs.source/encrypted_secret，改为 encrypted_platform，不提供旧数据库或旧配置迁移。仅重新提交旧请求不能修复旧 Schema。应在备份后使用新的 SQLite 路径/数据卷或新的 D1 数据库，按对应部署步骤初始化并重新创建接收配置；旧账号、消息等不会自动导入。Server 会拒绝缺少新配置列的旧 Schema，Workers 同样不能复用旧 D1 基线。不要为升级直接删除原数据库或生产卷。
+- 升级前核对目标版本的[更新日志](../CHANGELOG.md)并备份；程序不会自动清空已有数据。新增迁移与新安装基线不同，不代表支持所有历史 Schema 的转换。
+- Server 启动时自动应用待执行的数据库迁移；Workers 更新部署前，在 `crates/nomail-workers` 目录执行 `npx wrangler d1 migrations apply DB --remote`。先确认目标数据库，迁移影响及客户端兼容性要求以对应版本的更新日志为准。
 - Server 与 Workers 的数据库编码不同，不支持直接交换 SQLite/D1 数据库文件。
 - Docker 升级时构建/拉取目标版本，再重新执行 `docker compose up -d`；源码部署则重新构建并重启服务。不要为升级删除数据卷。
 
