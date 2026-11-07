@@ -58,6 +58,11 @@ jobs:
             echo "prerelease=false" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Validate changelog release notes
+        env:
+          TAG: ${{ github.ref_name }}
+        run: python3 .github/scripts/release_notes.py "$TAG" "$RUNNER_TEMP/release-notes.md"
+
   build:
     name: Build image (${{ matrix.arch }})
     needs: [check, release-info]
@@ -245,6 +250,14 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Extract changelog release notes
+        env:
+          TAG: ${{ github.ref_name }}
+        run: python3 .github/scripts/release_notes.py "$TAG" "$RUNNER_TEMP/release-notes.md"
+
       - name: Download release binaries
         uses: actions/download-artifact@v8
         with:
@@ -256,7 +269,7 @@ jobs:
         working-directory: ${{ runner.temp }}/release-assets
         run: sha256sum *.tar.gz > SHA256SUMS
 
-      - name: Create release with generated notes
+      - name: Create release with changelog notes
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
@@ -267,7 +280,7 @@ jobs:
           if gh release view "$TAG" > /dev/null 2>&1; then
             echo "Release $TAG already exists; updating assets without changing release notes."
           else
-            args=(--verify-tag --generate-notes --title "$TAG")
+            args=(--verify-tag --notes-file "$RUNNER_TEMP/release-notes.md" --title "$TAG")
             if [[ "$PRERELEASE" == "true" ]]; then
               args+=(--prerelease)
             fi

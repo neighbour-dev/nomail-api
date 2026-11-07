@@ -40,6 +40,9 @@ jobs:
       - name: Check formatting
         run: cargo fmt --all -- --check
 
+      - name: Test release notes extraction
+        run: python3 -m unittest discover -s .github/scripts -p 'test_*.py'
+
       # Use the workspace's default members; Workers/WASM has a separate runtime.
       - name: Run tests
         run: cargo test --locked
