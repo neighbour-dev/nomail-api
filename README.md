@@ -11,11 +11,12 @@
   - **Server**：Rust、Actix Web、SeaORM、SQLite，可通过 Docker 或源码运行。
   - **Cloudflare Workers**：官方 worker-rs、D1、Durable Objects。
 
-当前不包含 Web/App 客户端、公开注册或 APNs/FCM 等通知推送。SSE 无重放、无离线投递；消息过期时间暂不触发自动清理。
+本仓库是 NoMail 的服务端，配合 NoMail App 提供通知收件箱体验。服务端当前不提供公开注册或 APNs/FCM 等通知推送。SSE 无重放、无离线投递；消息过期时间暂不触发自动清理。
 
 ## 文档
 
-- [安装与部署](docs/install.md)
+- [项目文档](https://git.neighbour.sg/neighbour/nomail-docs)
+- [安装与部署](https://git.neighbour.sg/neighbour/nomail-docs/src/branch/main/guide/install.md)
 - [更新日志](CHANGELOG.md)
 - [Git Tag 规范](docs/tagging.md)
 - [贡献指南](CONTRIBUTING.md)

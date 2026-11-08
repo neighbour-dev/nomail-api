@@ -4,7 +4,7 @@ Cloudflare 官方 [workers-rs](https://github.com/cloudflare/workers-rs) 的 `wo
 
 ## 安装与部署
 
-环境准备、本地运行、D1/Secret 配置及远程部署统一见[安装指南](../../docs/install.md)。开发检查和提交要求见[贡献指南](../../CONTRIBUTING.md)，本文件仅补充 Workers 的实现边界。
+环境准备、本地运行、D1/Secret 配置及远程部署统一见[安装指南](https://git.neighbour.sg/neighbour/nomail-docs/src/branch/main/guide/install.md)。开发检查和提交要求见[贡献指南](../../CONTRIBUTING.md)，本文件仅补充 Workers 的实现边界。
 
 ## 测试
 

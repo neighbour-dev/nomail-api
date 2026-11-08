@@ -24,7 +24,7 @@ Server / Workers → nomail-app → nomail-core
 消息查询和批量操作、配置创建和修改在共享 HTTP 层完成一次输入转换，再调用用例：
 
 - `http/contract/message.rs` 保留查询参数原始语法，转换为只读 `MessageQuery`；不会把枚举、布尔值和时间重新字符串化。Service 直接使用类型化过滤条件和已校验分页；配置分页同样先转为 `ConfigPage`。
-- `http/contract/cursor.rs` 处理消息游标编码与查询转换；共享业务使用类型化接收位置，两端以时间、ID 复合索引执行范围查询，不统计总数。旧页码分页不变，客户端用法及一致性边界见[消息游标查询](../../docs/message-cursor.md)。
+- `http/contract/cursor.rs` 处理消息游标编码与查询转换；共享业务使用类型化接收位置，两端以时间、ID 复合索引执行范围查询，不统计总数。旧页码分页不变，客户端用法及一致性边界见[消息游标查询](https://git.neighbour.sg/neighbour/nomail-docs/src/branch/main/reference/message-cursor.md)。
 - 批量输入转换为 UUID 列表及 `BatchAction`。先检查原始 1～100 条限制，再解析 ID 和操作、去重；Service 不再匹配任意 action 字符串。
 - `http/contract/config.rs` 只定义业务请求外壳：创建必须提供 name/platform，内嵌 Core 的 `PlatformConfig`；拒绝未知字段、旧 provider/secret/source、null 替换和错误类型。PATCH 省略字段表示保留，platform 提供时完整替换并严格校验，description 可用空字符串清除，name 不允许空字符串。配置不再有 source，消息自身的平台来源和平台名兜底仍保留。
 - `CreateConfig` / `UpdateConfig` 通过业务构造入口验证，字段不对外开放构造，不派生 Debug/Serialize。Service 负责生成 Key、整体加密平台配置、时间和默认值，存储只接收含密文的 `NewConfig` / `ConfigPatch`，平台替换必须原子更新 provider 与 encrypted_platform。全空修改仍是只读，不更新接收配置的时间。当前不兼容或迁移旧配置数据。

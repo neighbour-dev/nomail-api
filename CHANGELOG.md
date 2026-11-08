@@ -20,7 +20,7 @@
 ### 升级说明
 
 - 从 `0.2.0` 升级时可保留现有数据库及配置；Server 启动时自动应用游标索引迁移，Workers 需按安装指南应用新增 D1 迁移。迁移只新增索引，不新增业务列或删除数据；升级前仍应备份。
-- 依赖旧 SSE 消息字段的客户端必须同步调整；游标查询是接收顺序分页，不是可靠同步日志，详见[消息游标查询](docs/message-cursor.md)。
+- 依赖旧 SSE 消息字段的客户端必须同步调整；游标查询是接收顺序分页，不是可靠同步日志，详见[消息游标查询](https://git.neighbour.sg/neighbour/nomail-docs/src/branch/main/reference/message-cursor.md)。
 
 ## [0.2.0] - 2026-11-04
 

@@ -1,6 +1,6 @@
 # 贡献指南
 
-欢迎提交问题报告、文档改进、修复和功能贡献。安装服务请先阅读[安装指南](docs/install.md)；较大的功能、接口或 Schema 变更，请先通过 Issue/讨论说明目标和方案。
+欢迎提交问题报告、文档改进、修复和功能贡献。安装服务请先阅读[安装指南](https://git.neighbour.sg/neighbour/nomail-docs/src/branch/main/guide/install.md)；较大的功能、接口或 Schema 变更，请先通过 Issue/讨论说明目标和方案。
 
 ## 开发环境
 
@@ -14,7 +14,7 @@ rustup component add rustfmt clippy
 rustup target add wasm32-unknown-unknown
 ```
 
-本地运行方法和密钥配置见[安装指南](docs/install.md)。不要使用生产凭据或生产数据库进行开发和测试。
+本地运行方法和密钥配置见[安装指南](https://git.neighbour.sg/neighbour/nomail-docs/src/branch/main/guide/install.md)。不要使用生产凭据或生产数据库进行开发和测试。
 
 ## 代码放在哪里
 
@@ -72,7 +72,7 @@ cargo run --locked -p nomail-app --features openapi --example export-openapi -- 
 cargo test --locked -p nomail-app --features openapi --lib
 ```
 
-接口变更应同时提交生成文件并核对文档快照，Workers 测试会校验实际响应的 Schema。用户操作变化更新 `docs/install.md`，贡献流程变化更新本文件，README 仅保留项目简介和文档入口。
+接口变更应同时提交生成文件并核对文档快照，Workers 测试会校验实际响应的 Schema。用户操作变化更新 `nomail-docs/guide/install.md`，接口使用说明在 `nomail-docs/reference/` 中维护；贡献流程变化更新本文件，README 仅保留项目简介和文档入口。文档仓库见 [nomail-docs](https://git.neighbour.sg/neighbour/nomail-docs)。
 
 ## 提交与评审
 
