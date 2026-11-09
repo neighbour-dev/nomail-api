@@ -1,43 +1,45 @@
-# 贡献指南
+# Contributing
 
-欢迎提交问题报告、文档改进、修复和功能贡献。安装服务请先阅读[安装指南](https://git.neighbour.sg/neighbour/nomail-docs/src/branch/main/guide/install.md)；较大的功能、接口或 Schema 变更，请先通过 Issue/讨论说明目标和方案。
+English | [简体中文](CONTRIBUTING.zh-CN.md)
 
-## 开发环境
+We welcome issue reports, documentation improvements, bug fixes, and feature contributions. To install the service, start with the [installation guide](https://git.neighbour.sg/neighbour/nomail-docs/src/branch/main/guide/install.md). For major feature, API, or schema changes, open an issue or discussion first to explain the goals and proposed approach.
 
-- Rust 1.99+，以及平台所需的系统编译工具。
-- `rustfmt`、Clippy；WASM 检查需要 `wasm32-unknown-unknown`。
-- 修改 Workers 或运行其集成测试时，需要 Node.js 22+ 和 `worker-build`。
-- Docker 只在构建、验证容器镜像时需要；原生测试无需外部数据库。
+## Development environment
+
+- Rust 1.99+ and the system build tools required by your platform.
+- `rustfmt` and Clippy; WASM checks also require `wasm32-unknown-unknown`.
+- Node.js 22+ and `worker-build` when modifying Workers or running its integration tests.
+- Docker is only needed to build and validate container images; native tests do not require an external database.
 
 ```bash
 rustup component add rustfmt clippy
 rustup target add wasm32-unknown-unknown
 ```
 
-本地运行方法和密钥配置见[安装指南](https://git.neighbour.sg/neighbour/nomail-docs/src/branch/main/guide/install.md)。不要使用生产凭据或生产数据库进行开发和测试。
+See the [installation guide](https://git.neighbour.sg/neighbour/nomail-docs/src/branch/main/guide/install.md) for local setup and secret configuration. Do not use production credentials or production databases for development or testing.
 
-## 代码放在哪里
+## Where code belongs
 
 ```text
-crates/nomail-core/       平台验签、解密、解析和基础内容提取
-crates/nomail-app/        开源业务、存储接口、接收用例与唯一 HTTP 执行
-crates/nomail-server/     Actix、SQLite、原生运行时与进程内 SSE
-crates/nomail-workers/    Workers、D1、WASM 运行时与 Durable Objects
+crates/nomail-core/       Platform signature verification, decryption, parsing, and basic content extraction
+crates/nomail-app/        Open-source business logic, storage interfaces, receive use cases, and the single HTTP execution layer
+crates/nomail-server/     Actix, SQLite, native runtime, and in-process SSE
+crates/nomail-workers/    Workers, D1, WASM runtime, and Durable Objects
 ```
 
-依赖方向：`Server / Workers → App → Core`。App 内部 HTTP 层依赖业务，业务不反向引用 HTTP。详细说明见 [Core](crates/nomail-core/README.md)、[App](crates/nomail-app/README.md) 和 [Workers](crates/nomail-workers/README.md)。
+Dependency direction: `Server / Workers → App → Core`. Within App, the HTTP layer depends on business logic, not the other way around. See the [Core](crates/nomail-core/README.md), [App](crates/nomail-app/README.md), and [Workers](crates/nomail-workers/README.md) documentation for details.
 
-- **修改平台协议：**在 Core 对应平台目录修改验签、解密、解析与测试；不要加入账号、数据库、系统时钟或开源版收件箱策略。
-- **修改业务：**在 App 实现，两端共用。存储接口表达原子操作，不要把刷新令牌消费、所有权检查或并发局部更新拆成无保护的 CRUD。
-- **新增接口：**在 App `http/contract/` 集中定义请求/响应 DTO，并在 `http/contract/routes.rs` 关联路由；`http/dispatch.rs` 转换业务输入/结果并绑定用例。业务和存储不使用 HTTP DTO，不向两端添加 `Operation` 分支或逐接口 Handler。
-- **修改部署：**两端仅处理请求、响应、存储、执行能力与实时连接，不重新实现业务规则。
-- **新增接入平台：**Core 协议支持与产品开放是两个步骤，还需核对接收配置、凭据模型、公开接口和两端存储测试。
+- **Platform protocol changes:** Update verification, decryption, parsing, and tests in the corresponding platform directory in Core. Do not add account, database, system clock, or open-source inbox policy dependencies.
+- **Business logic changes:** Implement them in App so both runtimes share them. Storage interfaces must express atomic operations; do not split refresh token consumption, ownership checks, or concurrent partial updates into unprotected CRUD operations.
+- **New endpoints:** Define request/response DTOs centrally in App's `http/contract/` and associate routes in `http/contract/routes.rs`. Use `http/dispatch.rs` to convert business inputs/results and bind use cases. Business logic and storage must not use HTTP DTOs. Do not add `Operation` branches or per-endpoint handlers to either runtime.
+- **Deployment changes:** Both runtimes only handle requests, responses, storage, execution capabilities, and real-time connections; do not reimplement business rules there.
+- **New platform integrations:** Core protocol support and product availability are separate steps. Also check receive configuration, credential models, public APIs, and storage tests for both runtimes.
 
-保持已有 API 行为，除非变更明确说明不兼容性。历史 PRD、迁移记录和缺失接口分析不代表当前契约；以代码、生成的 OpenAPI 和测试为准。
+Preserve existing API behavior unless a change explicitly documents its incompatibilities. Historical PRDs, migration notes, and missing-endpoint analyses do not define the current contract; use the code, generated OpenAPI, and tests as the source of truth.
 
-## 测试与检查
+## Tests and checks
 
-在仓库根目录执行：
+Run from the repository root:
 
 ```bash
 cargo fmt --all --check
@@ -50,9 +52,9 @@ cargo check --locked -p nomail-workers --target wasm32-unknown-unknown
 cargo build --locked --release -p nomail-server --bins
 ```
 
-Server 集成测试使用独立的临时 SQLite 文件。App 的架构测试检查依赖边界，并防止两端重新维护接口分发。
+Server integration tests use isolated temporary SQLite files. App architecture tests check dependency boundaries and prevent the two runtimes from maintaining their own endpoint dispatch logic.
 
-涉及 Workers、共享 HTTP 或业务行为时，还要运行本地 D1/DO 测试：
+For changes involving Workers, shared HTTP behavior, or business logic, also run the local D1/DO tests:
 
 ```bash
 cargo install worker-build --locked --version 0.8.7
@@ -61,55 +63,55 @@ npm ci
 npm test
 ```
 
-该测试使用临时本地 D1 和 Durable Objects，不需要 Cloudflare 账号、不连接远程数据库，使用端口 `8791`。确保 `worker-build` 在 `PATH` 中且端口未被占用。
+These tests use temporary local D1 and Durable Objects instances, require no Cloudflare account, and do not connect to remote databases. They use port `8791`. Ensure `worker-build` is in `PATH` and the port is available.
 
-## 更新接口文档
+## Updating API documentation
 
-`docs/swagger.json` 由真实 DTO 和路由契约生成，不手工编辑。在仓库根目录执行：
+`docs/swagger.json` is generated from the actual DTOs and route contracts; do not edit it manually. Run from the repository root:
 
 ```bash
 cargo run --locked -p nomail-app --features openapi --example export-openapi -- docs/swagger.json
 cargo test --locked -p nomail-app --features openapi --lib
 ```
 
-接口变更应同时提交生成文件并核对文档快照，Workers 测试会校验实际响应的 Schema。用户操作变化更新 `nomail-docs/guide/install.md`，接口使用说明在 `nomail-docs/reference/` 中维护；贡献流程变化更新本文件，README 仅保留项目简介和文档入口。文档仓库见 [nomail-docs](https://git.neighbour.sg/neighbour/nomail-docs)。
+Include the generated file with API changes and check documentation snapshots. Workers tests validate the schemas of actual responses. Update `nomail-docs/guide/install.md` for changes to user procedures, and maintain API usage documentation in `nomail-docs/reference/`. Update this guide when contribution procedures change; keep the README limited to the project introduction and documentation links. See the [nomail-docs](https://git.neighbour.sg/neighbour/nomail-docs) documentation repository.
 
-## 提交与评审
+## Commits and reviews
 
-### 提交规范
+### Commit conventions
 
-提交信息采用 Conventional Commits 格式：
+Use the Conventional Commits format:
 
 ```text
-<type>[可选 scope][可选 !]: <英文简短描述>
+<type>[optional scope][optional !]: <short description in English>
 
-[可选正文]
+[optional body]
 
-[可选脚注]
+[optional footer]
 ```
 
-| 类型 | 用途 |
+| Type | Purpose |
 |---|---|
-| `feat` | 新功能 |
-| `fix` | 修复问题 |
-| `refactor` | 不改变功能的重构 |
-| `perf` | 性能优化 |
-| `docs` | 文档 |
-| `test` | 测试 |
-| `build` | 构建、打包与依赖 |
-| `ci` | GitHub Actions 等 CI 配置 |
-| `chore` | 不属于以上类型的维护工作 |
-| `revert` | 撤销已有提交 |
+| `feat` | New features |
+| `fix` | Bug fixes |
+| `refactor` | Refactoring without behavior changes |
+| `perf` | Performance improvements |
+| `docs` | Documentation |
+| `test` | Tests |
+| `build` | Build, packaging, and dependencies |
+| `ci` | CI configuration, such as GitHub Actions |
+| `chore` | Maintenance not covered by the types above |
+| `revert` | Reverting an existing commit |
 
-- 标题使用英文、动词原形，不加句号，建议不超过 72 字符。
-- scope 可省略；涉及单个 crate 时可使用 `core`、`app`、`server`、`workers`。
-- 一个提交解决一个完整问题；重构与行为变化尽量分开，每一批保持可编译、可验证。
-- 不相关的修改分开提交，避免使用 `update`、`fix bug` 等无法说明目的的标题。
-- 复杂变更在正文说明原因、影响和必要的验证信息，不只重复修改内容。
-- 不兼容变更在类型或 scope 后加 `!`，并在脚注中使用 `BREAKING CHANGE:` 说明影响和迁移方式。
-- 撤销提交时在正文注明被撤销的 commit SHA。
+- Write the subject in English, use the imperative mood, and omit the trailing period. Aim for no more than 72 characters.
+- The scope is optional; use `core`, `app`, `server`, or `workers` for changes limited to one crate.
+- Each commit should address one complete concern. Separate refactoring from behavior changes where possible, and keep each batch buildable and verifiable.
+- Commit unrelated changes separately. Avoid vague subjects such as `update` or `fix bug`.
+- For complex changes, explain the rationale, impact, and necessary verification details in the body rather than merely repeating what changed.
+- For breaking changes, add `!` after the type or scope and include a `BREAKING CHANGE:` footer describing the impact and migration steps.
+- When reverting a commit, include its SHA in the body.
 
-示例：
+Examples:
 
 ```text
 feat(core): support a new webhook provider
@@ -118,7 +120,7 @@ ci: publish release binaries
 docs: remove obsolete migration guide
 ```
 
-不兼容变更示例：
+Breaking change example:
 
 ```text
 feat(app)!: change the pagination response format
@@ -127,20 +129,20 @@ BREAKING CHANGE: Replace the total field with hasMore. Clients must update
 their pagination handling before upgrading.
 ```
 
-### PR 与评审要求
+### Pull request and review requirements
 
-- PR 说明动机、主要变化、验证命令，以及对接口、数据库、部署和兼容性的影响。
-- 修复应包含能复现原问题的回归测试；影响两种部署的改动应验证两端。
-- 不提交 `.env`、`.dev.vars`、Token、真实 Webhook 原文、数据库、`target/`、`node_modules/` 或构建产物。提交前检查 diff，样例数据应脱敏。
-- 凭据或安全问题不要附带真实密钥公开报告；先通过仓库维护者的私下联系方式协调处理。
+- Describe the motivation, main changes, verification commands, and impact on APIs, databases, deployment, and compatibility.
+- Bug fixes should include regression tests that reproduce the original issue. Verify both runtimes for changes affecting both deployment options.
+- Do not commit `.env`, `.dev.vars`, tokens, real webhook payloads, databases, `target/`, `node_modules/`, or build artifacts. Review the diff before committing and sanitize example data.
+- Do not include real secrets in public reports of credential or security issues. Coordinate privately with the repository maintainers first.
 
-## 版本维护
+## Version maintenance
 
-- 项目版本统一定义在根目录 `Cargo.toml` 的 `[workspace.package].version`，四个 crate 继承同一版本。
-- 面向用户的变更记录在 `CHANGELOG.md` 的 `Unreleased` 中。
-- 发布前更新版本，运行 `cargo check` 同步 `Cargo.lock`，将待发布条目整理到对应版本和实际发布日期下，保留 `Unreleased` 区域；检查通过后提交。
-- GitHub Release 正文取自 `CHANGELOG.md` 中与标签精确对应的版本条目（例如 `v0.2.0` 对应 `## [0.2.0] - 日期`），不使用 GitHub 自动生成说明，也不使用 `Unreleased`。预发布需单独记录完整版本号；条目缺失、重复或为空时，发布检查失败。已有 Release 重跑仅更新附件，不覆盖原正文。
-- 按 [Git Tag 规范](docs/tagging.md) 推送与项目版本一致的标签，会自动发布镜像和 GitHub Release；不要补发旧稳定版本，以免覆盖 `latest`。
-- 普通 push / PR 的 CI 执行格式检查、默认成员的 Rust 测试及发布说明提取脚本测试，不能替代上述完整检查。脚本测试可在本地运行：`python3 -m unittest discover -s .github/scripts -p 'test_*.py'`。
+- The project version is defined in `[workspace.package].version` in the root `Cargo.toml`; all four crates inherit it.
+- Record user-facing changes under `Unreleased` in `CHANGELOG.md`.
+- Before a release, update the version, run `cargo check` to synchronize `Cargo.lock`, and move pending entries under the corresponding version and actual release date while retaining the `Unreleased` section. Commit after checks pass.
+- GitHub Release notes come from the `CHANGELOG.md` entry that exactly matches the tag (for example, `v0.2.0` matches `## [0.2.0] - YYYY-MM-DD`). Do not use GitHub-generated notes or `Unreleased`. Prereleases require their own full-version entries. Release checks fail if an entry is missing, duplicated, or empty. Rerunning an existing release updates assets only and does not overwrite its original notes.
+- Push a tag matching the project version according to the [Git tag conventions](docs/tagging.md) to automatically publish images and a GitHub Release. Do not publish older stable versions retroactively, as this could overwrite `latest`.
+- CI for regular pushes and pull requests runs formatting checks, Rust tests for the default workspace members, and release-note extraction script tests. It does not replace the full checks above. Run the script tests locally with `python3 -m unittest discover -s .github/scripts -p 'test_*.py'`.
 
-检查工作流为 `.github/workflows/ci.yml`；发布工作流为 `.github/workflows/release.yml`，仅由版本标签触发，复用检查通过后再发布。
+The check workflow is `.github/workflows/ci.yml`. The release workflow is `.github/workflows/release.yml`; it is triggered only by version tags and reuses the checks before publishing.
