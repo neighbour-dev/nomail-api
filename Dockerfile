@@ -1,6 +1,7 @@
 # syntax=docker/dockerfile:1
-FROM rust:1.99-alpine3.23 AS builder
-RUN apk add --no-cache build-base
+FROM rust:1.99-alpine3.24 AS builder
+RUN apk upgrade --no-cache \
+    && apk add --no-cache build-base
 WORKDIR /src
 COPY Cargo.toml Cargo.lock ./
 COPY crates ./crates
@@ -10,8 +11,9 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
     && mkdir -p /out \
     && cp target/release/nomail-api target/release/reset-account target/release/gen-secret-key /out/
 
-FROM alpine:3.23
-RUN apk add --no-cache ca-certificates tzdata \
+FROM alpine:3.24.4
+RUN apk upgrade --no-cache \
+    && apk add --no-cache ca-certificates tzdata \
     && addgroup -S -g 10001 nomail \
     && adduser -S -D -u 10001 -G nomail nomail
 RUN mkdir /data && chown nomail:nomail /data
