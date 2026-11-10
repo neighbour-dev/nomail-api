@@ -44,9 +44,9 @@ async fn one_message_preserves_platform_detail_level_raw_and_independent_user_st
     let config: Value = test::read_body_json(response).await;
     let receive_path = config["data"]["url"].as_str().unwrap();
     let config_path = format!("/api/webhook/configs/{}", config["data"]["id"]);
-    let payload = json!({"action":"created","repository":{"full_name":"owner/repo"},
-        "issue":{"number":123,"title":"Login failure","body":"Detailed issue body","state":"open","labels":[{"name":"bug","color":"ff0000"}],"user":{"login":"alice","avatar_url":"https://example.com/alice.png"}},
-        "comment":{"id":456,"body":"Reply text","created_at":"2000-01-01T00:00:00Z","user":{"login":"bob"}},
+    let payload = json!({"action":"created","repository":{"id":1,"full_name":"owner/repo","private":true,"created_at":"2026-01-01T00:00:00Z"},
+        "issue":{"id":2,"number":123,"title":"Login failure","body":"Detailed issue body","state":"open","labels":[{"id":3,"name":"bug","color":"ff0000"}],"user":{"login":"alice","avatar_url":"https://example.com/alice.png"},"assignees":[{"id":4,"login":"bob","type":"User"}],"pull_request":{"html_url":"https://example.com/pull/123"}},
+        "comment":{"id":456,"body":"Reply text","created_at":"2000-01-01T00:00:00Z","updated_at":"2000-01-02T00:00:00Z","user":{"id":4,"login":"bob"}},
         "custom":{"not_in_summary":true}});
     let mut mac = Hmac::<Sha256>::new_from_slice(b"secret").unwrap();
     mac.update(payload.to_string().as_bytes());
@@ -89,6 +89,27 @@ async fn one_message_preserves_platform_detail_level_raw_and_independent_user_st
     assert_eq!(before["metadata"]["eventType"], "issue_comment");
     assert_eq!(before["metadata"]["deduplicationKey"]["value"], long_key);
     assert_eq!(before["platformData"]["event"]["issue"]["number"], 123);
+    assert_eq!(before["platformData"]["event"]["issue"]["id"], 2);
+    assert_eq!(
+        before["platformData"]["event"]["issue"]["assignees"][0]["type"],
+        "User"
+    );
+    assert_eq!(
+        before["platformData"]["event"]["issue"]["pull_request"]["html_url"],
+        "https://example.com/pull/123"
+    );
+    assert_eq!(
+        before["platformData"]["event"]["repository"]["private"],
+        true
+    );
+    assert_eq!(
+        before["platformData"]["event"]["repository"]["created_at"],
+        "2026-01-01T00:00:00Z"
+    );
+    assert_eq!(
+        before["platformData"]["event"]["comment"]["updated_at"],
+        "2000-01-02T00:00:00Z"
+    );
     assert_eq!(
         before["platformData"]["event"]["issue"]["labels"][0]["name"],
         "bug"
@@ -129,7 +150,7 @@ async fn one_message_preserves_platform_detail_level_raw_and_independent_user_st
     let raw: Value = test::read_body_json(response).await;
     assert_eq!(raw, payload);
 
-    let workflow = json!({"action":"completed","workflow_run":{"id":10,"name":"CI","status":"completed","conclusion":"failure","head_branch":"main","run_number":11}});
+    let workflow = json!({"action":"completed","workflow_run":{"id":10,"name":"CI","status":"completed","conclusion":"failure","head_branch":"main","run_number":11,"display_title":"Build PR","run_attempt":2,"actor":{"id":4,"login":"bob"}}});
     let mut mac = Hmac::<Sha256>::new_from_slice(b"secret").unwrap();
     mac.update(workflow.to_string().as_bytes());
     let response = test::call_service(
@@ -160,6 +181,14 @@ async fn one_message_preserves_platform_detail_level_raw_and_independent_user_st
     .await;
     let workflow: Value = test::read_body_json(response).await;
     assert_eq!(workflow["data"]["level"], "normal");
+    assert_eq!(
+        workflow["data"]["platformData"]["event"]["workflow_run"]["run_attempt"],
+        2
+    );
+    assert_eq!(
+        workflow["data"]["platformData"]["event"]["workflow_run"]["actor"]["id"],
+        4
+    );
     assert_eq!(
         workflow["data"]["platformData"]["event"]["workflow_run"]["conclusion"],
         "failure"

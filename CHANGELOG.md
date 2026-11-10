@@ -6,6 +6,10 @@
 
 ## [Unreleased]
 
+### 新增
+
+- 扩展 GitHub 消息的结构化平台数据：补齐 Issue/PR 状态、指派、里程碑、审核与代码评论位置，新增 Push/引用/提交状态、Workflow Job/步骤、Check Run/Suite、Release/附件、Discussion/答案、Deployment/状态和编辑前信息，供客户端按事件展示。保留原有字段、宽容解析及完整 raw，旧消息快照可继续读取；仓库时间兼容字符串和 Unix 秒。
+
 ### 修复
 
 - Docker 构建阶段升级至 Alpine 3.24，运行镜像升级至包含安全修复的 Alpine 3.24.4；两个阶段均在构建时更新系统包，获取该分支已发布的安全更新。

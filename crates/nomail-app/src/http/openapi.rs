@@ -216,6 +216,42 @@ mod tests {
         let schemas = document["components"]["schemas"].as_object().unwrap();
         assert!(schemas.contains_key("MessageDetail"));
         assert!(schemas.contains_key("GithubEvent"));
+        for field in [
+            "review",
+            "thread",
+            "workflow_job",
+            "check_run",
+            "check_suite",
+            "release",
+            "discussion",
+            "deployment",
+            "deployment_status",
+            "changes",
+            "push",
+            "git_ref",
+            "commit_status",
+        ] {
+            assert!(
+                schemas["GithubEvent"]["properties"].get(field).is_some(),
+                "missing GitHub event field: {field}"
+            );
+        }
+        assert!(
+            schemas["GithubComment"]["properties"]
+                .get("in_reply_to_id")
+                .is_some()
+        );
+        assert!(
+            schemas["GithubIssue"]["properties"]
+                .get("pull_request")
+                .is_some()
+        );
+        assert!(
+            schemas["GithubWorkflowJob"]["properties"]
+                .get("steps")
+                .is_some()
+        );
+        assert!(schemas["GithubTimestamp"]["anyOf"].is_array());
         assert!(
             schemas
                 .keys()

@@ -1,5 +1,7 @@
 //! GitHub webhook authentication, JSON/form decoding, event model and inbox mapping.
 pub mod config;
+mod models;
+pub use models::*;
 #[cfg(test)]
 mod tests;
 use crate::webhook::{
@@ -7,120 +9,7 @@ use crate::webhook::{
     ProtocolResponse, ReceiveOutcome, WebhookConfig, WebhookError, WebhookRequest, crypto,
     support::*,
 };
-use serde::{Deserialize, Serialize};
 use serde_json::Value;
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
-pub struct GithubEvent {
-    pub action: Option<String>,
-    pub repository: Option<GithubRepository>,
-    pub sender: Option<GithubUser>,
-    pub issue: Option<GithubIssue>,
-    pub comment: Option<GithubComment>,
-    pub pull_request: Option<GithubPullRequest>,
-    pub workflow_run: Option<GithubWorkflowRun>,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
-pub struct GithubUser {
-    pub login: Option<String>,
-    pub avatar_url: Option<String>,
-    pub html_url: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
-pub struct GithubLabel {
-    pub name: Option<String>,
-    pub color: Option<String>,
-    pub description: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
-pub struct GithubIssue {
-    pub number: Option<u64>,
-    pub title: Option<String>,
-    pub body: Option<String>,
-    pub state: Option<String>,
-    pub html_url: Option<String>,
-    pub user: Option<GithubUser>,
-    pub labels: Vec<GithubLabel>,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
-pub struct GithubComment {
-    pub id: Option<u64>,
-    pub body: Option<String>,
-    pub html_url: Option<String>,
-    pub user: Option<GithubUser>,
-    pub created_at: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
-pub struct GithubPullRequest {
-    #[serde(flatten)]
-    pub issue: GithubIssue,
-    pub merged: Option<bool>,
-    pub head_branch: Option<String>,
-    pub base_branch: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
-pub struct GithubWorkflowRun {
-    pub id: Option<u64>,
-    pub name: Option<String>,
-    pub status: Option<String>,
-    pub conclusion: Option<String>,
-    pub html_url: Option<String>,
-    pub head_branch: Option<String>,
-    pub head_sha: Option<String>,
-    pub run_number: Option<u64>,
-}
-
-fn user(value: &Value) -> Option<GithubUser> {
-    value.as_object().map(|_| GithubUser {
-        login: optional(text(value, &["login"])),
-        avatar_url: optional(text(value, &["avatar_url"])),
-        html_url: optional(text(value, &["html_url"])),
-    })
-}
-
-fn issue(value: &Value) -> Option<GithubIssue> {
-    value.as_object().map(|_| GithubIssue {
-        number: value["number"].as_u64(),
-        title: optional(text(value, &["title"])),
-        body: value["body"].as_str().map(str::to_owned),
-        state: optional(text(value, &["state"])),
-        html_url: optional(text(value, &["html_url"])),
-        user: user(&value["user"]),
-        labels: value["labels"]
-            .as_array()
-            .into_iter()
-            .flatten()
-            .map(|label| GithubLabel {
-                name: label
-                    .as_str()
-                    .map(str::to_owned)
-                    .or_else(|| optional(text(label, &["name"]))),
-                color: optional(text(label, &["color"])),
-                description: optional(text(label, &["description"])),
-            })
-            .collect(),
-    })
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
-pub struct GithubRepository {
-    pub full_name: Option<String>,
-    pub html_url: Option<String>,
-}
 
 pub(in crate::webhook) fn receive(
     config: &WebhookConfig<'_>,
@@ -154,43 +43,7 @@ pub(in crate::webhook) fn receive(
             body: b"pong".to_vec(),
         }));
     }
-    let event = GithubEvent {
-        action: optional(text(&payload, &["action"])),
-        repository: payload
-            .get("repository")
-            .filter(|value| value.is_object())
-            .map(|value| GithubRepository {
-                full_name: optional(text(value, &["full_name"])),
-                html_url: optional(text(value, &["html_url"])),
-            }),
-        sender: user(&payload["sender"]),
-        issue: issue(&payload["issue"]),
-        comment: payload["comment"].as_object().map(|_| GithubComment {
-            id: payload["comment"]["id"].as_u64(),
-            body: payload["comment"]["body"].as_str().map(str::to_owned),
-            html_url: optional(text(&payload, &["comment", "html_url"])),
-            user: user(&payload["comment"]["user"]),
-            created_at: optional(text(&payload, &["comment", "created_at"])),
-        }),
-        pull_request: issue(&payload["pull_request"]).map(|issue| GithubPullRequest {
-            issue,
-            merged: payload["pull_request"]["merged"].as_bool(),
-            head_branch: optional(text(&payload, &["pull_request", "head", "ref"])),
-            base_branch: optional(text(&payload, &["pull_request", "base", "ref"])),
-        }),
-        workflow_run: payload["workflow_run"]
-            .as_object()
-            .map(|_| GithubWorkflowRun {
-                id: payload["workflow_run"]["id"].as_u64(),
-                name: optional(text(&payload, &["workflow_run", "name"])),
-                status: optional(text(&payload, &["workflow_run", "status"])),
-                conclusion: optional(text(&payload, &["workflow_run", "conclusion"])),
-                html_url: optional(text(&payload, &["workflow_run", "html_url"])),
-                head_branch: optional(text(&payload, &["workflow_run", "head_branch"])),
-                head_sha: optional(text(&payload, &["workflow_run", "head_sha"])),
-                run_number: payload["workflow_run"]["run_number"].as_u64(),
-            }),
-    };
+    let event = GithubEvent::from_payload(&event_type, &payload);
     Ok(PlatformEvent {
         metadata: metadata(
             event_type,

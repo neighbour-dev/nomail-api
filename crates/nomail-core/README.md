@@ -58,7 +58,11 @@ WebhookRequest（签名用的原始字节）+ 可信配置
 
 `raw.to_readable_string()` 对 JSON 格式化显示，对表单逐行展示已解码字段；`media_type()` 描述该可读表示。解析会改变 JSON 空白、字段顺序、表单编码等，**raw 不能用于重新验签或精确 HTTP 回放**。签名仍只使用 `WebhookRequest.body`。Core 不保留整套 HTTP 头或密文字节，不实现传输报文归档。
 
-平台模型只提取已支持的关键语义：例如 GitHub 的仓库和 action、Stripe 的资源引用、飞书的消息类型、Slack 的交互 action、Telegram 的聊天和消息标识。它不是另一份完整 JSON 副本。完整结构在 raw；映射可同时使用语义模型与 raw，不隐式调用外部 API。
+平台模型提取用于展示和交互的业务语义：例如 GitHub 的事件资源、状态、审核、代码位置及执行步骤，Stripe 的资源引用、飞书的消息类型、Slack 的交互 action、Telegram 的聊天和消息标识。它不是另一份完整 JSON 副本。完整结构在 raw；映射可同时使用语义模型与 raw，不隐式调用外部 API。
+
+GitHub 的公开类型位于 `webhook::platforms::github`，模型定义集中在 `github/models.rs`。`GithubEvent` 保留原有字段，并提供 `review/thread`、`workflow/workflow_job`、`check_run/check_suite`、`release`、`discussion/answer/old_answer`、`deployment/deployment_status`、`label/assignee/milestone/changes`。根级业务字段分别归入 `push`、`git_ref`（create/delete）和 `commit_status`（status）。Issue 的 `pull_request` 引用用于区分 PR 会话评论；PR 保留 `head_branch/base_branch` 并补充 `head/base`。`GithubTimestamp` 保留仓库时间原来的字符串或 Unix 秒类型。
+
+接收仍先验签并解码为 JSON，再逐字段提取；单个字段类型异常不会使整个事件被拒绝或丢弃其他有效字段。正文、代码片段和编辑前正文保留空白，未知字段仍在 raw。新增字段使用默认值以兼容旧的持久化快照；不会从旧 raw 隐式重建历史平台数据，也不改变现有通用摘要或优先级规则。
 
 Generic 明确是 **NoMail 自定义协议**，不是任意平台自动识别器。`GenericEvent::Json` 表达 JSON 字段，`GenericEvent::Text` 表达 `X-NoMail-*` 请求头输入；没有 `GenericDefaults`。JSON 分支不继承文本分支的请求头。非 UTF-8 文本现在显式拒绝，不用有损替换伪装成可读原文。
 

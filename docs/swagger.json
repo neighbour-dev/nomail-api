@@ -575,31 +575,130 @@
         ],
         "type": "object"
       },
-      "GithubComment": {
+      "GithubApp": {
         "properties": {
-          "body": {
+          "created_at": {
+            "default": null,
             "type": [
               "string",
               "null"
             ]
           },
-          "created_at": {
+          "description": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "external_url": {
+            "default": null,
             "type": [
               "string",
               "null"
             ]
           },
           "html_url": {
+            "default": null,
             "type": [
               "string",
               "null"
             ]
           },
           "id": {
+            "default": null,
             "format": "uint64",
             "minimum": 0,
             "type": [
               "integer",
+              "null"
+            ]
+          },
+          "name": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "node_id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "owner": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubUser"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "slug": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "updated_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "node_id",
+          "slug",
+          "name",
+          "description",
+          "owner",
+          "html_url",
+          "external_url",
+          "created_at",
+          "updated_at"
+        ],
+        "type": "object"
+      },
+      "GithubBranch": {
+        "properties": {
+          "label": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "ref": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "repo": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubRepository"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "sha": {
+            "default": null,
+            "type": [
+              "string",
               "null"
             ]
           },
@@ -611,15 +710,1044 @@
               {
                 "type": "null"
               }
+            ],
+            "default": null
+          }
+        },
+        "required": [
+          "label",
+          "ref",
+          "sha",
+          "user",
+          "repo"
+        ],
+        "type": "object"
+      },
+      "GithubCategoryChange": {
+        "properties": {
+          "from": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubDiscussionCategory"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "required": [
+          "from"
+        ],
+        "type": "object"
+      },
+      "GithubChanges": {
+        "properties": {
+          "body": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubStringChange"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "category": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubCategoryChange"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "color": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubStringChange"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "default_branch": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubStringChange"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "description": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubStringChange"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "homepage": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubStringChange"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "name": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubStringChange"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "title": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubStringChange"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "required": [
+          "body",
+          "title",
+          "name",
+          "description",
+          "color",
+          "category",
+          "homepage",
+          "default_branch"
+        ],
+        "type": "object"
+      },
+      "GithubCheckOutput": {
+        "properties": {
+          "annotations_count": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "annotations_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "summary": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "text": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "title": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "title",
+          "summary",
+          "text",
+          "annotations_count",
+          "annotations_url"
+        ],
+        "type": "object"
+      },
+      "GithubCheckRun": {
+        "properties": {
+          "app": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubApp"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "check_suite": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubCheckSuite"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "completed_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "conclusion": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "details_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "external_id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "head_sha": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "html_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "name": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "node_id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "output": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubCheckOutput"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "pull_requests": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/GithubPullRequestReference"
+            },
+            "type": "array"
+          },
+          "started_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
             ]
           }
         },
         "required": [
           "id",
+          "node_id",
+          "name",
+          "head_sha",
+          "status",
+          "conclusion",
+          "external_id",
+          "html_url",
+          "details_url",
+          "started_at",
+          "completed_at",
+          "output",
+          "app",
+          "check_suite",
+          "pull_requests"
+        ],
+        "type": "object"
+      },
+      "GithubCheckSuite": {
+        "properties": {
+          "after": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "app": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubApp"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "before": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "check_runs_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "conclusion": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "created_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "head_branch": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "head_commit": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubCommit"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "head_sha": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "latest_check_runs_count": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "node_id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "pull_requests": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/GithubPullRequestReference"
+            },
+            "type": "array"
+          },
+          "rerequestable": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "runs_rerequestable": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "status": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "updated_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "node_id",
+          "head_branch",
+          "head_sha",
+          "before",
+          "after",
+          "status",
+          "conclusion",
+          "app",
+          "head_commit",
+          "pull_requests",
+          "created_at",
+          "updated_at",
+          "latest_check_runs_count",
+          "check_runs_url",
+          "rerequestable",
+          "runs_rerequestable"
+        ],
+        "type": "object"
+      },
+      "GithubComment": {
+        "properties": {
+          "author_association": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "body": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "child_comment_count": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "commit_id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "created_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "diff_hunk": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "discussion_id": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "html_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "in_reply_to_id": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "issue_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "line": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "node_id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "original_commit_id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "original_line": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "original_position": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "original_start_line": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "parent_id": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "path": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "position": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "pull_request_review_id": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "pull_request_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reactions": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubReactions"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "side": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "start_line": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "start_side": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "subject_type": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "updated_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "user": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubUser"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "required": [
+          "id",
+          "node_id",
           "body",
           "html_url",
           "user",
-          "created_at"
+          "created_at",
+          "updated_at",
+          "author_association",
+          "reactions",
+          "commit_id",
+          "original_commit_id",
+          "path",
+          "diff_hunk",
+          "line",
+          "original_line",
+          "side",
+          "start_line",
+          "original_start_line",
+          "start_side",
+          "position",
+          "original_position",
+          "subject_type",
+          "pull_request_review_id",
+          "in_reply_to_id",
+          "discussion_id",
+          "parent_id",
+          "child_comment_count",
+          "url",
+          "issue_url",
+          "pull_request_url"
+        ],
+        "type": "object"
+      },
+      "GithubCommit": {
+        "properties": {
+          "added": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "author": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubCommitAuthor"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "committer": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubCommitAuthor"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "distinct": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "message": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "modified": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "removed": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "timestamp": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "tree_id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "tree_id",
+          "message",
+          "timestamp",
+          "url",
+          "distinct",
+          "author",
+          "committer",
+          "added",
+          "removed",
+          "modified"
+        ],
+        "type": "object"
+      },
+      "GithubCommitAuthor": {
+        "properties": {
+          "date": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "email": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "username": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "email",
+          "username",
+          "date"
+        ],
+        "type": "object"
+      },
+      "GithubCommitReference": {
+        "properties": {
+          "html_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sha": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "sha",
+          "url",
+          "html_url"
+        ],
+        "type": "object"
+      },
+      "GithubCommitStatus": {
+        "properties": {
+          "avatar_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "branches": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/GithubStatusBranch"
+            },
+            "type": "array"
+          },
+          "commit": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubStatusCommit"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "context": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "created_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "description": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "name": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sha": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "state": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "target_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "updated_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "state",
+          "context",
+          "description",
+          "sha",
+          "target_url",
+          "name",
+          "avatar_url",
+          "created_at",
+          "updated_at",
+          "commit",
+          "branches"
         ],
         "type": "object"
       },
@@ -635,13 +1763,633 @@
         ],
         "type": "object"
       },
-      "GithubEvent": {
+      "GithubDeployment": {
         "properties": {
-          "action": {
+          "created_at": {
+            "default": null,
             "type": [
               "string",
               "null"
             ]
+          },
+          "creator": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubUser"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "description": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "environment": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "node_id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "original_environment": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "payload": {
+            "default": null
+          },
+          "performed_via_github_app": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubApp"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "production_environment": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "ref": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sha": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "statuses_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "task": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "transient_environment": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "updated_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "node_id",
+          "ref",
+          "sha",
+          "task",
+          "environment",
+          "original_environment",
+          "description",
+          "creator",
+          "production_environment",
+          "transient_environment",
+          "created_at",
+          "updated_at",
+          "statuses_url",
+          "performed_via_github_app",
+          "payload"
+        ],
+        "type": "object"
+      },
+      "GithubDeploymentStatus": {
+        "properties": {
+          "created_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "creator": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubUser"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "deployment_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "description": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "environment": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "environment_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "log_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "node_id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "performed_via_github_app": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubApp"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "state": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "target_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "updated_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "node_id",
+          "state",
+          "description",
+          "environment",
+          "environment_url",
+          "target_url",
+          "log_url",
+          "creator",
+          "created_at",
+          "updated_at",
+          "deployment_url",
+          "performed_via_github_app"
+        ],
+        "type": "object"
+      },
+      "GithubDiscussion": {
+        "properties": {
+          "active_lock_reason": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "answer_chosen_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "answer_chosen_by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubUser"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "answer_html_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "author_association": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "body": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "category": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubDiscussionCategory"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "comments": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "created_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "html_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "labels": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/GithubLabel"
+            },
+            "type": "array"
+          },
+          "locked": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "node_id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "number": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "reactions": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubReactions"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "state": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "state_reason": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "title": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "updated_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "user": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubUser"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "required": [
+          "id",
+          "node_id",
+          "number",
+          "title",
+          "body",
+          "html_url",
+          "user",
+          "category",
+          "state",
+          "state_reason",
+          "locked",
+          "active_lock_reason",
+          "labels",
+          "comments",
+          "answer_html_url",
+          "answer_chosen_at",
+          "answer_chosen_by",
+          "created_at",
+          "updated_at",
+          "author_association",
+          "reactions"
+        ],
+        "type": "object"
+      },
+      "GithubDiscussionCategory": {
+        "properties": {
+          "created_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "description": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "emoji": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "is_answerable": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "name": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "node_id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "repository_id": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "slug": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "updated_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "node_id",
+          "repository_id",
+          "name",
+          "description",
+          "slug",
+          "emoji",
+          "is_answerable",
+          "created_at",
+          "updated_at"
+        ],
+        "type": "object"
+      },
+      "GithubEvent": {
+        "properties": {
+          "action": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "after": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "answer": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubComment"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "assignee": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubUser"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "before": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "changes": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubChanges"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "check_run": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubCheckRun"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "check_suite": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubCheckSuite"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
           },
           "comment": {
             "anyOf": [
@@ -651,7 +2399,63 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "default": null
+          },
+          "commit_status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubCommitStatus"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "deployment": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubDeployment"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "deployment_status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubDeploymentStatus"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "discussion": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubDiscussion"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "git_ref": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubRefEvent"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
           },
           "issue": {
             "anyOf": [
@@ -661,7 +2465,50 @@
               {
                 "type": "null"
               }
+            ],
+            "default": null
+          },
+          "label": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubLabel"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "milestone": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubMilestone"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "number": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
             ]
+          },
+          "old_answer": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubComment"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
           },
           "pull_request": {
             "anyOf": [
@@ -671,7 +2518,30 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "default": null
+          },
+          "push": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubPush"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "release": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubRelease"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
           },
           "repository": {
             "anyOf": [
@@ -681,7 +2551,19 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "default": null
+          },
+          "review": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubReview"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
           },
           "sender": {
             "anyOf": [
@@ -691,7 +2573,55 @@
               {
                 "type": "null"
               }
+            ],
+            "default": null
+          },
+          "starred_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
             ]
+          },
+          "thread": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubReviewThread"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "updated_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "workflow": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubWorkflow"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "workflow_job": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubWorkflowJob"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
           },
           "workflow_run": {
             "anyOf": [
@@ -701,7 +2631,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "default": null
           }
         },
         "required": [
@@ -711,51 +2642,113 @@
           "issue",
           "comment",
           "pull_request",
-          "workflow_run"
+          "workflow_run",
+          "review",
+          "thread",
+          "workflow",
+          "workflow_job",
+          "check_run",
+          "check_suite",
+          "release",
+          "discussion",
+          "deployment",
+          "deployment_status",
+          "label",
+          "assignee",
+          "milestone",
+          "changes",
+          "answer",
+          "old_answer",
+          "number",
+          "before",
+          "after",
+          "updated_at",
+          "starred_at",
+          "push",
+          "git_ref",
+          "commit_status"
+        ],
+        "type": "object"
+      },
+      "GithubGitCommit": {
+        "properties": {
+          "author": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubCommitAuthor"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "comment_count": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "committer": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubCommitAuthor"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "message": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "tree": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubCommitReference"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "message",
+          "author",
+          "committer",
+          "tree",
+          "url",
+          "comment_count"
         ],
         "type": "object"
       },
       "GithubIssue": {
         "properties": {
-          "body": {
+          "active_lock_reason": {
+            "default": null,
             "type": [
               "string",
               "null"
             ]
           },
-          "html_url": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "labels": {
-            "items": {
-              "$ref": "#/components/schemas/GithubLabel"
-            },
-            "type": "array"
-          },
-          "number": {
-            "format": "uint64",
-            "minimum": 0,
-            "type": [
-              "integer",
-              "null"
-            ]
-          },
-          "state": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "title": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "user": {
+          "assignee": {
             "anyOf": [
               {
                 "$ref": "#/components/schemas/GithubUser"
@@ -763,207 +2756,367 @@
               {
                 "type": "null"
               }
-            ]
-          }
-        },
-        "required": [
-          "number",
-          "title",
-          "body",
-          "state",
-          "html_url",
-          "user",
-          "labels"
-        ],
-        "type": "object"
-      },
-      "GithubLabel": {
-        "properties": {
-          "color": {
-            "type": [
-              "string",
-              "null"
-            ]
+            ],
+            "default": null
           },
-          "description": {
-            "type": [
-              "string",
-              "null"
-            ]
+          "assignees": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/GithubUser"
+            },
+            "type": "array"
           },
-          "name": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        },
-        "required": [
-          "name",
-          "color",
-          "description"
-        ],
-        "type": "object"
-      },
-      "GithubPullRequest": {
-        "properties": {
-          "base_branch": {
+          "author_association": {
+            "default": null,
             "type": [
               "string",
               "null"
             ]
           },
           "body": {
+            "default": null,
             "type": [
               "string",
               "null"
             ]
           },
-          "head_branch": {
+          "closed_at": {
+            "default": null,
             "type": [
               "string",
               "null"
             ]
           },
-          "html_url": {
+          "comments": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "created_at": {
+            "default": null,
             "type": [
               "string",
               "null"
             ]
           },
-          "labels": {
-            "items": {
-              "$ref": "#/components/schemas/GithubLabel"
-            },
-            "type": "array"
-          },
-          "merged": {
+          "draft": {
+            "default": null,
             "type": [
               "boolean",
               "null"
             ]
           },
-          "number": {
-            "format": "uint64",
-            "minimum": 0,
-            "type": [
-              "integer",
-              "null"
-            ]
-          },
-          "state": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "title": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "user": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/GithubUser"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "required": [
-          "number",
-          "title",
-          "body",
-          "state",
-          "html_url",
-          "user",
-          "labels",
-          "merged",
-          "head_branch",
-          "base_branch"
-        ],
-        "type": "object"
-      },
-      "GithubRepository": {
-        "properties": {
-          "full_name": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
           "html_url": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        },
-        "required": [
-          "full_name",
-          "html_url"
-        ],
-        "type": "object"
-      },
-      "GithubUser": {
-        "properties": {
-          "avatar_url": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "html_url": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "login": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        },
-        "required": [
-          "login",
-          "avatar_url",
-          "html_url"
-        ],
-        "type": "object"
-      },
-      "GithubWorkflowRun": {
-        "properties": {
-          "conclusion": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "head_branch": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "head_sha": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "html_url": {
+            "default": null,
             "type": [
               "string",
               "null"
             ]
           },
           "id": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "issue_dependencies_summary": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubIssueDependenciesSummary"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "labels": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/GithubLabel"
+            },
+            "type": "array"
+          },
+          "locked": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "milestone": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubMilestone"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "node_id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "number": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "pull_request": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubIssuePullRequest"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "reactions": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubReactions"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "state": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "state_reason": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sub_issues_summary": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubSubIssuesSummary"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "title": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "updated_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "user": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubUser"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "required": [
+          "id",
+          "node_id",
+          "number",
+          "title",
+          "body",
+          "state",
+          "state_reason",
+          "html_url",
+          "user",
+          "labels",
+          "assignee",
+          "assignees",
+          "milestone",
+          "locked",
+          "active_lock_reason",
+          "comments",
+          "author_association",
+          "created_at",
+          "updated_at",
+          "closed_at",
+          "draft",
+          "reactions",
+          "pull_request",
+          "sub_issues_summary",
+          "issue_dependencies_summary"
+        ],
+        "type": "object"
+      },
+      "GithubIssueDependenciesSummary": {
+        "properties": {
+          "blocked_by": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "blocking": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "total_blocked_by": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "total_blocking": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "blocked_by",
+          "blocking",
+          "total_blocked_by",
+          "total_blocking"
+        ],
+        "type": "object"
+      },
+      "GithubIssuePullRequest": {
+        "properties": {
+          "diff_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "html_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "merged_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "patch_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "url",
+          "html_url",
+          "diff_url",
+          "patch_url",
+          "merged_at"
+        ],
+        "type": "object"
+      },
+      "GithubLabel": {
+        "properties": {
+          "archived_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "archived_by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubUser"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "color": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "default": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "description": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "default": null,
             "format": "uint64",
             "minimum": 0,
             "type": [
@@ -972,12 +3125,98 @@
             ]
           },
           "name": {
+            "default": null,
             "type": [
               "string",
               "null"
             ]
           },
-          "run_number": {
+          "node_id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "node_id",
+          "name",
+          "color",
+          "description",
+          "url",
+          "default",
+          "archived_at",
+          "archived_by"
+        ],
+        "type": "object"
+      },
+      "GithubLicense": {
+        "properties": {
+          "key": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "node_id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "spdx_id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "key",
+          "name",
+          "spdx_id",
+          "url",
+          "node_id"
+        ],
+        "type": "object"
+      },
+      "GithubMilestone": {
+        "properties": {
+          "closed_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "closed_issues": {
+            "default": null,
             "format": "uint64",
             "minimum": 0,
             "type": [
@@ -985,7 +3224,2427 @@
               "null"
             ]
           },
+          "created_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "creator": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubUser"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "description": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "due_on": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "html_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "node_id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "number": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "open_issues": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "state": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "title": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "updated_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "node_id",
+          "number",
+          "title",
+          "description",
+          "state",
+          "html_url",
+          "creator",
+          "open_issues",
+          "closed_issues",
+          "due_on",
+          "created_at",
+          "updated_at",
+          "closed_at"
+        ],
+        "type": "object"
+      },
+      "GithubPullRequest": {
+        "properties": {
+          "active_lock_reason": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "additions": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "assignee": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubUser"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "assignees": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/GithubUser"
+            },
+            "type": "array"
+          },
+          "author_association": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "base": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubBranch"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "base_branch": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "body": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "changed_files": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "closed_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "comments": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "commits": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "created_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "deletions": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "diff_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "draft": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "head": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubBranch"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "head_branch": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "html_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "issue_dependencies_summary": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubIssueDependenciesSummary"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "labels": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/GithubLabel"
+            },
+            "type": "array"
+          },
+          "locked": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "maintainer_can_modify": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "merge_commit_sha": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "mergeable": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "mergeable_state": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "merged": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "merged_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "merged_by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubUser"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "milestone": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubMilestone"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "node_id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "number": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "patch_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "pull_request": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubIssuePullRequest"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "reactions": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubReactions"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "rebaseable": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "requested_reviewers": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/GithubUser"
+            },
+            "type": "array"
+          },
+          "requested_teams": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/GithubTeam"
+            },
+            "type": "array"
+          },
+          "review_comments": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "state": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "state_reason": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sub_issues_summary": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubSubIssuesSummary"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "title": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "updated_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "user": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubUser"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "required": [
+          "id",
+          "node_id",
+          "number",
+          "title",
+          "body",
+          "state",
+          "state_reason",
+          "html_url",
+          "user",
+          "labels",
+          "assignee",
+          "assignees",
+          "milestone",
+          "locked",
+          "active_lock_reason",
+          "comments",
+          "author_association",
+          "created_at",
+          "updated_at",
+          "closed_at",
+          "draft",
+          "reactions",
+          "pull_request",
+          "sub_issues_summary",
+          "issue_dependencies_summary",
+          "merged",
+          "head_branch",
+          "base_branch",
+          "head",
+          "base",
+          "merged_at",
+          "merged_by",
+          "merge_commit_sha",
+          "mergeable",
+          "mergeable_state",
+          "rebaseable",
+          "additions",
+          "deletions",
+          "changed_files",
+          "commits",
+          "review_comments",
+          "requested_reviewers",
+          "requested_teams",
+          "maintainer_can_modify",
+          "diff_url",
+          "patch_url"
+        ],
+        "type": "object"
+      },
+      "GithubPullRequestReference": {
+        "properties": {
+          "base": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubBranch"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "head": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubBranch"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "id": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "number": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "number",
+          "url",
+          "head",
+          "base"
+        ],
+        "type": "object"
+      },
+      "GithubPush": {
+        "properties": {
+          "after": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "base_ref": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "before": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "commits": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/GithubCommit"
+            },
+            "type": "array"
+          },
+          "compare": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "created": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "deleted": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "forced": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "head_commit": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubCommit"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "pusher": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubCommitAuthor"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "ref": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "ref",
+          "before",
+          "after",
+          "base_ref",
+          "created",
+          "deleted",
+          "forced",
+          "compare",
+          "pusher",
+          "commits",
+          "head_commit"
+        ],
+        "type": "object"
+      },
+      "GithubReactions": {
+        "properties": {
+          "+1": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "-1": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "confused": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "eyes": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "heart": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "hooray": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "laugh": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "rocket": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "total_count": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "url",
+          "total_count",
+          "+1",
+          "-1",
+          "laugh",
+          "hooray",
+          "confused",
+          "heart",
+          "rocket",
+          "eyes"
+        ],
+        "type": "object"
+      },
+      "GithubRefEvent": {
+        "properties": {
+          "description": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "master_branch": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "pusher_type": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "ref": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "ref_type": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "ref",
+          "ref_type",
+          "master_branch",
+          "pusher_type",
+          "description"
+        ],
+        "type": "object"
+      },
+      "GithubReferencedWorkflow": {
+        "properties": {
+          "path": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "ref": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sha": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "path",
+          "sha",
+          "ref"
+        ],
+        "type": "object"
+      },
+      "GithubRelease": {
+        "properties": {
+          "assets": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/GithubReleaseAsset"
+            },
+            "type": "array"
+          },
+          "author": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubUser"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "body": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "created_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "draft": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "html_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "immutable": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "name": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "node_id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "prerelease": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "published_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "tag_name": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "tarball_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "target_commitish": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "updated_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "zipball_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "node_id",
+          "tag_name",
+          "target_commitish",
+          "name",
+          "body",
+          "html_url",
+          "draft",
+          "prerelease",
+          "immutable",
+          "author",
+          "created_at",
+          "updated_at",
+          "published_at",
+          "assets",
+          "tarball_url",
+          "zipball_url"
+        ],
+        "type": "object"
+      },
+      "GithubReleaseAsset": {
+        "properties": {
+          "browser_download_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "content_type": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "created_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "digest": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "download_count": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "id": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "label": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "node_id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "size": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "state": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "updated_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "uploader": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubUser"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "required": [
+          "id",
+          "node_id",
+          "name",
+          "label",
+          "content_type",
+          "state",
+          "size",
+          "download_count",
+          "browser_download_url",
+          "uploader",
+          "digest",
+          "created_at",
+          "updated_at"
+        ],
+        "type": "object"
+      },
+      "GithubRepository": {
+        "properties": {
+          "allow_forking": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "archived": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "clone_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubTimestamp"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "default_branch": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "description": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "disabled": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "fork": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "forks_count": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "full_name": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "has_discussions": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "has_issues": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "has_pages": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "has_projects": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "has_pull_requests": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "has_wiki": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "homepage": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "html_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "is_template": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "language": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "license": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubLicense"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "name": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "node_id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "open_issues_count": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "owner": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubUser"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "private": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "pushed_at": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubTimestamp"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "size": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "ssh_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "stargazers_count": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "topics": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubTimestamp"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "visibility": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "watchers_count": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "web_commit_signoff_required": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "node_id",
+          "name",
+          "full_name",
+          "html_url",
+          "owner",
+          "description",
+          "private",
+          "visibility",
+          "default_branch",
+          "archived",
+          "disabled",
+          "fork",
+          "is_template",
+          "topics",
+          "language",
+          "homepage",
+          "created_at",
+          "updated_at",
+          "pushed_at",
+          "stargazers_count",
+          "watchers_count",
+          "forks_count",
+          "open_issues_count",
+          "size",
+          "has_issues",
+          "has_pull_requests",
+          "has_discussions",
+          "has_projects",
+          "has_wiki",
+          "has_pages",
+          "allow_forking",
+          "web_commit_signoff_required",
+          "clone_url",
+          "ssh_url",
+          "license"
+        ],
+        "type": "object"
+      },
+      "GithubReview": {
+        "properties": {
+          "author_association": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "body": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "commit_id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "html_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "node_id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "pull_request_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "state": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "submitted_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "updated_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "user": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubUser"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "required": [
+          "id",
+          "node_id",
+          "state",
+          "body",
+          "user",
+          "commit_id",
+          "html_url",
+          "submitted_at",
+          "updated_at",
+          "author_association",
+          "pull_request_url"
+        ],
+        "type": "object"
+      },
+      "GithubReviewThread": {
+        "properties": {
+          "comments": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/GithubComment"
+            },
+            "type": "array"
+          },
+          "node_id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "node_id",
+          "comments"
+        ],
+        "type": "object"
+      },
+      "GithubStatusBranch": {
+        "properties": {
+          "commit": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubCommitReference"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "name": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "protected": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "protected",
+          "commit"
+        ],
+        "type": "object"
+      },
+      "GithubStatusCommit": {
+        "properties": {
+          "author": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubUser"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "commit": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubGitCommit"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "committer": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubUser"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "html_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "node_id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "parents": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/GithubCommitReference"
+            },
+            "type": "array"
+          },
+          "sha": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "sha",
+          "node_id",
+          "url",
+          "html_url",
+          "author",
+          "committer",
+          "commit",
+          "parents"
+        ],
+        "type": "object"
+      },
+      "GithubStringChange": {
+        "properties": {
+          "from": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "from"
+        ],
+        "type": "object"
+      },
+      "GithubSubIssuesSummary": {
+        "properties": {
+          "completed": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "percent_completed": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "total": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "total",
+          "completed",
+          "percent_completed"
+        ],
+        "type": "object"
+      },
+      "GithubTeam": {
+        "properties": {
+          "description": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "html_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "name": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "node_id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "privacy": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "slug": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "node_id",
+          "name",
+          "slug",
+          "description",
+          "html_url",
+          "privacy"
+        ],
+        "type": "object"
+      },
+      "GithubTimestamp": {
+        "anyOf": [
+          {
+            "format": "int64",
+            "type": "integer"
+          },
+          {
+            "type": "string"
+          }
+        ],
+        "description": "GitHub repository timestamps are Unix seconds in push events and strings in\nother events. Preserve their wire representation rather than guessing a clock."
+      },
+      "GithubUser": {
+        "properties": {
+          "avatar_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "html_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "login": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "node_id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "site_admin": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "type": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "user_view_type": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "node_id",
+          "login",
+          "avatar_url",
+          "html_url",
+          "type",
+          "site_admin",
+          "user_view_type"
+        ],
+        "type": "object"
+      },
+      "GithubWorkflow": {
+        "properties": {
+          "badge_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "created_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "html_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "name": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "node_id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "path": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "state": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "updated_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "node_id",
+          "name",
+          "path",
+          "state",
+          "html_url",
+          "badge_url",
+          "created_at",
+          "updated_at"
+        ],
+        "type": "object"
+      },
+      "GithubWorkflowJob": {
+        "properties": {
+          "check_run_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "completed_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "conclusion": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "created_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "head_branch": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "head_sha": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "html_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "labels": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "name": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "node_id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "run_attempt": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "run_id": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "run_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "runner_group_id": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "runner_group_name": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "runner_id": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "runner_name": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "started_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "status": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "steps": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/GithubWorkflowStep"
+            },
+            "type": "array"
+          },
+          "workflow_name": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "node_id",
+          "run_id",
+          "run_attempt",
+          "name",
+          "workflow_name",
+          "head_branch",
+          "head_sha",
+          "status",
+          "conclusion",
+          "html_url",
+          "created_at",
+          "started_at",
+          "completed_at",
+          "runner_id",
+          "runner_name",
+          "runner_group_id",
+          "runner_group_name",
+          "labels",
+          "steps",
+          "run_url",
+          "check_run_url"
+        ],
+        "type": "object"
+      },
+      "GithubWorkflowRun": {
+        "properties": {
+          "actor": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubUser"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "artifacts_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "check_suite_id": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "conclusion": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "created_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "display_title": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "event": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "head_branch": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "head_commit": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubCommit"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "head_repository": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubRepository"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "head_sha": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "html_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "jobs_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "logs_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "node_id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "path": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "previous_attempt_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "pull_requests": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/GithubPullRequestReference"
+            },
+            "type": "array"
+          },
+          "referenced_workflows": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/GithubReferencedWorkflow"
+            },
+            "type": "array"
+          },
+          "rerun_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "run_attempt": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "run_number": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "run_started_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "triggering_actor": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubUser"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "updated_at": {
+            "default": null,
             "type": [
               "string",
               "null"
@@ -1000,7 +5659,84 @@
           "html_url",
           "head_branch",
           "head_sha",
-          "run_number"
+          "run_number",
+          "node_id",
+          "display_title",
+          "event",
+          "path",
+          "run_attempt",
+          "actor",
+          "triggering_actor",
+          "created_at",
+          "updated_at",
+          "run_started_at",
+          "head_commit",
+          "head_repository",
+          "pull_requests",
+          "referenced_workflows",
+          "check_suite_id",
+          "jobs_url",
+          "logs_url",
+          "artifacts_url",
+          "rerun_url",
+          "previous_attempt_url"
+        ],
+        "type": "object"
+      },
+      "GithubWorkflowStep": {
+        "properties": {
+          "completed_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "conclusion": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "number": {
+            "default": null,
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "started_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "number",
+          "status",
+          "conclusion",
+          "started_at",
+          "completed_at"
         ],
         "type": "object"
       },

@@ -284,9 +284,9 @@ test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, a
       validateResponse('POST', github.url, response.status, result);
       return result.data;
     }
-    const comment = { action: 'created', repository: { full_name: 'owner/repo' },
-      issue: { number: 123, title: 'Login failure', body: 'Detailed issue', labels: [{ name: 'bug', color: 'ff0000' }] },
-      comment: { id: 456, body: 'Reply text', user: { login: 'bob' }, created_at: '2000-01-01T00:00:00Z' },
+    const comment = { action: 'created', repository: { id: 1, full_name: 'owner/repo', private: true, created_at: '2026-01-01T00:00:00Z' },
+      issue: { id: 2, number: 123, title: 'Login failure', body: 'Detailed issue', labels: [{ id: 3, name: 'bug', color: 'ff0000' }], assignees: [{ id: 4, login: 'bob', type: 'User' }], pull_request: { html_url: 'https://example.com/pull/123' } },
+      comment: { id: 456, body: 'Reply text', user: { id: 4, login: 'bob' }, created_at: '2000-01-01T00:00:00Z', updated_at: '2000-01-02T00:00:00Z' },
       custom: { not_in_summary: true } };
     const longId = 'x'.repeat(300) + 'a';
     const reply = await githubReceive(comment, 'issue_comment', longId);
@@ -302,6 +302,12 @@ test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, a
     assert.equal(before.metadata.eventType, 'issue_comment');
     assert.equal(before.metadata.deduplicationKey.value, longId);
     assert.equal(before.platformData.event.issue.number, 123);
+    assert.equal(before.platformData.event.issue.id, 2);
+    assert.equal(before.platformData.event.issue.assignees[0].type, 'User');
+    assert.equal(before.platformData.event.issue.pull_request.html_url, 'https://example.com/pull/123');
+    assert.equal(before.platformData.event.repository.private, true);
+    assert.equal(before.platformData.event.repository.created_at, '2026-01-01T00:00:00Z');
+    assert.equal(before.platformData.event.comment.updated_at, '2000-01-02T00:00:00Z');
     assert.equal(before.platformData.event.issue.labels[0].name, 'bug');
     assert.equal(before.platformData.event.comment.user.login, 'bob');
     assert.notEqual(before.createdAt, comment.comment.created_at);
@@ -312,9 +318,11 @@ test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, a
     assert.equal(after.pinned, true);
     const original = await fetch(origin + replyPath + '/raw', { headers: { Authorization: `Bearer ${token}` } });
     assert.deepEqual(await original.json(), comment);
-    const build = await githubReceive({ action: 'completed', workflow_run: { id: 10, name: 'CI', status: 'completed', conclusion: 'failure', head_branch: 'main', run_number: 11 } }, 'workflow_run', 'ci-failure');
+    const build = await githubReceive({ action: 'completed', workflow_run: { id: 10, name: 'CI', status: 'completed', conclusion: 'failure', head_branch: 'main', run_number: 11, display_title: 'Build PR', run_attempt: 2, actor: { id: 4, login: 'bob' } } }, 'workflow_run', 'ci-failure');
     const buildDetail = await api('GET', `/api/messages/${build.messageId}`, undefined, token);
     assert.equal(buildDetail.level, 'normal');
+    assert.equal(buildDetail.platformData.event.workflow_run.run_attempt, 2);
+    assert.equal(buildDetail.platformData.event.workflow_run.actor.id, 4);
     assert.equal(buildDetail.platformData.event.workflow_run.conclusion, 'failure');
     assert.equal(buildDetail.platformData.event.workflow_run.head_branch, 'main');
     assert.equal(Date.parse(buildDetail.expireAt) - Date.parse(buildDetail.createdAt), 3 * 86_400_000);
