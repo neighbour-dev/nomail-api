@@ -1,9 +1,10 @@
 //! Owned, platform-discriminated protocol configuration. No product or storage policy.
 pub use super::platforms::{
     feishu::config::FeishuCredentials, generic::config::GenericCredentials,
-    github::config::GithubCredentials, gitlab::config::GitlabCredentials,
-    shopify::config::ShopifyCredentials, slack::config::SlackCredentials,
-    stripe::config::StripeCredentials, telegram::config::TelegramCredentials,
+    gitea::config::GiteaCredentials, github::config::GithubCredentials,
+    gitlab::config::GitlabCredentials, shopify::config::ShopifyCredentials,
+    slack::config::SlackCredentials, stripe::config::StripeCredentials,
+    telegram::config::TelegramCredentials,
 };
 use super::{Provider, WebhookConfig, WebhookError};
 use serde::{
@@ -25,6 +26,7 @@ use serde::{
 pub enum PlatformConfig {
     Generic(#[serde(deserialize_with = "object_only")] GenericCredentials),
     Github(#[serde(deserialize_with = "object_only")] GithubCredentials),
+    Gitea(#[serde(deserialize_with = "object_only")] GiteaCredentials),
     Gitlab(#[serde(deserialize_with = "object_only")] GitlabCredentials),
     Stripe(#[serde(deserialize_with = "object_only")] StripeCredentials),
     Slack(#[serde(deserialize_with = "object_only")] SlackCredentials),
@@ -112,6 +114,7 @@ impl PlatformConfig {
         match self {
             Self::Generic(_) => Provider::Generic,
             Self::Github(_) => Provider::Github,
+            Self::Gitea(_) => Provider::Gitea,
             Self::Gitlab(_) => Provider::Gitlab,
             Self::Stripe(_) => Provider::Stripe,
             Self::Slack(_) => Provider::Slack,
@@ -126,6 +129,7 @@ impl PlatformConfig {
         match self {
             Self::Generic(c) => c.validate(),
             Self::Github(c) => c.validate(),
+            Self::Gitea(c) => c.validate(),
             Self::Gitlab(c) => c.validate(),
             Self::Stripe(c) => c.validate(),
             Self::Slack(c) => c.validate(),
@@ -139,6 +143,7 @@ impl PlatformConfig {
         let authentication = match self {
             Self::Generic(c) => c.mode(),
             Self::Github(c) => c.mode(),
+            Self::Gitea(c) => c.mode(),
             Self::Gitlab(c) => c.mode(),
             Self::Stripe(c) => c.mode(),
             Self::Slack(c) => c.mode(),
@@ -158,6 +163,7 @@ impl PlatformConfig {
         let authentication = match self {
             Self::Generic(c) => c.authentication(),
             Self::Github(c) => c.authentication(),
+            Self::Gitea(c) => c.authentication(),
             Self::Gitlab(c) => c.authentication(),
             Self::Stripe(c) => c.authentication(),
             Self::Slack(c) => c.authentication(),
@@ -180,6 +186,7 @@ mod tests {
             json!({"provider":"generic","credentials":{"type":"none"}}),
             json!({"provider":"generic","credentials":{"type":"hmacSha256","secret":"private"}}),
             json!({"provider":"github","credentials":{"secret":"private"}}),
+            json!({"provider":"gitea","credentials":{"secret":"private"}}),
             json!({"provider":"gitlab","credentials":{"type":"signingToken","signingToken":"whsec_cHJpdmF0ZQ=="}}),
             json!({"provider":"gitlab","credentials":{"type":"secretToken","secretToken":"private"}}),
             json!({"provider":"stripe","credentials":{"signingSecrets":["whsec_private"]}}),
@@ -208,6 +215,11 @@ mod tests {
     fn unknown_fields_types_modes_and_cross_platform_credentials_are_rejected() {
         for value in [
             json!({"provider":"unknown","credentials":{}}),
+            json!({"provider":"gitea","credentials":{}}),
+            json!({"provider":"gitea","credentials":{"secret":1}}),
+            json!({"provider":"gitea","credentials":{"secret":"ok","type":"none"}}),
+            json!({"provider":"gitea","credentials":{"secretToken":"wrong"}}),
+            json!({"provider":"gitea","credentials":["secret"]}),
             json!({"provider":"github","credentials":{"secret":"ok"},"extra":true}),
             json!({"provider":"github","credentials":{"secret":"ok","encryptKey":"wrong"}}),
             json!({"provider":"github","credentials":{"secretToken":"wrong"}}),
@@ -230,6 +242,7 @@ mod tests {
     fn semantic_validation_rejects_empty_or_malformed_credentials() {
         for value in [
             json!({"provider":"github","credentials":{"secret":" "}}),
+            json!({"provider":"gitea","credentials":{"secret":" "}}),
             json!({"provider":"feishu","credentials":{"verificationToken":"token","encryptKey":""}}),
             json!({"provider":"telegram","credentials":{"secretToken":"bot:token"}}),
             json!({"provider":"gitlab","credentials":{"type":"signingToken","signingToken":"whsec_!"}}),

@@ -187,7 +187,7 @@ mod tests {
         assert_eq!(update_schema["additionalProperties"], false);
         assert!(create_schema["properties"].get("source").is_none());
         let platform = &document["components"]["schemas"]["PlatformConfig"];
-        assert_eq!(platform["oneOf"].as_array().unwrap().len(), 8);
+        assert_eq!(platform["oneOf"].as_array().unwrap().len(), 9);
         fn references(value: &Value, root: &Value) {
             match value {
                 Value::Object(object) => {
@@ -216,6 +216,38 @@ mod tests {
         let schemas = document["components"]["schemas"].as_object().unwrap();
         assert!(schemas.contains_key("MessageDetail"));
         assert!(schemas.contains_key("GithubEvent"));
+        for name in [
+            "GiteaEvent",
+            "GiteaCredentials",
+            "GiteaReview",
+            "GiteaPush",
+            "GiteaPackage",
+            "GiteaWorkflowRun",
+        ] {
+            assert!(schemas.contains_key(name), "missing Gitea schema: {name}");
+        }
+        assert_eq!(
+            schemas["GiteaWorkflow"]["properties"]["id"]["type"],
+            json!(["string", "null"])
+        );
+        assert_eq!(schemas["GiteaUser"]["properties"]["id"]["format"], "int64");
+        for field in [
+            "push",
+            "git_ref",
+            "commit_status",
+            "wiki",
+            "forkee",
+            "package",
+            "organization",
+            "requested_reviewer",
+            "is_pull",
+            "event_type",
+        ] {
+            assert!(
+                schemas["GiteaEvent"]["properties"].get(field).is_some(),
+                "missing Gitea field: {field}"
+            );
+        }
         for field in [
             "review",
             "thread",

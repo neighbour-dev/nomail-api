@@ -1,6 +1,7 @@
 //! Each platform owns its event types, authentication, decoding and message mapping.
 pub mod feishu;
 pub mod generic;
+pub mod gitea;
 pub mod github;
 pub mod gitlab;
 pub mod shopify;
@@ -10,6 +11,7 @@ pub mod telegram;
 
 pub use feishu::FeishuEvent;
 pub use generic::{GenericEvent, GenericJsonEvent, GenericTextEvent};
+pub use gitea::GiteaEvent;
 pub use github::GithubEvent;
 pub use gitlab::GitlabEvent;
 pub use shopify::ShopifyEvent;
@@ -26,6 +28,7 @@ use serde::{Deserialize, Serialize};
 pub enum PlatformData {
     Generic(GenericEvent),
     Github(Box<GithubEvent>),
+    Gitea(Box<GiteaEvent>),
     Gitlab(GitlabEvent),
     Stripe(StripeEvent),
     Slack(SlackEvent),
@@ -53,6 +56,7 @@ impl PlatformEvent {
         match &self.data {
             PlatformData::Generic(_) => Provider::Generic,
             PlatformData::Github(_) => Provider::Github,
+            PlatformData::Gitea(_) => Provider::Gitea,
             PlatformData::Gitlab(_) => Provider::Gitlab,
             PlatformData::Stripe(_) => Provider::Stripe,
             PlatformData::Slack(_) => Provider::Slack,
@@ -69,6 +73,7 @@ impl PlatformEvent {
         match &self.data {
             PlatformData::Generic(event) => event.to_message_content(&self.metadata, &self.raw),
             PlatformData::Github(event) => event.to_message_content(&self.metadata, &self.raw),
+            PlatformData::Gitea(event) => event.to_message_content(&self.metadata, &self.raw),
             PlatformData::Gitlab(event) => event.to_message_content(&self.metadata, &self.raw),
             PlatformData::Stripe(event) => event.to_message_content(&self.metadata, &self.raw),
             PlatformData::Slack(event) => event.to_message_content(&self.metadata, &self.raw),

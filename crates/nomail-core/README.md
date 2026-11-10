@@ -27,6 +27,7 @@ src/webhook/
      │   ├── config.rs      # GitHub 凭据类型、纯校验及认证参数构造
     │   └── tests.rs       # GitHub 样例、签名构造与测试
     ├── gitlab/
+    ├── gitea/             # 原生验签、独立资源模型、Gitea 事件映射与测试
     ├── stripe/
     ├── slack/
     ├── feishu/
@@ -67,6 +68,16 @@ GitHub 的公开类型位于 `webhook::platforms::github`，模型定义集中�
 Generic 明确是 **NoMail 自定义协议**，不是任意平台自动识别器。`GenericEvent::Json` 表达 JSON 字段，`GenericEvent::Text` 表达 `X-NoMail-*` 请求头输入；没有 `GenericDefaults`。JSON 分支不继承文本分支的请求头。非 UTF-8 文本现在显式拒绝，不用有损替换伪装成可读原文。
 
 ## 使用
+
+### Gitea
+
+配置采用 `{"provider":"gitea","credentials":{"secret":"replace-with-a-random-secret"}}`，产品要求有效 Secret，不使用 GitHub 或 Gogs 兼容头替代 Gitea 原生签名。现有接收地址只支持 POST，可使用 JSON 或 `payload` 表单；Gitea 的 GET 投递不在当前产品接收范围内。
+
+Gitea 使用独立模型，不复用 GitHub 类型。`metadata.event_type` 是 `X-Gitea-Event` 的归一化值，`GiteaEvent.event_type` 保留 `X-Gitea-Event-Type`。根级业务字段投影到 `push/git_ref/wiki/commit_status`，其余资源保持 `issue/pull_request/review/release/package/workflow/workflow_run/workflow_job` 等字段。用户 ID 使用有符号整数，工作流 ID 使用字符串。模型按上游 v28.3.0 结构定义提取业务信息，兼容缺失/null 和未知字段，完整内容仍在 raw。
+
+验签始终针对 Gitea 的原始 JSON 文本：JSON 投递使用原 Body，表单投递先提取解码后的 `payload`，不能重新序列化再验签，也不能对整个编码表单验签。去重使用 `gitea:delivery` 与原生 Delivery ID；Gitea 手动 Replay 生成新 UUID，因此会作为新消息处理。Gitea 的测试投递是普通 Push，不是 GitHub Ping。
+
+### 通用接收示例
 
 ```rust
 use nomail_core::webhook::{
@@ -112,6 +123,7 @@ match receive(&config, &WebhookRequest { headers: &headers, body })? {
 |---|---|---|
 | Generic | HMAC-SHA256 或显式无认证；JSON/UTF-8 文本 | JSON 字段与文本请求头分别建模，再映射消息 |
 | GitHub | 原始 JSON/表单 Body HMAC；事件头；Ping | Issues、PR、评论、Push、Workflow Run 摘要 |
+| Gitea | JSON 原文或表单解码后 JSON HMAC；原生事件/精确类型头；POST | Issue/PR/审核、Push、引用、Fork、Wiki、Release、Package、Commit Status、Workflow/Job 摘要与独立资源模型 |
 | GitLab | 固定 Token 或 Standard Webhooks 签名；轮换签名；时间窗口 | MR/评论摘要；自定义模板保留并使用 JSON 回退 |
 | Stripe | 原始 Body + 时间戳签名；多个 v1 签名；Snapshot/Thin | 事件摘要；Thin 明确标记未获取详情 |
 | Slack | 原始 Body + 时间戳签名；Events API、Interaction、Slash Command、URL 验证 | 文本/命令摘要；交互保留 JSON；限流通知忽略 |

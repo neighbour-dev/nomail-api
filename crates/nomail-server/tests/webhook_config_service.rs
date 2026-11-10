@@ -309,6 +309,7 @@ async fn config_service_preserves_sparse_concurrent_updates_credentials_and_scop
     for platform in [
         json!({"provider":"generic","credentials":{"type":"hmacSha256","secret":"platform-secret"}}),
         json!({"provider":"github","credentials":{"secret":"platform-secret"}}),
+        json!({"provider":"gitea","credentials":{"secret":"platform-secret"}}),
         json!({"provider":"gitlab","credentials":{"type":"signingToken","signingToken":"whsec_cGxhdGZvcm0tc2VjcmV0"}}),
         json!({"provider":"gitlab","credentials":{"type":"secretToken","secretToken":"platform-secret"}}),
         json!({"provider":"stripe","credentials":{"signingSecrets":["whsec_retired","whsec_platform-secret"]}}),
@@ -337,7 +338,8 @@ async fn config_service_preserves_sparse_concurrent_updates_credentials_and_scop
         for (name, value) in &headers {
             request = request.insert_header((name.as_str(), value.as_str()));
         }
-        let response = test::call_service(&app, request.set_payload(raw).to_request()).await;
+        let response =
+            test::call_service(&app, request.set_payload(raw.clone()).to_request()).await;
         assert_eq!(response.status(), StatusCode::OK, "{provider}");
         let received: Value = test::read_body_json(response).await;
         assert!(
@@ -349,6 +351,55 @@ async fn config_service_preserves_sparse_concurrent_updates_credentials_and_scop
             received["data"]["messageId"].as_str().unwrap()
         );
         assert_eq!(api!(get, &message_path, json!({})).1["provider"], provider);
+        if provider == "gitea" {
+            let detail = api!(get, &message_path, json!({})).1;
+            assert_eq!(detail["platformData"]["provider"], "gitea");
+            assert_eq!(detail["platformData"]["event"]["sender"]["id"], -2);
+            assert_eq!(detail["platformData"]["event"]["issue"]["is_locked"], true);
+            assert_eq!(
+                detail["platformData"]["event"]["event_type"],
+                "issue_assign"
+            );
+            assert_eq!(
+                detail["metadata"]["deduplicationKey"]["scope"],
+                "gitea:delivery"
+            );
+            // A form transport of the same delivery is a duplicate; signing is
+            // over the decoded JSON. Manual Gitea Replay uses a new delivery ID.
+            for (delivery, duplicate) in [("matrix", true), ("matrix-replay", false)] {
+                let mut request = test::TestRequest::post().uri(receive_path);
+                for (name, value) in &headers {
+                    if !name.eq_ignore_ascii_case("x-gitea-delivery") {
+                        request = request.insert_header((name.as_str(), value.as_str()));
+                    }
+                }
+                let response = test::call_service(
+                    &app,
+                    request
+                        .insert_header(("X-Gitea-Delivery", delivery))
+                        .set_form([("payload", raw.as_str())])
+                        .to_request(),
+                )
+                .await;
+                assert_eq!(response.status(), StatusCode::OK);
+                let acknowledgement: Value = test::read_body_json(response).await;
+                assert_eq!(acknowledgement["data"]["duplicate"], duplicate);
+                assert_eq!(
+                    acknowledgement["data"]["messageId"] == received["data"]["messageId"],
+                    duplicate
+                );
+            }
+            let response = test::call_service(
+                &app,
+                test::TestRequest::get()
+                    .uri(&format!("{message_path}/raw"))
+                    .insert_header(("Authorization", format!("Bearer {token}")))
+                    .to_request(),
+            )
+            .await;
+            let original: Value = test::read_body_json(response).await;
+            assert_eq!(original, serde_json::from_str::<Value>(&raw).unwrap());
+        }
         // Missing authentication never falls back to a weaker mode.
         let response = test::call_service(
             &app,
@@ -394,6 +445,7 @@ fn platform_delivery(provider: &str, platform: &Value) -> (String, Vec<(String, 
     let body = match provider {
         "generic" => json!({"id":"matrix","title":"Test"}),
         "github" => json!({"action":"opened","issue":{"title":"Test"}}),
+        "gitea" => json!({"action":"assigned","issue":{"number":1,"title":"Test","is_locked":true},"sender":{"id":-2,"login":"actions"}}),
         "gitlab" => json!({"object_kind":"issue","object_attributes":{"title":"Test"}}),
         "stripe" => json!({"id":"evt_matrix","object":"event","type":"payment_intent.succeeded","data":{"object":{"id":"pi_test"}}}),
         "slack" => json!({"type":"event_callback","event_id":"EvMatrix","event":{"type":"message","text":"Test"}}),
@@ -418,6 +470,15 @@ fn platform_delivery(provider: &str, platform: &Value) -> (String, Vec<(String, 
             (
                 "X-Hub-Signature-256",
                 format!("sha256={}", hex::encode(sign(b"platform-secret", &body))),
+            ),
+        ],
+        "gitea" => vec![
+            ("X-Gitea-Event", "issues".into()),
+            ("X-Gitea-Event-Type", "issue_assign".into()),
+            ("X-Gitea-Delivery", "matrix".into()),
+            (
+                "X-Gitea-Signature",
+                hex::encode(sign(b"platform-secret", &body)),
             ),
         ],
         "gitlab" if platform["credentials"]["type"] == "signingToken" => vec![

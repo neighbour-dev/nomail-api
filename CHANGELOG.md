@@ -8,6 +8,8 @@
 
 ### 新增
 
+- 新增独立 Gitea 平台：配置使用 `provider: gitea` 和 Webhook Secret，支持 POST JSON/表单及原生 HMAC-SHA256 验签；结构化保留 Issue/PR、审核、标签变更、Push/提交签名、引用、Fork、Wiki、Release/附件、Package、Workflow/步骤等信息。区分归一化事件和原始事件类型，保留负数系统用户 ID；手动 Replay 的新 Delivery ID 按新投递处理。Server/Workers 共用接收逻辑，无需数据库迁移。
+
 - 扩展 GitHub 消息的结构化平台数据：补齐 Issue/PR 状态、指派、里程碑、审核与代码评论位置，新增 Push/引用/提交状态、Workflow Job/步骤、Check Run/Suite、Release/附件、Discussion/答案、Deployment/状态和编辑前信息，供客户端按事件展示。保留原有字段、宽容解析及完整 raw，旧消息快照可继续读取；仓库时间兼容字符串和 Unix 秒。
 
 ### 修复

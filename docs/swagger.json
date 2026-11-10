@@ -575,6 +575,4055 @@
         ],
         "type": "object"
       },
+      "GiteaAttachment": {
+        "properties": {
+          "browser_download_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "created_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "download_count": {
+            "default": null,
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "id": {
+            "default": null,
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "name": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "size": {
+            "default": null,
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "uuid": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "size",
+          "download_count",
+          "created_at",
+          "uuid",
+          "browser_download_url"
+        ],
+        "type": "object"
+      },
+      "GiteaBranch": {
+        "properties": {
+          "label": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "ref": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "repo": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GiteaRepository"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "repo_id": {
+            "default": null,
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "sha": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "label",
+          "ref",
+          "sha",
+          "repo_id",
+          "repo"
+        ],
+        "type": "object"
+      },
+      "GiteaChange": {
+        "properties": {
+          "from": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "from"
+        ],
+        "type": "object"
+      },
+      "GiteaChanges": {
+        "properties": {
+          "added_labels": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/GiteaLabel"
+            },
+            "type": "array"
+          },
+          "body": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GiteaChange"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "name": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GiteaChange"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "ref": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GiteaChange"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "removed_labels": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/GiteaLabel"
+            },
+            "type": "array"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GiteaChange"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "required": [
+          "title",
+          "body",
+          "name",
+          "ref",
+          "added_labels",
+          "removed_labels"
+        ],
+        "type": "object"
+      },
+      "GiteaComment": {
+        "properties": {
+          "assets": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/GiteaAttachment"
+            },
+            "type": "array"
+          },
+          "body": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "created_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "html_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "default": null,
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "issue_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "original_author": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "original_author_id": {
+            "default": null,
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "pull_request_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "updated_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "user": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GiteaUser"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "required": [
+          "id",
+          "html_url",
+          "pull_request_url",
+          "issue_url",
+          "user",
+          "original_author",
+          "original_author_id",
+          "body",
+          "assets",
+          "created_at",
+          "updated_at"
+        ],
+        "type": "object"
+      },
+      "GiteaCommit": {
+        "properties": {
+          "added": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "author": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GiteaCommitUser"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "committer": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GiteaCommitUser"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "message": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "modified": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "removed": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "timestamp": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "verification": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GiteaCommitVerification"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "required": [
+          "id",
+          "message",
+          "url",
+          "author",
+          "committer",
+          "verification",
+          "timestamp",
+          "added",
+          "removed",
+          "modified"
+        ],
+        "type": "object"
+      },
+      "GiteaCommitStatus": {
+        "properties": {
+          "commit": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GiteaCommit"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "context": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "created_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "description": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "default": null,
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "sha": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "state": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "target_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "updated_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "commit",
+          "context",
+          "created_at",
+          "description",
+          "id",
+          "sha",
+          "state",
+          "target_url",
+          "updated_at"
+        ],
+        "type": "object"
+      },
+      "GiteaCommitUser": {
+        "properties": {
+          "email": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "username": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "email",
+          "username"
+        ],
+        "type": "object"
+      },
+      "GiteaCommitVerification": {
+        "properties": {
+          "payload": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reason": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "signature": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "signer": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GiteaCommitUser"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "verified": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "verified",
+          "reason",
+          "signature",
+          "signer",
+          "payload"
+        ],
+        "type": "object"
+      },
+      "GiteaCredentials": {
+        "additionalProperties": false,
+        "properties": {
+          "secret": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "secret"
+        ],
+        "type": "object"
+      },
+      "GiteaEvent": {
+        "properties": {
+          "action": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "after": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "before": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "changes": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GiteaChanges"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "comment": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GiteaComment"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "commit_id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "commit_status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GiteaCommitStatus"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "event_type": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "forkee": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GiteaRepository"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "git_ref": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GiteaRefEvent"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "installation_target_type": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "is_pull": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "issue": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GiteaIssue"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "number": {
+            "default": null,
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "organization": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GiteaOrganization"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "package": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GiteaPackage"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "pull_request": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GiteaPullRequest"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "push": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GiteaPush"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "release": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GiteaRelease"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "repository": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GiteaRepository"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "requested_reviewer": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GiteaUser"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "review": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GiteaReview"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "sender": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GiteaUser"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "wiki": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GiteaWiki"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "workflow": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GiteaWorkflow"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "workflow_job": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GiteaWorkflowJob"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "workflow_run": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GiteaWorkflowRun"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "required": [
+          "event_type",
+          "installation_target_type",
+          "action",
+          "number",
+          "commit_id",
+          "is_pull",
+          "before",
+          "after",
+          "repository",
+          "sender",
+          "organization",
+          "issue",
+          "pull_request",
+          "comment",
+          "requested_reviewer",
+          "review",
+          "changes",
+          "forkee",
+          "release",
+          "package",
+          "workflow",
+          "workflow_run",
+          "workflow_job",
+          "push",
+          "git_ref",
+          "wiki",
+          "commit_status"
+        ],
+        "type": "object"
+      },
+      "GiteaExternalTracker": {
+        "properties": {
+          "external_tracker_format": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "external_tracker_regexp_pattern": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "external_tracker_style": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "external_tracker_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "external_tracker_url",
+          "external_tracker_format",
+          "external_tracker_style",
+          "external_tracker_regexp_pattern"
+        ],
+        "type": "object"
+      },
+      "GiteaExternalWiki": {
+        "properties": {
+          "external_wiki_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "external_wiki_url"
+        ],
+        "type": "object"
+      },
+      "GiteaInternalTracker": {
+        "properties": {
+          "allow_only_contributors_to_track_time": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "enable_issue_dependencies": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "enable_time_tracker": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "enable_time_tracker",
+          "allow_only_contributors_to_track_time",
+          "enable_issue_dependencies"
+        ],
+        "type": "object"
+      },
+      "GiteaIssue": {
+        "properties": {
+          "assets": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/GiteaAttachment"
+            },
+            "type": "array"
+          },
+          "assignee": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GiteaUser"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "assignees": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/GiteaUser"
+            },
+            "type": "array"
+          },
+          "body": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "closed_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "comments": {
+            "default": null,
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "content_version": {
+            "default": null,
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "created_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "due_date": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "html_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "default": null,
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "is_locked": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "labels": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/GiteaLabel"
+            },
+            "type": "array"
+          },
+          "milestone": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GiteaMilestone"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "number": {
+            "default": null,
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "original_author": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "original_author_id": {
+            "default": null,
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "pin_order": {
+            "default": null,
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "projects": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/GiteaProject"
+            },
+            "type": "array"
+          },
+          "pull_request": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GiteaPullRequestMeta"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "ref": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "repository": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GiteaRepositoryMeta"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "state": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "time_estimate": {
+            "default": null,
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "title": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "updated_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "user": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GiteaUser"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "required": [
+          "id",
+          "url",
+          "html_url",
+          "number",
+          "user",
+          "original_author",
+          "original_author_id",
+          "title",
+          "body",
+          "ref",
+          "assets",
+          "labels",
+          "milestone",
+          "projects",
+          "assignee",
+          "assignees",
+          "state",
+          "is_locked",
+          "comments",
+          "created_at",
+          "updated_at",
+          "closed_at",
+          "due_date",
+          "time_estimate",
+          "pull_request",
+          "repository",
+          "pin_order",
+          "content_version"
+        ],
+        "type": "object"
+      },
+      "GiteaLabel": {
+        "properties": {
+          "color": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "description": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "exclusive": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "id": {
+            "default": null,
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "is_archived": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "name": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "exclusive",
+          "is_archived",
+          "color",
+          "description",
+          "url"
+        ],
+        "type": "object"
+      },
+      "GiteaMilestone": {
+        "properties": {
+          "closed_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "closed_issues": {
+            "default": null,
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "created_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "description": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "due_on": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "default": null,
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "open_issues": {
+            "default": null,
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "state": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "title": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "updated_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "description",
+          "state",
+          "open_issues",
+          "closed_issues",
+          "created_at",
+          "updated_at",
+          "closed_at",
+          "due_on"
+        ],
+        "type": "object"
+      },
+      "GiteaOrganization": {
+        "properties": {
+          "avatar_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "description": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "email": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "full_name": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "html_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "default": null,
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "location": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "login": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "repo_admin_change_team_access": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "username": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "visibility": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "website": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "username",
+          "login",
+          "full_name",
+          "email",
+          "avatar_url",
+          "html_url",
+          "description",
+          "website",
+          "location",
+          "visibility",
+          "repo_admin_change_team_access"
+        ],
+        "type": "object"
+      },
+      "GiteaPackage": {
+        "properties": {
+          "created_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "creator": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GiteaUser"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "html_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "default": null,
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "name": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "owner": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GiteaUser"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "repository": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GiteaRepository"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "type": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "version": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "owner",
+          "repository",
+          "creator",
+          "type",
+          "name",
+          "version",
+          "html_url",
+          "created_at"
+        ],
+        "type": "object"
+      },
+      "GiteaPermission": {
+        "properties": {
+          "admin": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "pull": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "push": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "admin",
+          "push",
+          "pull"
+        ],
+        "type": "object"
+      },
+      "GiteaProject": {
+        "properties": {
+          "card_type": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "closed_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "created_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "creator": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GiteaUser"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "creator_id": {
+            "default": null,
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "description": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "html_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "default": null,
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "is_closed": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "num_closed_issues": {
+            "default": null,
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "num_issues": {
+            "default": null,
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "num_open_issues": {
+            "default": null,
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "owner_id": {
+            "default": null,
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "repo_id": {
+            "default": null,
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "state": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "template_type": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "title": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "type": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "updated_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "description",
+          "owner_id",
+          "repo_id",
+          "creator",
+          "creator_id",
+          "state",
+          "is_closed",
+          "template_type",
+          "card_type",
+          "type",
+          "num_open_issues",
+          "num_closed_issues",
+          "num_issues",
+          "created_at",
+          "updated_at",
+          "closed_at",
+          "html_url"
+        ],
+        "type": "object"
+      },
+      "GiteaPullRequest": {
+        "properties": {
+          "additions": {
+            "default": null,
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "allow_maintainer_edit": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "assignee": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GiteaUser"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "assignees": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/GiteaUser"
+            },
+            "type": "array"
+          },
+          "base": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GiteaBranch"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "body": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "changed_files": {
+            "default": null,
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "closed_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "comments": {
+            "default": null,
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "content_version": {
+            "default": null,
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "created_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "deletions": {
+            "default": null,
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "diff_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "draft": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "due_date": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "head": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GiteaBranch"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "html_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "default": null,
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "is_locked": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "labels": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/GiteaLabel"
+            },
+            "type": "array"
+          },
+          "merge_base": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "merge_commit_sha": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "mergeable": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "merged": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "merged_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "merged_by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GiteaUser"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "milestone": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GiteaMilestone"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "number": {
+            "default": null,
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "patch_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "pin_order": {
+            "default": null,
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "requested_reviewers": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/GiteaUser"
+            },
+            "type": "array"
+          },
+          "requested_reviewers_teams": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/GiteaTeam"
+            },
+            "type": "array"
+          },
+          "review_comments": {
+            "default": null,
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "state": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "title": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "updated_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "user": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GiteaUser"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "required": [
+          "id",
+          "url",
+          "number",
+          "user",
+          "title",
+          "body",
+          "labels",
+          "milestone",
+          "assignee",
+          "assignees",
+          "requested_reviewers",
+          "requested_reviewers_teams",
+          "state",
+          "draft",
+          "is_locked",
+          "comments",
+          "review_comments",
+          "additions",
+          "deletions",
+          "changed_files",
+          "html_url",
+          "diff_url",
+          "patch_url",
+          "mergeable",
+          "merged",
+          "merged_at",
+          "merge_commit_sha",
+          "merged_by",
+          "allow_maintainer_edit",
+          "base",
+          "head",
+          "merge_base",
+          "due_date",
+          "created_at",
+          "updated_at",
+          "closed_at",
+          "pin_order",
+          "content_version"
+        ],
+        "type": "object"
+      },
+      "GiteaPullRequestMeta": {
+        "properties": {
+          "draft": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "html_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "merged": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "merged_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "merged",
+          "merged_at",
+          "draft",
+          "html_url"
+        ],
+        "type": "object"
+      },
+      "GiteaPullRequestReference": {
+        "properties": {
+          "base": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GiteaBranch"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "head": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GiteaBranch"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "id": {
+            "default": null,
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "number": {
+            "default": null,
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "number",
+          "url",
+          "head",
+          "base"
+        ],
+        "type": "object"
+      },
+      "GiteaPush": {
+        "properties": {
+          "after": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "before": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "commits": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/GiteaCommit"
+            },
+            "type": "array"
+          },
+          "compare_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "head_commit": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GiteaCommit"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "pusher": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GiteaUser"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "ref": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "total_commits": {
+            "default": null,
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "ref",
+          "before",
+          "after",
+          "compare_url",
+          "commits",
+          "total_commits",
+          "head_commit",
+          "pusher"
+        ],
+        "type": "object"
+      },
+      "GiteaRefEvent": {
+        "properties": {
+          "pusher_type": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "ref": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "ref_type": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sha": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "sha",
+          "ref",
+          "ref_type",
+          "pusher_type"
+        ],
+        "type": "object"
+      },
+      "GiteaRelease": {
+        "properties": {
+          "assets": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/GiteaAttachment"
+            },
+            "type": "array"
+          },
+          "author": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GiteaUser"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "body": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "created_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "draft": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "html_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "default": null,
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "name": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "prerelease": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "published_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "tag_name": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "tarball_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "target_commitish": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "upload_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "zipball_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "tag_name",
+          "target_commitish",
+          "name",
+          "body",
+          "url",
+          "html_url",
+          "tarball_url",
+          "zipball_url",
+          "upload_url",
+          "draft",
+          "prerelease",
+          "created_at",
+          "published_at",
+          "author",
+          "assets"
+        ],
+        "type": "object"
+      },
+      "GiteaRepoTransfer": {
+        "properties": {
+          "doer": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GiteaUser"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "recipient": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GiteaUser"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "teams": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/GiteaTeam"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "doer",
+          "recipient",
+          "teams"
+        ],
+        "type": "object"
+      },
+      "GiteaRepository": {
+        "properties": {
+          "allow_fast_forward_only_merge": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "allow_manual_merge": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "allow_merge_commits": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "allow_merge_update": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "allow_rebase": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "allow_rebase_explicit": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "allow_rebase_update": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "allow_squash_merge": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "archived": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "archived_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "autodetect_manual_merge": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "avatar_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "branch_count": {
+            "default": null,
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "clone_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "created_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "default_allow_maintainer_edit": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "default_branch": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "default_delete_branch_after_merge": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "default_merge_style": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "default_target_branch": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "default_update_style": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "description": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "empty": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "external_tracker": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GiteaExternalTracker"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "external_wiki": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GiteaExternalWiki"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "fork": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "forks_count": {
+            "default": null,
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "full_name": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "has_actions": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "has_code": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "has_issues": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "has_packages": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "has_projects": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "has_pull_requests": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "has_releases": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "has_wiki": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "html_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "default": null,
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "ignore_whitespace_conflicts": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "internal": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "internal_tracker": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GiteaInternalTracker"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "language": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "languages_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "licenses": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "link": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "mirror": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "mirror_interval": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "mirror_last_sync_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "mirror_updated": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "object_format_name": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "open_issues_count": {
+            "default": null,
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "open_pr_counter": {
+            "default": null,
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "original_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "owner": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GiteaUser"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "parent": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GiteaRepository"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "permissions": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GiteaPermission"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "private": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "projects_mode": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "release_counter": {
+            "default": null,
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "repo_transfer": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GiteaRepoTransfer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "size": {
+            "default": null,
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "ssh_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "stars_count": {
+            "default": null,
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "template": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "topics": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "updated_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "watchers_count": {
+            "default": null,
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "website": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "owner",
+          "name",
+          "full_name",
+          "description",
+          "empty",
+          "private",
+          "fork",
+          "template",
+          "parent",
+          "mirror",
+          "size",
+          "language",
+          "languages_url",
+          "html_url",
+          "url",
+          "link",
+          "ssh_url",
+          "clone_url",
+          "original_url",
+          "website",
+          "stars_count",
+          "forks_count",
+          "watchers_count",
+          "branch_count",
+          "open_issues_count",
+          "open_pr_counter",
+          "release_counter",
+          "default_branch",
+          "default_target_branch",
+          "archived",
+          "created_at",
+          "updated_at",
+          "archived_at",
+          "permissions",
+          "has_code",
+          "has_issues",
+          "internal_tracker",
+          "external_tracker",
+          "has_wiki",
+          "external_wiki",
+          "has_pull_requests",
+          "has_projects",
+          "projects_mode",
+          "has_releases",
+          "has_packages",
+          "has_actions",
+          "ignore_whitespace_conflicts",
+          "allow_merge_commits",
+          "allow_rebase",
+          "allow_rebase_explicit",
+          "allow_squash_merge",
+          "allow_fast_forward_only_merge",
+          "allow_merge_update",
+          "allow_rebase_update",
+          "allow_manual_merge",
+          "autodetect_manual_merge",
+          "default_delete_branch_after_merge",
+          "default_merge_style",
+          "default_update_style",
+          "default_allow_maintainer_edit",
+          "avatar_url",
+          "internal",
+          "mirror_interval",
+          "object_format_name",
+          "mirror_updated",
+          "mirror_last_sync_at",
+          "repo_transfer",
+          "topics",
+          "licenses"
+        ],
+        "type": "object"
+      },
+      "GiteaRepositoryMeta": {
+        "properties": {
+          "full_name": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "default": null,
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "name": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "owner": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "owner",
+          "full_name"
+        ],
+        "type": "object"
+      },
+      "GiteaReview": {
+        "properties": {
+          "content": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "type": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "content"
+        ],
+        "type": "object"
+      },
+      "GiteaTeam": {
+        "properties": {
+          "can_create_org_repo": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "description": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "default": null,
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "includes_all_repositories": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "name": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "organization": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GiteaOrganization"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "permission": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "units": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "units_map": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "default": {},
+            "type": "object"
+          },
+          "visibility": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "description",
+          "organization",
+          "includes_all_repositories",
+          "permission",
+          "units",
+          "units_map",
+          "can_create_org_repo",
+          "visibility"
+        ],
+        "type": "object"
+      },
+      "GiteaUser": {
+        "properties": {
+          "active": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "avatar_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "created": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "description": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "email": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "followers_count": {
+            "default": null,
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "following_count": {
+            "default": null,
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "full_name": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "html_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "default": null,
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "is_admin": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "language": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "last_login": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "location": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "login": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "login_name": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "prohibit_login": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "restricted": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "source_id": {
+            "default": null,
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "starred_repos_count": {
+            "default": null,
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "type": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "visibility": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "website": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "login",
+          "type",
+          "login_name",
+          "source_id",
+          "full_name",
+          "email",
+          "avatar_url",
+          "html_url",
+          "language",
+          "is_admin",
+          "last_login",
+          "created",
+          "restricted",
+          "active",
+          "prohibit_login",
+          "location",
+          "website",
+          "description",
+          "visibility",
+          "followers_count",
+          "following_count",
+          "starred_repos_count"
+        ],
+        "type": "object"
+      },
+      "GiteaWiki": {
+        "properties": {
+          "comment": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "page": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "page",
+          "comment"
+        ],
+        "type": "object"
+      },
+      "GiteaWorkflow": {
+        "properties": {
+          "badge_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "created_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "deleted_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "html_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "path": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "state": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "updated_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "path",
+          "state",
+          "created_at",
+          "updated_at",
+          "url",
+          "html_url",
+          "badge_url",
+          "deleted_at"
+        ],
+        "type": "object"
+      },
+      "GiteaWorkflowJob": {
+        "properties": {
+          "completed_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "conclusion": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "created_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "head_branch": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "head_sha": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "html_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "default": null,
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "labels": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "name": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "run_attempt": {
+            "default": null,
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "run_id": {
+            "default": null,
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "run_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "runner_id": {
+            "default": null,
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "runner_name": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "started_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "steps": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/GiteaWorkflowStep"
+            },
+            "type": "array"
+          },
+          "url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "url",
+          "html_url",
+          "run_id",
+          "run_url",
+          "name",
+          "labels",
+          "run_attempt",
+          "head_sha",
+          "head_branch",
+          "status",
+          "conclusion",
+          "runner_id",
+          "runner_name",
+          "steps",
+          "created_at",
+          "started_at",
+          "completed_at"
+        ],
+        "type": "object"
+      },
+      "GiteaWorkflowRun": {
+        "properties": {
+          "actor": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GiteaUser"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "artifacts_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "cancel_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "completed_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "conclusion": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "created_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "display_title": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "event": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "head_branch": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "head_repository": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GiteaRepository"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "head_sha": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "html_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "default": null,
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "jobs_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "logs_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "path": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "previous_attempt_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "pull_requests": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/GiteaPullRequestReference"
+            },
+            "type": "array"
+          },
+          "repository": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GiteaRepository"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "repository_id": {
+            "default": null,
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "rerun_url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "run_attempt": {
+            "default": null,
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "run_number": {
+            "default": null,
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "started_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "trigger_actor": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GiteaUser"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "updated_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "url": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "url",
+          "previous_attempt_url",
+          "html_url",
+          "jobs_url",
+          "logs_url",
+          "artifacts_url",
+          "cancel_url",
+          "rerun_url",
+          "display_title",
+          "path",
+          "event",
+          "run_attempt",
+          "run_number",
+          "repository_id",
+          "head_sha",
+          "head_branch",
+          "status",
+          "actor",
+          "trigger_actor",
+          "repository",
+          "head_repository",
+          "conclusion",
+          "pull_requests",
+          "created_at",
+          "updated_at",
+          "started_at",
+          "completed_at"
+        ],
+        "type": "object"
+      },
+      "GiteaWorkflowStep": {
+        "properties": {
+          "completed_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "conclusion": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "number": {
+            "default": null,
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "started_at": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "number",
+          "status",
+          "conclusion",
+          "started_at",
+          "completed_at"
+        ],
+        "type": "object"
+      },
       "GithubApp": {
         "properties": {
           "created_at": {
@@ -6205,6 +10254,23 @@
             "additionalProperties": false,
             "properties": {
               "credentials": {
+                "$ref": "#/components/schemas/GiteaCredentials"
+              },
+              "provider": {
+                "const": "gitea",
+                "type": "string"
+              }
+            },
+            "required": [
+              "provider",
+              "credentials"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "credentials": {
                 "$ref": "#/components/schemas/GitlabCredentials"
               },
               "provider": {
@@ -6342,6 +10408,22 @@
           {
             "properties": {
               "event": {
+                "$ref": "#/components/schemas/GiteaEvent"
+              },
+              "provider": {
+                "const": "gitea",
+                "type": "string"
+              }
+            },
+            "required": [
+              "provider",
+              "event"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "event": {
                 "$ref": "#/components/schemas/GitlabEvent"
               },
               "provider": {
@@ -6458,6 +10540,7 @@
         "enum": [
           "generic",
           "github",
+          "gitea",
           "gitlab",
           "stripe",
           "slack",

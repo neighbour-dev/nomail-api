@@ -9,6 +9,7 @@ use std::{fmt, str::FromStr};
 pub enum Provider {
     Generic,
     Github,
+    Gitea,
     Gitlab,
     Stripe,
     Slack,
@@ -22,6 +23,7 @@ impl Provider {
         match self {
             Self::Generic => "generic",
             Self::Github => "github",
+            Self::Gitea => "gitea",
             Self::Gitlab => "gitlab",
             Self::Stripe => "stripe",
             Self::Slack => "slack",
@@ -39,6 +41,7 @@ impl FromStr for Provider {
         match value.trim().to_ascii_lowercase().as_str() {
             "generic" => Ok(Self::Generic),
             "github" => Ok(Self::Github),
+            "gitea" => Ok(Self::Gitea),
             "gitlab" => Ok(Self::Gitlab),
             "stripe" => Ok(Self::Stripe),
             "slack" => Ok(Self::Slack),

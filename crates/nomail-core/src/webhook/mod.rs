@@ -31,6 +31,7 @@ pub fn receive(
     match config.provider {
         Provider::Generic => platforms::generic::receive(config, request),
         Provider::Github => platforms::github::receive(config, request),
+        Provider::Gitea => platforms::gitea::receive(config, request),
         Provider::Gitlab => platforms::gitlab::receive(config, request),
         Provider::Stripe => platforms::stripe::receive(config, request),
         Provider::Slack => platforms::slack::receive(config, request),
