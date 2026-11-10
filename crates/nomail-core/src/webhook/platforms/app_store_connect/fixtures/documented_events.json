@@ -1,0 +1,106 @@
+[
+  {
+    "data": {
+      "type": "appStoreVersionAppVersionStateUpdated", "id": "example-event-app-version", "version": 1,
+      "attributes": { "newValue": "READY_FOR_REVIEW", "oldValue": "PREPARE_FOR_SUBMISSION", "timestamp": "2025-04-16T05:00:52.745Z" },
+      "relationships": { "instance": { "data": { "type": "appStoreVersions", "id": "example-app-version" } } }
+    }
+  },
+  {
+    "data": {
+      "type": "buildBetaDetailExternalBuildStateUpdated", "id": "example-event-external-build", "version": 1,
+      "attributes": { "newExternalBuildState": "BETA_APPROVED", "oldExternalBuildState": "IN_BETA_REVIEW", "timestamp": "2025-04-16T05:00:52.745Z" },
+      "relationships": { "instance": { "data": { "type": "buildBetaDetails", "id": "example-build-beta-detail" } } }
+    }
+  },
+  {
+    "data": {
+      "type": "betaFeedbackScreenshotSubmissionCreated", "id": "example-event-screenshot", "version": 1,
+      "attributes": { "timestamp": "2025-05-08T01:29:36.16Z" },
+      "relationships": { "instance": { "data": { "type": "betaFeedbackScreenshotSubmissions", "id": "example-feedback-screenshot" }, "links": { "self": "https://example.invalid/feedback/screenshots/example-feedback-screenshot" } } }
+    }
+  },
+  {
+    "data": {
+      "type": "betaFeedbackCrashSubmissionCreated", "id": "example-event-crash", "version": 1,
+      "attributes": { "timestamp": "2025-05-16T20:53:20.729Z" },
+      "relationships": { "instance": { "data": { "type": "betaFeedbackCrashSubmissions", "id": "example-feedback-crash" }, "links": { "self": "https://example.invalid/feedback/crashes/example-feedback-crash" } } }
+    }
+  },
+  {
+    "data": {
+      "type": "backgroundAssetVersionStateUpdated", "id": "example-event-background-version",
+      "attributes": { "timestamp": "2025-12-05T14:30:45Z", "newState": "FAILED", "oldState": "PROCESSING" },
+      "relationships": { "instance": { "id": "example-background-version", "type": "backgroundAssetVersions", "links": { "self": "https://example.invalid/background/versions/example-background-version" } } }
+    }
+  },
+  {
+    "data": {
+      "type": "backgroundAssetVersionInternalBetaReleaseCreated", "id": "example-event-background-internal-beta",
+      "attributes": { "timestamp": "2025-12-05T14:30:45Z" },
+      "relationships": { "instance": { "id": "example-background-internal-beta", "type": "backgroundAssetVersionInternalBetaReleases", "links": { "self": "https://example.invalid/background/internal-beta/example-background-internal-beta" } } }
+    }
+  },
+  {
+    "data": {
+      "type": "backgroundAssetVersionExternalBetaReleaseStateUpdated", "id": "example-event-background-external-beta-rejected",
+      "attributes": { "timestamp": "2025-12-05T14:30:45Z", "newState": "REJECTED", "oldState": "IN_REVIEW" },
+      "relationships": { "instance": { "id": "example-background-external-beta", "type": "backgroundAssetVersionExternalBetaReleases", "links": { "self": "https://example.invalid/background/external-beta/example-background-external-beta" } } }
+    }
+  },
+  {
+    "data": {
+      "type": "backgroundAssetVersionExternalBetaReleaseStateUpdated", "id": "example-event-background-external-beta-ready",
+      "attributes": { "timestamp": "2025-12-05T14:30:45Z", "newState": "READY_FOR_TESTING", "oldState": "PROCESSING_FOR_TESTING" },
+      "relationships": { "instance": { "id": "example-background-external-beta", "type": "backgroundAssetVersionExternalBetaReleases", "links": { "self": "https://example.invalid/background/external-beta/example-background-external-beta" } } }
+    }
+  },
+  {
+    "data": {
+      "type": "backgroundAssetVersionAppStoreReleaseStateUpdated", "id": "example-event-background-app-store-rejected",
+      "attributes": { "timestamp": "2025-12-05T14:30:45Z", "newState": "REJECTED", "oldState": "IN_REVIEW" },
+      "relationships": { "instance": { "id": "example-background-app-store", "type": "backgroundAssetVersionAppStoreReleases", "links": { "self": "https://example.invalid/background/app-store/example-background-app-store" } } }
+    }
+  },
+  {
+    "data": {
+      "type": "backgroundAssetVersionAppStoreReleaseStateUpdated", "id": "example-event-background-app-store-ready",
+      "attributes": { "timestamp": "2025-12-05T14:30:45Z", "newState": "READY_FOR_DISTRIBUTION", "oldState": "PROCESSING_FOR_DISTRIBUTION" },
+      "relationships": { "instance": { "id": "example-background-app-store", "type": "backgroundAssetVersionAppStoreReleases", "links": { "self": "https://example.invalid/background/app-store/example-background-app-store" } } }
+    }
+  },
+  {
+    "data": {
+      "type": "buildUploadStateUpdated", "id": "example-event-build-upload", "version": 1,
+      "attributes": { "newState": "COMPLETE" },
+      "relationships": { "instance": { "data": { "type": "buildUploads", "id": "example-build-upload" } } }
+    }
+  },
+  {
+    "data": {
+      "type": "alternativeDistributionPackageVersionCreated", "id": "example-event-package-version", "version": 1,
+      "attributes": { "appId": "1234567890", "timestamp": "2025-07-10T22:35:02.541411Z" },
+      "relationships": {
+        "instance": { "data": { "type": "alternativeDistributionPackageVersions", "id": "example-package-version" }, "links": { "self": "https://example.invalid/packages/versions/example-package-version" } },
+        "marketplaceApp": { "data": { "type": "apps", "id": "9876543210" }, "links": { "self": "https://example.invalid/apps/9876543210" } }
+      }
+    }
+  },
+  {
+    "data": {
+      "type": "alternativeDistributionPackageAvailableUpdated", "id": "example-event-package-availability", "version": 1,
+      "attributes": { "available": true, "territories": ["DNK", "IRL", "NLD", "SVK", "SVN", "LTU", "HRV", "PRT", "MLT", "CYP", "AUT", "SWE", "HUN", "ESP", "EST", "BEL", "FIN", "POL", "BGR", "LUX", "CZE", "FRA", "DEU", "LVA", "ITA", "GRC", "ROU"], "appId": "1234567890", "timestamp": "2025-07-11T17:47:14.498347Z" },
+      "relationships": {
+        "instance": { "data": { "type": "alternativeDistributionPackages", "id": "example-package" }, "links": { "self": "https://example.invalid/packages/example-package" } },
+        "marketplaceApp": { "data": { "type": "apps", "id": "9876543210" }, "links": { "self": "https://example.invalid/apps/9876543210" } }
+      }
+    }
+  },
+  {
+    "data": {
+      "type": "alternativeDistributionTerritoryAvailabilityUpdated", "id": "example-event-territory-availability", "version": 1,
+      "attributes": { "available": true, "territories": ["DNK", "IRL", "NLD", "SVK", "SVN", "LTU", "HRV", "PRT", "MLT", "CYP", "AUT", "SWE", "HUN", "ESP", "EST", "BEL", "FIN", "POL", "BGR", "LUX", "CZE", "FRA", "DEU", "LVA", "ITA", "GRC", "ROU"], "appId": "1234567890", "timestamp": "2025-07-17T14:55:16.125331Z" },
+      "relationships": { "marketplaceApp": { "data": { "type": "apps", "id": "9876543210" }, "links": { "self": "https://example.invalid/apps/9876543210" } } }
+    }
+  }
+]

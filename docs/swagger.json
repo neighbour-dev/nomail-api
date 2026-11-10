@@ -34,6 +34,318 @@
         ],
         "type": "object"
       },
+      "AppStoreConnectAttributes": {
+        "description": "Keep the distinct attribute names from each documented event family. State\nstrings are open-ended; a new Apple state must not reject the notification.",
+        "properties": {
+          "appId": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "available": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "newExternalBuildState": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "newState": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "newValue": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "oldExternalBuildState": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "oldState": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "oldValue": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "territories": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "timestamp": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "timestamp",
+          "newValue",
+          "oldValue",
+          "newExternalBuildState",
+          "oldExternalBuildState",
+          "newState",
+          "oldState",
+          "available",
+          "territories",
+          "appId"
+        ],
+        "type": "object"
+      },
+      "AppStoreConnectCredentials": {
+        "additionalProperties": false,
+        "description": "The webhook Secret, not an App Store Connect JWT/private key or IAP secret.",
+        "properties": {
+          "secret": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "secret"
+        ],
+        "type": "object"
+      },
+      "AppStoreConnectEvent": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/AppStoreConnectNotification",
+            "default": {
+              "attributes": null,
+              "id": null,
+              "relationships": null,
+              "type": "",
+              "version": null
+            }
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "type": "object"
+      },
+      "AppStoreConnectLinks": {
+        "properties": {
+          "related": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "self": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "self",
+          "related"
+        ],
+        "type": "object"
+      },
+      "AppStoreConnectNotification": {
+        "properties": {
+          "attributes": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AppStoreConnectAttributes"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "id": {
+            "default": null,
+            "description": "The notification event ID, not the related app/build/feedback resource ID.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "relationships": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AppStoreConnectRelationships"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "type": {
+            "default": "",
+            "type": "string"
+          },
+          "version": {
+            "default": null,
+            "description": "Present in some examples, absent in background-asset notifications.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "id",
+          "version",
+          "attributes",
+          "relationships"
+        ],
+        "type": "object"
+      },
+      "AppStoreConnectRelationship": {
+        "description": "Ordinary events wrap identifiers in `data`; background-asset examples put\nid/type/links directly on the relationship. Preserve both documented shapes.",
+        "properties": {
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AppStoreConnectResourceReference"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "links": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AppStoreConnectLinks"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "type": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "data",
+          "type",
+          "id",
+          "links"
+        ],
+        "type": "object"
+      },
+      "AppStoreConnectRelationships": {
+        "properties": {
+          "instance": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AppStoreConnectRelationship"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "marketplaceApp": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AppStoreConnectRelationship"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "required": [
+          "instance",
+          "marketplaceApp"
+        ],
+        "type": "object"
+      },
+      "AppStoreConnectResourceReference": {
+        "properties": {
+          "id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "links": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AppStoreConnectLinks"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "type": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "id",
+          "links"
+        ],
+        "type": "object"
+      },
       "AuthenticationMode": {
         "enum": [
           "none",
@@ -10271,6 +10583,23 @@
             "additionalProperties": false,
             "properties": {
               "credentials": {
+                "$ref": "#/components/schemas/AppStoreConnectCredentials"
+              },
+              "provider": {
+                "const": "appstoreconnect",
+                "type": "string"
+              }
+            },
+            "required": [
+              "provider",
+              "credentials"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "credentials": {
                 "$ref": "#/components/schemas/GitlabCredentials"
               },
               "provider": {
@@ -10424,6 +10753,22 @@
           {
             "properties": {
               "event": {
+                "$ref": "#/components/schemas/AppStoreConnectEvent"
+              },
+              "provider": {
+                "const": "appstoreconnect",
+                "type": "string"
+              }
+            },
+            "required": [
+              "provider",
+              "event"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "event": {
                 "$ref": "#/components/schemas/GitlabEvent"
               },
               "provider": {
@@ -10541,6 +10886,7 @@
           "generic",
           "github",
           "gitea",
+          "appstoreconnect",
           "gitlab",
           "stripe",
           "slack",

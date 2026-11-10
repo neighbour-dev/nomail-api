@@ -105,6 +105,7 @@ test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, a
     assert.equal(localSql('SELECT COUNT(*) AS count FROM webhook_configs;')[0].count, 1);
     for (const platform of [
       { provider: 'gitea', credentials: { secret: 'valid', unknown: true } },
+      { provider: 'appstoreconnect', credentials: { secret: 'valid', privateKey: 'wrong-credential' } },
       { provider: 'github', credentials: { secret: 'valid', unknown: true } },
       { provider: 'github', credentials: ['positional-secret'] },
       ['github', { secret: 'positional-secret' }],
@@ -356,6 +357,7 @@ test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, a
     for (const platform of [
       { provider: 'gitlab', credentials: { type: 'signingToken', signingToken: 'whsec_cGxhdGZvcm0tc2VjcmV0' } },
       { provider: 'gitea', credentials: { secret: 'platform-secret' } },
+      { provider: 'appstoreconnect', credentials: { secret: 'platform-secret' } },
       { provider: 'gitlab', credentials: { type: 'secretToken', secretToken: 'platform-secret' } },
       { provider: 'stripe', credentials: { signingSecrets: ['whsec_retired', 'whsec_platform-secret'] } },
       { provider: 'slack', credentials: { signingSecret: 'platform-secret' } },
@@ -370,6 +372,7 @@ test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, a
       assert.deepEqual(await api('GET', path, undefined, token), item);
       const payloads = {
         gitea: { action: 'assigned', issue: { number: 1, title: 'Test', is_locked: true }, sender: { id: -2, login: 'actions' } },
+        appstoreconnect: { data: { type: 'appStoreVersionAppVersionStateUpdated', id: 'matrix', version: 1, attributes: { oldValue: 'PREPARE_FOR_SUBMISSION', newValue: 'READY_FOR_REVIEW' }, relationships: { instance: { data: { type: 'appStoreVersions', id: 'example-version' } } } }, future: { keep: true } },
         gitlab: { object_kind: 'issue', object_attributes: { title: 'Test' } },
         stripe: { id: 'evt_matrix', object: 'event', type: 'payment_intent.succeeded', data: { object: { id: 'pi_test' } } },
         slack: { type: 'event_callback', event_id: 'EvMatrix', event: { type: 'message', text: 'Test' } },
@@ -382,6 +385,7 @@ test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, a
       let headers;
       switch (platform.provider) {
         case 'gitea': headers = { 'X-Gitea-Event': 'issues', 'X-Gitea-Event-Type': 'issue_assign', 'X-Gitea-Delivery': 'matrix', 'X-Gitea-Signature': sign('platform-secret', raw) }; break;
+        case 'appstoreconnect': headers = { 'X-Apple-Signature': 'hmacsha256=' + sign('platform-secret', raw) }; break;
         case 'gitlab':
           headers = platform.credentials.type === 'signingToken'
             ? { 'X-Gitlab-Event': 'Issue Hook', 'webhook-id': 'matrix', 'webhook-timestamp': time, 'webhook-signature': 'v1,' + sign('platform-secret', `matrix.${time}.${raw}`, 'base64') }
@@ -416,6 +420,28 @@ test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, a
         assert.deepEqual(await original.json(), payloads.gitea);
       }
       await api('POST', item.url, { title: 'unauthenticated' }, undefined, 401);
+      if (platform.provider === 'appstoreconnect') {
+        const detail = await api('GET', `/api/messages/${ack.data.messageId}`, undefined, token);
+        assert.equal(detail.platformData.provider, 'appstoreconnect');
+        assert.equal(detail.platformData.event.data.type, 'appStoreVersionAppVersionStateUpdated');
+        assert.equal(detail.platformData.event.data.attributes.oldValue, 'PREPARE_FOR_SUBMISSION');
+        assert.equal(detail.platformData.event.data.attributes.newValue, 'READY_FOR_REVIEW');
+        assert.equal(detail.platformData.event.data.relationships.instance.data.id, 'example-version');
+        assert.equal(detail.metadata.version, '1');
+        assert.equal(detail.metadata.deduplicationKey.scope, 'appstoreconnect:event');
+        const next = structuredClone(payloads.appstoreconnect);
+        next.data.id = 'matrix-next-event';
+        for (const [body, duplicate] of [[raw, true], [JSON.stringify(next), false]]) {
+          const response = await fetch(origin + item.url, { method: 'POST', body, headers: { 'Content-Type': 'application/json', 'X-Apple-Signature': 'hmacsha256=' + sign('platform-secret', body) } });
+          const replay = await response.json();
+          assert.equal(response.status, 200, JSON.stringify(replay));
+          validateResponse('POST', item.url, 200, replay);
+          assert.equal(replay.data.duplicate, duplicate);
+          assert.equal(replay.data.messageId === ack.data.messageId, duplicate);
+        }
+        const original = await fetch(origin + `/api/messages/${ack.data.messageId}/raw`, { headers: { Authorization: `Bearer ${token}` } });
+        assert.deepEqual(await original.json(), payloads.appstoreconnect);
+      }
       await api('PATCH', path, { platform: { provider: 'github' } }, token, 400);
       assert.deepEqual(await api('GET', path, undefined, token), item);
       const switched = await api('PATCH', path, { platform: anonymousGeneric }, token);

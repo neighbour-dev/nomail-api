@@ -8,6 +8,8 @@
 
 ### 新增
 
+- 新增 App Store Connect 平台（`appstoreconnect`）：使用独立 Webhook Secret 验证 `x-apple-signature: hmacsha256=...`，支持官方文档列出的 12 类通知，结构化保留状态变化、地区可用性和关联资源。兼容普通与后台资源两种 relationship 结构、可缺失的 version/timestamp，按通知事件 ID 去重；不隐式调用 Apple API 补全反馈或资源详情，不混用内购/订阅的 JWS 通知协议。
+
 - 新增独立 Gitea 平台：配置使用 `provider: gitea` 和 Webhook Secret，支持 POST JSON/表单及原生 HMAC-SHA256 验签；结构化保留 Issue/PR、审核、标签变更、Push/提交签名、引用、Fork、Wiki、Release/附件、Package、Workflow/步骤等信息。区分归一化事件和原始事件类型，保留负数系统用户 ID；手动 Replay 的新 Delivery ID 按新投递处理。Server/Workers 共用接收逻辑，无需数据库迁移。
 
 - 扩展 GitHub 消息的结构化平台数据：补齐 Issue/PR 状态、指派、里程碑、审核与代码评论位置，新增 Push/引用/提交状态、Workflow Job/步骤、Check Run/Suite、Release/附件、Discussion/答案、Deployment/状态和编辑前信息，供客户端按事件展示。保留原有字段、宽容解析及完整 raw，旧消息快照可继续读取；仓库时间兼容字符串和 Unix 秒。

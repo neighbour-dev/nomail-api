@@ -1,4 +1,5 @@
 //! Each platform owns its event types, authentication, decoding and message mapping.
+pub mod app_store_connect;
 pub mod feishu;
 pub mod generic;
 pub mod gitea;
@@ -9,6 +10,7 @@ pub mod slack;
 pub mod stripe;
 pub mod telegram;
 
+pub use app_store_connect::AppStoreConnectEvent;
 pub use feishu::FeishuEvent;
 pub use generic::{GenericEvent, GenericJsonEvent, GenericTextEvent};
 pub use gitea::GiteaEvent;
@@ -29,6 +31,7 @@ pub enum PlatformData {
     Generic(GenericEvent),
     Github(Box<GithubEvent>),
     Gitea(Box<GiteaEvent>),
+    AppStoreConnect(Box<AppStoreConnectEvent>),
     Gitlab(GitlabEvent),
     Stripe(StripeEvent),
     Slack(SlackEvent),
@@ -57,6 +60,7 @@ impl PlatformEvent {
             PlatformData::Generic(_) => Provider::Generic,
             PlatformData::Github(_) => Provider::Github,
             PlatformData::Gitea(_) => Provider::Gitea,
+            PlatformData::AppStoreConnect(_) => Provider::AppStoreConnect,
             PlatformData::Gitlab(_) => Provider::Gitlab,
             PlatformData::Stripe(_) => Provider::Stripe,
             PlatformData::Slack(_) => Provider::Slack,
@@ -74,6 +78,9 @@ impl PlatformEvent {
             PlatformData::Generic(event) => event.to_message_content(&self.metadata, &self.raw),
             PlatformData::Github(event) => event.to_message_content(&self.metadata, &self.raw),
             PlatformData::Gitea(event) => event.to_message_content(&self.metadata, &self.raw),
+            PlatformData::AppStoreConnect(event) => {
+                event.to_message_content(&self.metadata, &self.raw)
+            }
             PlatformData::Gitlab(event) => event.to_message_content(&self.metadata, &self.raw),
             PlatformData::Stripe(event) => event.to_message_content(&self.metadata, &self.raw),
             PlatformData::Slack(event) => event.to_message_content(&self.metadata, &self.raw),

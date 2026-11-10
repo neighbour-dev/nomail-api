@@ -310,6 +310,7 @@ async fn config_service_preserves_sparse_concurrent_updates_credentials_and_scop
         json!({"provider":"generic","credentials":{"type":"hmacSha256","secret":"platform-secret"}}),
         json!({"provider":"github","credentials":{"secret":"platform-secret"}}),
         json!({"provider":"gitea","credentials":{"secret":"platform-secret"}}),
+        json!({"provider":"appstoreconnect","credentials":{"secret":"platform-secret"}}),
         json!({"provider":"gitlab","credentials":{"type":"signingToken","signingToken":"whsec_cGxhdGZvcm0tc2VjcmV0"}}),
         json!({"provider":"gitlab","credentials":{"type":"secretToken","secretToken":"platform-secret"}}),
         json!({"provider":"stripe","credentials":{"signingSecrets":["whsec_retired","whsec_platform-secret"]}}),
@@ -400,6 +401,63 @@ async fn config_service_preserves_sparse_concurrent_updates_credentials_and_scop
             let original: Value = test::read_body_json(response).await;
             assert_eq!(original, serde_json::from_str::<Value>(&raw).unwrap());
         }
+        if provider == "appstoreconnect" {
+            let detail = api!(get, &message_path, json!({})).1;
+            assert_eq!(detail["platformData"]["provider"], "appstoreconnect");
+            let data = &detail["platformData"]["event"]["data"];
+            assert_eq!(data["type"], "appStoreVersionAppVersionStateUpdated");
+            assert_eq!(data["attributes"]["oldValue"], "PREPARE_FOR_SUBMISSION");
+            assert_eq!(data["attributes"]["newValue"], "READY_FOR_REVIEW");
+            assert_eq!(
+                data["relationships"]["instance"]["data"]["id"],
+                "example-version"
+            );
+            assert_eq!(detail["metadata"]["version"], "1");
+            assert_eq!(
+                detail["metadata"]["deduplicationKey"]["scope"],
+                "appstoreconnect:event"
+            );
+            let mut next_event: Value = serde_json::from_str(&raw).unwrap();
+            next_event["data"]["id"] = json!("matrix-next-event");
+            // Same notification deduplicates; another event concerning the same
+            // app version must create a new message, not collide on instance ID.
+            for (body, duplicate) in [(raw.clone(), true), (next_event.to_string(), false)] {
+                let mut mac = Hmac::<Sha256>::new_from_slice(b"platform-secret").unwrap();
+                mac.update(body.as_bytes());
+                let response = test::call_service(
+                    &app,
+                    test::TestRequest::post()
+                        .uri(receive_path)
+                        .insert_header(("Content-Type", "application/json"))
+                        .insert_header((
+                            "X-Apple-Signature",
+                            format!("hmacsha256={}", hex::encode(mac.finalize().into_bytes())),
+                        ))
+                        .set_payload(body)
+                        .to_request(),
+                )
+                .await;
+                assert_eq!(response.status(), StatusCode::OK);
+                let acknowledgement: Value = test::read_body_json(response).await;
+                assert_eq!(acknowledgement["data"]["duplicate"], duplicate);
+                assert_eq!(
+                    acknowledgement["data"]["messageId"] == received["data"]["messageId"],
+                    duplicate
+                );
+            }
+            let response = test::call_service(
+                &app,
+                test::TestRequest::get()
+                    .uri(&format!("{message_path}/raw"))
+                    .insert_header(("Authorization", format!("Bearer {token}")))
+                    .to_request(),
+            )
+            .await;
+            assert_eq!(
+                test::read_body_json::<Value, _>(response).await,
+                serde_json::from_str::<Value>(&raw).unwrap()
+            );
+        }
         // Missing authentication never falls back to a weaker mode.
         let response = test::call_service(
             &app,
@@ -446,6 +504,7 @@ fn platform_delivery(provider: &str, platform: &Value) -> (String, Vec<(String, 
         "generic" => json!({"id":"matrix","title":"Test"}),
         "github" => json!({"action":"opened","issue":{"title":"Test"}}),
         "gitea" => json!({"action":"assigned","issue":{"number":1,"title":"Test","is_locked":true},"sender":{"id":-2,"login":"actions"}}),
+        "appstoreconnect" => json!({"data":{"type":"appStoreVersionAppVersionStateUpdated","id":"matrix","version":1,"attributes":{"oldValue":"PREPARE_FOR_SUBMISSION","newValue":"READY_FOR_REVIEW"},"relationships":{"instance":{"data":{"type":"appStoreVersions","id":"example-version"}}}},"future":{"keep":true}}),
         "gitlab" => json!({"object_kind":"issue","object_attributes":{"title":"Test"}}),
         "stripe" => json!({"id":"evt_matrix","object":"event","type":"payment_intent.succeeded","data":{"object":{"id":"pi_test"}}}),
         "slack" => json!({"type":"event_callback","event_id":"EvMatrix","event":{"type":"message","text":"Test"}}),
@@ -481,6 +540,13 @@ fn platform_delivery(provider: &str, platform: &Value) -> (String, Vec<(String, 
                 hex::encode(sign(b"platform-secret", &body)),
             ),
         ],
+        "appstoreconnect" => vec![(
+            "X-Apple-Signature",
+            format!(
+                "hmacsha256={}",
+                hex::encode(sign(b"platform-secret", &body))
+            ),
+        )],
         "gitlab" if platform["credentials"]["type"] == "signingToken" => vec![
             ("X-Gitlab-Event", "Issue Hook".into()),
             ("webhook-id", "matrix".into()),

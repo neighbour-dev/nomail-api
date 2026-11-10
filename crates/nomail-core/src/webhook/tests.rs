@@ -5,6 +5,10 @@ use super::{test_support::*, *};
 fn configuration_is_explicit_and_headers_are_case_insensitive() {
     assert_eq!(" GitHub ".parse::<Provider>().unwrap(), Provider::Github);
     assert_eq!(" Gitea ".parse::<Provider>().unwrap(), Provider::Gitea);
+    assert_eq!(
+        " AppStoreConnect ".parse::<Provider>().unwrap(),
+        Provider::AppStoreConnect
+    );
     assert!("unknown".parse::<Provider>().is_err());
     let h = headers(&[("X-Repeated", "one"), ("x-repeated", "two")]);
     assert_eq!(h.values("X-REPEATED"), ["one", "two"]);
@@ -38,6 +42,7 @@ fn configuration_is_explicit_and_headers_are_case_insensitive() {
 fn invalid_json_objects_are_rejected() {
     for provider in [
         Provider::Gitea,
+        Provider::AppStoreConnect,
         Provider::Gitlab,
         Provider::Stripe,
         Provider::Slack,

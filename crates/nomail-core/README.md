@@ -22,6 +22,7 @@ src/webhook/
 └── platforms/
     ├── mod.rs             # PlatformEvent 信封、PlatformData 枚举、映射分发
     ├── generic/
+    ├── app_store_connect/ # App Store Connect HMAC、通知信封、资源关系及官方示例测试
     ├── github/
      │   ├── mod.rs         # GitHub 事件类型、验签、解析、内置映射
      │   ├── config.rs      # GitHub 凭据类型、纯校验及认证参数构造
@@ -77,6 +78,18 @@ Gitea 使用独立模型，不复用 GitHub 类型。`metadata.event_type` 是 `
 
 验签始终针对 Gitea 的原始 JSON 文本：JSON 投递使用原 Body，表单投递先提取解码后的 `payload`，不能重新序列化再验签，也不能对整个编码表单验签。去重使用 `gitea:delivery` 与原生 Delivery ID；Gitea 手动 Replay 生成新 UUID，因此会作为新消息处理。Gitea 的测试投递是普通 Push，不是 GitHub Ping。
 
+### App Store Connect
+
+产品配置使用 `{"provider":"appstoreconnect","credentials":{"secret":"replace-with-a-random-secret"}}`，Secret 是在 App Store Connect Webhook 中设置的独立字符串，不是 API 私钥/JWT，也不是内购共享密钥。接收 POST JSON，使用原始 Body 验证 `x-apple-signature`，前缀严格为 `hmacsha256=`，不是 GitHub 的 `sha256=`。
+
+`AppStoreConnectEvent.data` 保留通知的 `type/id/version/attributes/relationships`。属性分别保留 `newValue/oldValue`、`newExternalBuildState/oldExternalBuildState`、`newState/oldState`、`available/territories/appId/timestamp`，不把不同事件的状态键混成同一字段。普通资源关系使用 `instance.data`，后台资源直接使用 `instance.id/type/links`，模型保留两种结构，Rust 调用方可通过 relationship 的 `reference()/self_url()` 统一访问。`marketplaceApp` 独立建模，允许某些通知没有 `instance`；version 和 timestamp 不作全局必填要求。
+
+事件类型、版本和去重标识分别来自 `data.type`、可选的 `data.version`、`data.id`，去重 scope 为 `appstoreconnect:event`；同一资源的不同事件不会按资源 ID 合并。ID 保持字符串，不要求 UUID。反馈通知只表达资源创建，不包含可直接展示的截图、崩溃日志或完整反馈；Core 不调用 Apple API 补全这些内容。未知事件/状态与未知字段保留 raw，优先级默认 normal。
+
+官方文档中的 `WebhookPing/webhookPings` 是管理 API 类型，不能据此推断入站 Ping 的完整契约；没有为它虚构 ACK-only 分支。有效的未知通知信封仍按普通事件处理，必须通过存储后才确认接收。该平台不是 App Store Server Notifications，不处理其 `signedPayload`/JWS。
+
+测试将官方 `webhook-events` 的 14 个示例（12 类事件）固化为脱敏 JSON fixture，并逐字段检查类型和值；CI 不依赖外部样本、Apple 账号或联网下载。
+
 ### 通用接收示例
 
 ```rust
@@ -124,6 +137,7 @@ match receive(&config, &WebhookRequest { headers: &headers, body })? {
 | Generic | HMAC-SHA256 或显式无认证；JSON/UTF-8 文本 | JSON 字段与文本请求头分别建模，再映射消息 |
 | GitHub | 原始 JSON/表单 Body HMAC；事件头；Ping | Issues、PR、评论、Push、Workflow Run 摘要 |
 | Gitea | JSON 原文或表单解码后 JSON HMAC；原生事件/精确类型头；POST | Issue/PR/审核、Push、引用、Fork、Wiki、Release、Package、Commit Status、Workflow/Job 摘要与独立资源模型 |
+| App Store Connect | POST JSON 原文 HMAC-SHA256；`x-apple-signature` | App/Build/Beta/后台资源状态、反馈资源创建、替代分发可用性和资源关系；不隐式查询 API |
 | GitLab | 固定 Token 或 Standard Webhooks 签名；轮换签名；时间窗口 | MR/评论摘要；自定义模板保留并使用 JSON 回退 |
 | Stripe | 原始 Body + 时间戳签名；多个 v1 签名；Snapshot/Thin | 事件摘要；Thin 明确标记未获取详情 |
 | Slack | 原始 Body + 时间戳签名；Events API、Interaction、Slash Command、URL 验证 | 文本/命令摘要；交互保留 JSON；限流通知忽略 |

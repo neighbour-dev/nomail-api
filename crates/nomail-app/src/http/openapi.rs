@@ -187,7 +187,7 @@ mod tests {
         assert_eq!(update_schema["additionalProperties"], false);
         assert!(create_schema["properties"].get("source").is_none());
         let platform = &document["components"]["schemas"]["PlatformConfig"];
-        assert_eq!(platform["oneOf"].as_array().unwrap().len(), 9);
+        assert_eq!(platform["oneOf"].as_array().unwrap().len(), 10);
         fn references(value: &Value, root: &Value) {
             match value {
                 Value::Object(object) => {
@@ -216,6 +216,46 @@ mod tests {
         let schemas = document["components"]["schemas"].as_object().unwrap();
         assert!(schemas.contains_key("MessageDetail"));
         assert!(schemas.contains_key("GithubEvent"));
+        for name in [
+            "AppStoreConnectEvent",
+            "AppStoreConnectNotification",
+            "AppStoreConnectAttributes",
+            "AppStoreConnectRelationship",
+            "AppStoreConnectCredentials",
+        ] {
+            assert!(
+                schemas.contains_key(name),
+                "missing App Store Connect schema: {name}"
+            );
+        }
+        let attributes = &schemas["AppStoreConnectAttributes"]["properties"];
+        for field in [
+            "newValue",
+            "oldValue",
+            "newExternalBuildState",
+            "oldExternalBuildState",
+            "newState",
+            "oldState",
+            "timestamp",
+            "available",
+            "territories",
+            "appId",
+        ] {
+            assert!(
+                attributes.get(field).is_some(),
+                "missing App Store Connect attribute: {field}"
+            );
+        }
+        assert!(
+            schemas["AppStoreConnectRelationship"]["properties"]
+                .get("data")
+                .is_some()
+        );
+        assert!(
+            schemas["AppStoreConnectRelationship"]["properties"]
+                .get("id")
+                .is_some()
+        );
         for name in [
             "GiteaEvent",
             "GiteaCredentials",
