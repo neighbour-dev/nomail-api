@@ -143,6 +143,6 @@ their pagination handling before upgrading.
 - 发布前更新版本，运行 `cargo check` 同步 `Cargo.lock`，将待发布条目整理到对应版本和实际发布日期下，保留 `Unreleased` 区域；检查通过后提交。
 - GitHub Release 正文取自 `CHANGELOG.md` 中与标签精确对应的版本条目（例如 `v0.2.0` 对应 `## [0.2.0] - 日期`），不使用 GitHub 自动生成说明，也不使用 `Unreleased`。预发布需单独记录完整版本号；条目缺失、重复或为空时，发布检查失败。已有 Release 重跑仅更新附件，不覆盖原正文。
 - 按 [Git Tag 规范](docs/tagging.md) 推送与项目版本一致的标签，会自动发布镜像和 GitHub Release；不要补发旧稳定版本，以免覆盖 `latest`。
-- 普通 push / PR 的 CI 执行格式检查、默认成员的 Rust 测试及发布说明提取脚本测试，不能替代上述完整检查。脚本测试可在本地运行：`python3 -m unittest discover -s .github/scripts -p 'test_*.py'`。
+- 普通 push / PR 的 CI 执行格式检查、默认成员的 Rust 测试、发布说明提取脚本测试及独立的 Workers WASM/OpenAPI/本地 D1/DO 检查，不能替代上述完整检查。脚本测试可在本地运行：`python3 -m unittest discover -s .github/scripts -p 'test_*.py'`。
 
 检查工作流为 `.github/workflows/ci.yml`；发布工作流为 `.github/workflows/release.yml`，仅由版本标签触发，复用检查通过后再发布。

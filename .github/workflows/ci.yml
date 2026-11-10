@@ -43,6 +43,60 @@ jobs:
       - name: Test release notes extraction
         run: python3 -m unittest discover -s .github/scripts -p 'test_*.py'
 
-      # Use the workspace's default members; Workers/WASM has a separate runtime.
+      # Use the workspace's default members; the Workers job tests its own runtime.
       - name: Run tests
         run: cargo test --locked
+
+  workers:
+    name: Workers (local D1/DO)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: crates/nomail-workers
+    env:
+      CI: "true"
+      WRANGLER_SEND_METRICS: "false"
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Install Rust with WASM target
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.99.0
+          targets: wasm32-unknown-unknown
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: check-workers-local
+
+      - name: Install Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: crates/nomail-workers/package-lock.json
+
+      - name: Install Workers test dependencies
+        run: npm ci
+
+      - name: Install worker-build
+        run: cargo install --locked --version 0.8.7 worker-build
+
+      - name: Check Workers WASM
+        run: cargo check --locked -p nomail-workers --target wasm32-unknown-unknown
+
+      - name: Verify OpenAPI contract
+        run: cargo test --locked -p nomail-app --features openapi --lib
+
+      # Keep the cold Rust/WASM build outside the integration test's startup
+      # timeout. Wrangler can reuse these artifacts when it runs the build again.
+      - name: Build Worker bundle
+        run: worker-build --release
+
+      # npm test applies D1 migrations and starts Wrangler with --local and an
+      # isolated --persist-to directory. No Cloudflare credentials are needed.
+      - name: Test Workers with local D1 and Durable Objects
+        run: npm test
