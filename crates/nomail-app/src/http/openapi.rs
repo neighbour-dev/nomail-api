@@ -217,6 +217,89 @@ mod tests {
         assert!(schemas.contains_key("MessageDetail"));
         assert!(schemas.contains_key("GithubEvent"));
         for name in [
+            "TelegramEvent",
+            "TelegramMessage",
+            "TelegramUser",
+            "TelegramChat",
+            "TelegramMaybeInaccessibleMessage",
+            "TelegramInaccessibleMessage",
+            "TelegramCallbackQuery",
+            "TelegramMessageEntity",
+            "TelegramPhotoSize",
+            "TelegramPoll",
+            "TelegramChatMember",
+            "TelegramBusinessConnection",
+            "TelegramSuccessfulPayment",
+            "TelegramRichText",
+            "TelegramRichBlock",
+        ] {
+            assert!(
+                schemas.contains_key(name),
+                "missing Telegram schema: {name}"
+            );
+        }
+        for field in [
+            "update_id",
+            "message",
+            "edited_message",
+            "channel_post",
+            "edited_channel_post",
+            "business_connection",
+            "business_message",
+            "edited_business_message",
+            "deleted_business_messages",
+            "guest_message",
+            "message_reaction",
+            "message_reaction_count",
+            "inline_query",
+            "chosen_inline_result",
+            "callback_query",
+            "widget_query",
+            "shared_widget_query",
+            "shipping_query",
+            "pre_checkout_query",
+            "purchased_paid_media",
+            "poll",
+            "poll_answer",
+            "my_chat_member",
+            "chat_member",
+            "chat_join_request",
+            "chat_boost",
+            "removed_chat_boost",
+            "managed_bot",
+            "subscription",
+            "stopped_message_generation",
+        ] {
+            assert!(
+                schemas["TelegramEvent"]["properties"].get(field).is_some(),
+                "missing Telegram Update field: {field}"
+            );
+        }
+        assert_eq!(
+            schemas["TelegramChat"]["properties"]["id"]["format"],
+            "int64"
+        );
+        assert_eq!(
+            schemas["TelegramUser"]["properties"]["id"]["format"],
+            "int64"
+        );
+        assert_eq!(
+            schemas["TelegramCallbackQuery"]["properties"]["chat_instance"]["type"],
+            json!(["string", "null"])
+        );
+        assert_eq!(
+            schemas["TelegramMessage"]["properties"]["photo"]["items"]["$ref"],
+            "#/components/schemas/TelegramPhotoSize"
+        );
+        assert_eq!(schemas["TelegramEvent"]["required"], json!(["update_id"]));
+        for field in ["chat_id", "message_id", "callback_query_id", "update"] {
+            assert!(
+                schemas["TelegramEvent"]["properties"].get(field).is_none(),
+                "unexpected synthetic Telegram field: {field}"
+            );
+        }
+        assert!(!schemas.contains_key("TelegramUpdate"));
+        for name in [
             "AppStoreConnectEvent",
             "AppStoreConnectNotification",
             "AppStoreConnectAttributes",

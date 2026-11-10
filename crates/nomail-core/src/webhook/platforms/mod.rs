@@ -36,7 +36,7 @@ pub enum PlatformData {
     Stripe(StripeEvent),
     Slack(SlackEvent),
     Feishu(FeishuEvent),
-    Telegram(TelegramEvent),
+    Telegram(Box<TelegramEvent>),
     Shopify(ShopifyEvent),
 }
 

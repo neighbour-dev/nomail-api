@@ -1,21 +1,14 @@
 //! Telegram Bot API authentication, Update model and inbox mapping.
 pub mod config;
+mod models;
+pub use models::*;
 #[cfg(test)]
 mod tests;
 use crate::webhook::{
     Authentication, EventContent, EventMetadata, MessageContent, PlatformData, PlatformEvent,
     ReceiveOutcome, WebhookConfig, WebhookError, WebhookRequest, crypto, support::*,
 };
-use serde::{Deserialize, Serialize};
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
-pub struct TelegramEvent {
-    pub update_id: i64,
-    pub chat_id: Option<i64>,
-    pub message_id: Option<i64>,
-    pub callback_query_id: Option<String>,
-}
+use models::TelegramValue;
 
 pub(in crate::webhook) fn receive(
     config: &WebhookConfig<'_>,
@@ -40,31 +33,27 @@ pub(in crate::webhook) fn receive(
         .filter(|key| key.as_str() != "update_id")
         .cloned()
         .collect();
-    // Preserve unknown single update fields when Telegram adds new types.
-    if fields.len() != 1 || id < 0 {
+    let known: Vec<_> = fields
+        .iter()
+        .filter(|key| models::is_update_field(key))
+        .collect();
+    if known.len() > 1 || id < 0 {
         return Err(WebhookError::InvalidPayload("invalid Telegram Update"));
     }
-    let update = &payload[&fields[0]];
-    let callback = fields[0] == "callback_query";
-    let message = if callback { &update["message"] } else { update };
-    let event = TelegramEvent {
-        update_id: id,
-        chat_id: message["chat"]["id"].as_i64(),
-        message_id: message["message_id"].as_i64(),
-        callback_query_id: if callback {
-            optional(text(update, &["id"]))
+    // Prefer a known branch over future metadata. Preserve a single unknown
+    // branch, and accept update_id-only envelopes (the contract says at most one).
+    let kind = known.first().map(|s| s.as_str()).unwrap_or_else(|| {
+        if fields.len() == 1 {
+            fields[0].as_str()
         } else {
-            None
-        },
-    };
+            "update"
+        }
+    });
+    let event = TelegramEvent::read(&payload)
+        .ok_or(WebhookError::InvalidPayload("invalid Telegram Update"))?;
     Ok(PlatformEvent {
-        metadata: metadata(
-            fields[0].clone(),
-            None,
-            "telegram:bot-update",
-            id.to_string(),
-        ),
-        data: PlatformData::Telegram(event),
+        metadata: metadata(kind.to_owned(), None, "telegram:bot-update", id.to_string()),
+        data: PlatformData::Telegram(Box::new(event)),
         raw: EventContent::Json(payload),
     }
     .into())
@@ -78,7 +67,7 @@ impl TelegramEvent {
     ) -> MessageContent {
         let kind = &metadata.event_type;
         let payload = raw.as_json().unwrap_or(&serde_json::Value::Null);
-        let update = &payload[kind];
+        let update = payload.get(kind).unwrap_or(payload);
         message(
             format!("Telegram {kind}"),
             first(&[

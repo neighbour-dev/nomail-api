@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHmac, createHash, createCipheriv } from 'node:crypto';
@@ -401,6 +401,30 @@ test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, a
       assert.equal(response.status, 200, JSON.stringify(ack));
       validateResponse('POST', item.url, 200, ack);
       assert.equal((await api('GET', `/api/messages/${ack.data.messageId}`, undefined, token)).provider, platform.provider);
+      if (platform.provider === 'telegram') {
+        const fixtures = JSON.parse(await readFile(new URL('../../nomail-core/src/webhook/platforms/telegram/fixtures/updates.json', import.meta.url), 'utf8'));
+        for (const fixture of fixtures) {
+          const payload = { ...fixture, future_metadata: { retained: true } };
+          const response = await fetch(origin + item.url, { method: 'POST', body: JSON.stringify(payload), headers: { 'Content-Type': 'application/json', ...headers } });
+          const ack = await response.json();
+          assert.equal(response.status, 200, JSON.stringify(ack));
+          validateResponse('POST', item.url, 200, ack);
+          assert.equal(ack.data.duplicate, false);
+          const path = `/api/messages/${ack.data.messageId}`;
+          const detail = await api('GET', path, undefined, token);
+          assert.deepEqual(detail.platformData.event, fixture);
+          assert.equal(detail.metadata.deduplicationKey.scope, 'telegram:bot-update');
+          const original = await fetch(origin + path + '/raw', { headers: { Authorization: `Bearer ${token}` } });
+          assert.equal(original.status, 200);
+          assert.deepEqual(await original.json(), payload);
+          const replay = await fetch(origin + item.url, { method: 'POST', body: JSON.stringify(fixture), headers: { 'Content-Type': 'application/json', ...headers } });
+          const duplicate = await replay.json();
+          assert.equal(replay.status, 200, JSON.stringify(duplicate));
+          validateResponse('POST', item.url, 200, duplicate);
+          assert.equal(duplicate.data.duplicate, true);
+          assert.equal(duplicate.data.messageId, ack.data.messageId);
+        }
+      }
       if (platform.provider === 'gitea') {
         const detail = await api('GET', `/api/messages/${ack.data.messageId}`, undefined, token);
         assert.equal(detail.platformData.provider, 'gitea');

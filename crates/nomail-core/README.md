@@ -60,7 +60,7 @@ WebhookRequest（签名用的原始字节）+ 可信配置
 
 `raw.to_readable_string()` 对 JSON 格式化显示，对表单逐行展示已解码字段；`media_type()` 描述该可读表示。解析会改变 JSON 空白、字段顺序、表单编码等，**raw 不能用于重新验签或精确 HTTP 回放**。签名仍只使用 `WebhookRequest.body`。Core 不保留整套 HTTP 头或密文字节，不实现传输报文归档。
 
-平台模型提取用于展示和交互的业务语义：例如 GitHub 的事件资源、状态、审核、代码位置及执行步骤，Stripe 的资源引用、飞书的消息类型、Slack 的交互 action、Telegram 的聊天和消息标识。它不是另一份完整 JSON 副本。完整结构在 raw；映射可同时使用语义模型与 raw，不隐式调用外部 API。
+平台模型提取用于展示和交互的业务语义：例如 GitHub 的事件资源、状态、审核、代码位置及执行步骤，Stripe 的资源引用、飞书的消息类型、Slack 的交互 action、Telegram 的 Update 分支和嵌套消息、媒体、回调等。它不是另一份完整 JSON 副本。完整结构在 raw；映射可同时使用语义模型与 raw，不隐式调用外部 API。
 
 GitHub 的公开类型位于 `webhook::platforms::github`，模型定义集中在 `github/models.rs`。`GithubEvent` 保留原有字段，并提供 `review/thread`、`workflow/workflow_job`、`check_run/check_suite`、`release`、`discussion/answer/old_answer`、`deployment/deployment_status`、`label/assignee/milestone/changes`。根级业务字段分别归入 `push`、`git_ref`（create/delete）和 `commit_status`（status）。Issue 的 `pull_request` 引用用于区分 PR 会话评论；PR 保留 `head_branch/base_branch` 并补充 `head/base`。`GithubTimestamp` 保留仓库时间原来的字符串或 Unix 秒类型。
 
@@ -146,6 +146,8 @@ match receive(&config, &WebhookRequest { headers: &headers, body })? {
 | Shopify | Base64 HMAC；主题、API 版本、店铺、投递与事件 ID | title/name 摘要，裁剪字段使用 JSON 回退 |
 
 事件结构采用平台专属类型和必要的子类型（例如 `StripeEvent::Snapshot/Thin`、`SlackEvent::EventsApi/Interaction/SlashCommand`），完整 JSON 保留在 `raw: EventContent::Json`。**当前只建模已支持的关键字段，不是所有上游事件的完整强类型 Schema。** 未知字段不会丢失；未知普通事件一般使用 raw 摘要。版本保留在元数据中，并不表示已验证所有 API 版本的字段兼容性。
+
+Telegram 的 `TelegramEvent` 直接对应 [Bot API Update 请求体](https://core.telegram.org/bots/api#update)（2026-11-10）：顶层为必填 `update_id` 和 29 类可选更新分支，嵌套结构遵循平台原有层级。不再提供从嵌套对象提升的 `chat_id/message_id/callback_query_id`，也没有额外的 `update` 包装；聊天及消息 ID 从 `message.chat.id/message.message_id` 或相应事件路径读取，不回填历史平台数据。嵌套字段采用字段级宽容提取，不强制要求文档中的必填字段，以免一个异常字段丢弃其他信息；类型不匹配不做字符串/数字转换。联合类型按 `type/status/source` 或消息 `date` 分流，未知变体保留为未知对象。文本、caption、回调数据及字符串 ID 原样保存，实体偏移使用 UTF-16 单元；媒体只包含文件标识与元数据，不下载内容。接收端允许仅有 `update_id` 的信封，拒绝多个已知更新分支；未知更新及附加元数据保留在 raw。该接入仅对应 Bot API，不包括 Telegram Gateway。
 
 GitLab 自定义模板、Shopify 字段裁剪不要求完整资源。Stripe Thin 不会隐式补充查询；如果以后需要详情，应在适配层提供显式的异步补全步骤。交互请求只聚合为通知，不实现 Slack/Telegram 的完整交互机器人流程。
 

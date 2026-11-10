@@ -352,6 +352,61 @@ async fn config_service_preserves_sparse_concurrent_updates_credentials_and_scop
             received["data"]["messageId"].as_str().unwrap()
         );
         assert_eq!(api!(get, &message_path, json!({})).1["provider"], provider);
+        if provider == "telegram" {
+            let fixtures: Vec<Value> = serde_json::from_str(include_str!(
+                "../../nomail-core/src/webhook/platforms/telegram/fixtures/updates.json"
+            ))
+            .unwrap();
+            for fixture in fixtures {
+                let mut payload = fixture.clone();
+                payload["future_metadata"] = json!({"retained":true});
+                let response = test::call_service(
+                    &app,
+                    test::TestRequest::post()
+                        .uri(receive_path)
+                        .insert_header(("X-Telegram-Bot-Api-Secret-Token", "platform-secret"))
+                        .set_json(&payload)
+                        .to_request(),
+                )
+                .await;
+                assert_eq!(response.status(), StatusCode::OK);
+                let ack: Value = test::read_body_json(response).await;
+                assert_eq!(ack["data"]["duplicate"], false);
+                let path = format!(
+                    "/api/messages/{}",
+                    ack["data"]["messageId"].as_str().unwrap()
+                );
+                let detail = api!(get, &path, json!({})).1;
+                assert_eq!(detail["platformData"]["event"], fixture);
+                assert_eq!(
+                    detail["metadata"]["deduplicationKey"]["scope"],
+                    "telegram:bot-update"
+                );
+                let original = test::call_service(
+                    &app,
+                    test::TestRequest::get()
+                        .uri(&format!("{path}/raw"))
+                        .insert_header(("Authorization", format!("Bearer {token}")))
+                        .to_request(),
+                )
+                .await;
+                assert_eq!(test::read_body_json::<Value, _>(original).await, payload);
+                // Deduplication remains scoped to update_id, not message_id or
+                // the presence of a typed branch / future metadata.
+                let replay = test::call_service(
+                    &app,
+                    test::TestRequest::post()
+                        .uri(receive_path)
+                        .insert_header(("X-Telegram-Bot-Api-Secret-Token", "platform-secret"))
+                        .set_json(&fixture)
+                        .to_request(),
+                )
+                .await;
+                let replay: Value = test::read_body_json(replay).await;
+                assert_eq!(replay["data"]["duplicate"], true);
+                assert_eq!(replay["data"]["messageId"], ack["data"]["messageId"]);
+            }
+        }
         if provider == "gitea" {
             let detail = api!(get, &message_path, json!({})).1;
             assert_eq!(detail["platformData"]["provider"], "gitea");
