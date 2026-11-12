@@ -41,6 +41,18 @@ fn raw_response_wraps_exact_stored_strings_without_payload_decoding() {
 }
 
 #[test]
+fn account_response_contains_only_id_and_username() {
+    let response = AccountResponse::from(crate::auth::AccountInfo {
+        id: 1,
+        username: "admin".into(),
+    });
+    assert_eq!(
+        serde_json::to_value(response).unwrap(),
+        json!({"id":1,"username":"admin"})
+    );
+}
+
+#[test]
 fn auth_conversion_groups_registration_and_keeps_wire_defaults_at_the_boundary() {
     let login: crate::auth::Login = decode::<endpoints::Login>(json!({
         "username":"admin", "password":"password123", "deviceId":"phone", "platform":"ios", "deviceType":"phone",

@@ -109,7 +109,8 @@ test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, a
       assert.equal(failure.msg, message);
       assert.equal(failure.data, null);
     }
-    assert.equal(login.user.requiresAccountSetup, false);
+    assert.deepEqual(login.user, { id: 1, username: 'admin' });
+    assert.deepEqual(await api('GET', '/api/auth/account', undefined, token), login.user);
     const signedGeneric = secret => ({ provider: 'generic', credentials: { type: 'hmacSha256', secret } });
     const anonymousGeneric = { provider: 'generic', credentials: { type: 'none' } };
     const config = await api('POST', '/api/webhook/configs/', { name: 'Monitor', platform: signedGeneric('test-webhook-secret') }, token);
@@ -671,6 +672,7 @@ test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, a
     const refreshes = await Promise.all(Array.from({ length: 2 }, () => fetch(origin + '/api/auth/refresh-token', { method: 'POST', headers: { 'Content-Type': 'application/json', 'User-Agent': 'nomail-refresh-agent' }, body: JSON.stringify({ refreshToken: login.refreshToken }) })));
     assert.deepEqual(refreshes.map(r => r.status).sort(), [200, 401]);
     const refreshed = (await refreshes.find(r => r.status === 200).json()).data;
+    assert.deepEqual(refreshed.user, login.user);
     token = refreshed.accessToken;
     // Deployment-specific capacity errors still obey the public Core error
     // envelope, rather than leaking a private DO's plain-text response.
@@ -708,7 +710,7 @@ test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, a
     await api('POST', '/api/push/devices', {}, token, 404);
     await api('PATCH', '/api/push/devices/a', {}, token, 404);
     await api('DELETE', '/api/push/devices/a', undefined, token, 404);
-    await api('PATCH', '/api/auth/account', { currentPassword: 'password123', newPassword: 'newpassword123' }, token);
+    assert.deepEqual(await api('PATCH', '/api/auth/account', { currentPassword: 'password123', newPassword: 'newpassword123' }, token), login.user);
     await api('GET', '/api/messages', undefined, token, 401);
     const again = await api('POST', '/api/auth/login', { ...loginBody('a'), password: 'newpassword123' });
     token = again.accessToken;

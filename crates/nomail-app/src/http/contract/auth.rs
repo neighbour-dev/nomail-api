@@ -74,7 +74,6 @@ pub struct AccountUpdateRequest {
 pub struct AccountResponse {
     pub id: i64,
     pub username: String,
-    pub requires_account_setup: bool,
 }
 
 /// Deliberately not Debug: contains bearer credentials.
@@ -149,7 +148,6 @@ impl From<crate::auth::AccountInfo> for AccountResponse {
         Self {
             id: account.id,
             username: account.username,
-            requires_account_setup: account.requires_account_setup,
         }
     }
 }

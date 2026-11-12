@@ -65,7 +65,6 @@ impl<S: AuthStore, R: AuthRuntime> AuthService<S, R> {
             user: AccountInfo {
                 id: grant.account.id,
                 username: grant.account.username,
-                requires_account_setup: false,
             },
         })
     }
@@ -168,7 +167,6 @@ impl<S: AuthStore, R: AuthRuntime> AuthService<S, R> {
         Ok(AccountInfo {
             id: account.id,
             username: account.username,
-            requires_account_setup: false,
         })
     }
     pub async fn update_account(
@@ -202,7 +200,6 @@ impl<S: AuthStore, R: AuthRuntime> AuthService<S, R> {
         Ok(AccountInfo {
             id: account.id,
             username: account.username,
-            requires_account_setup: false,
         })
     }
     /// Privileged local operation; no public password-reset HTTP endpoint.

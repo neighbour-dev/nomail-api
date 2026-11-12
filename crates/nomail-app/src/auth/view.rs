@@ -4,7 +4,6 @@ use chrono::{DateTime, Utc};
 pub struct AccountInfo {
     pub id: i64,
     pub username: String,
-    pub requires_account_setup: bool,
 }
 /// Deliberately not Debug/Serialize: contains bearer credentials.
 pub struct SessionTokens {

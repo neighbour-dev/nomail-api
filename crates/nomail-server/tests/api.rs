@@ -113,7 +113,7 @@ async fn all_api_contracts() {
         None
     );
     assert_eq!(status, StatusCode::OK, "{login}");
-    assert_eq!(login["data"]["user"]["requiresAccountSetup"], false);
+    assert_eq!(login["data"]["user"], json!({"id":1,"username":"admin"}));
     let token = login["data"]["accessToken"].as_str().unwrap().to_owned();
     let refresh = login["data"]["refreshToken"].as_str().unwrap().to_owned();
     let claims = nomail_app::auth::token::decode(
@@ -128,6 +128,7 @@ async fn all_api_contracts() {
     assert_eq!(claims.user_id, 1);
     let (_, body) = api!(get, "/api/auth/account", json!({}), Some(&token));
     assert_eq!(body["data"]["username"], "admin");
+    assert_eq!(body["data"], login["data"]["user"]);
     let (_, body) = api!(get, "/api/auth/devices", json!({}), Some(&token));
     assert_eq!(body["data"][0]["deviceId"], "a");
     assert_eq!(body["data"][0]["loggedIn"], true);
@@ -484,6 +485,7 @@ async fn all_api_contracts() {
         two
     };
     let valid: Value = test::read_body_json(valid).await;
+    assert_eq!(valid["data"]["user"], login["data"]["user"]);
     let (_, devices) = api!(get, "/api/auth/devices", json!({}), Some(&token));
     let device = devices["data"]
         .as_array()
@@ -538,6 +540,7 @@ async fn all_api_contracts() {
     );
     assert_eq!(status, StatusCode::OK, "{body}");
     assert_eq!(body["data"]["username"], "renamed");
+    assert_eq!(body["data"], json!({"id":1,"username":"renamed"}));
     let (status, _) = api!(
         patch,
         "/api/auth/account",

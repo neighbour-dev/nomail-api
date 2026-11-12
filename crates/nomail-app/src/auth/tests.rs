@@ -286,7 +286,6 @@ async fn shared_flow_uses_one_clock_token_policy_metadata_and_revocation_policy(
         )
         .await
         .unwrap();
-    assert!(!result.user.requires_account_setup);
     assert_eq!(service.store.limit.get(), MAX_DEVICES);
     assert_eq!(
         result.access_token_expires_at.timestamp(),
@@ -354,7 +353,6 @@ async fn shared_flow_uses_one_clock_token_policy_metadata_and_revocation_policy(
         .login(request("admin", "newpassword123"), RequestMeta::default())
         .await
         .unwrap();
-    assert!(!login.user.requires_account_setup);
     service.kick_device(11, "phone").await.unwrap();
     assert!(matches!(
         service.authenticate(&login.access_token).await,
@@ -568,7 +566,7 @@ async fn login_never_initializes_and_existing_weak_credentials_still_work() {
         .login(request("legacy", "weak"), RequestMeta::default())
         .await
         .unwrap();
-    assert!(!result.user.requires_account_setup);
+    assert_eq!(result.user.username, "legacy");
 }
 
 #[tokio::test]
