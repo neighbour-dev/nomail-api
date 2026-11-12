@@ -19,6 +19,7 @@ npm test
 
 ## 与 Server 的边界
 
+- 详情的 platformData.event 统一为 `{ header, payload }`，payload 按平台原来的字段路径返回；缺失字段不补 null 或空集合，显式 null、空值、false 和 0 原样保留。该结构变化不改变鉴权策略，未知字段仍完整保留在 raw。
 - 通过 App 使用 Core 的平台协议与基础内容映射；开源版收件箱规则、Message、AuthService、DTO、分页、凭据存储加密及 Token hash 全部属于 App。依赖方向是 `Workers → App → Core`。
 - 单张消息表同时保存通用字段、类型/版本/完整去重键、带标签的 platform_data JSON、可读原始内容及 NoMail 状态。列表必含 level；详情返回 metadata/platformData，原文继续使用 raw 接口。配置修改和已读/置顶操作不会重写平台快照。
 - 初始 Schema 与 Server 约束对齐：完整作用域去重、平台 JSON/provider 一致性、合法等级、读状态及外键。不转换旧的本地数据库，也不会自动清空已有开发数据。

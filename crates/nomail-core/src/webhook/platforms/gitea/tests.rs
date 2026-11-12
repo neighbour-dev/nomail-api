@@ -42,11 +42,23 @@ fn receive_json(kind: &str, exact: &str, payload: &Value) -> PlatformEvent {
     parsed
 }
 
-fn model(parsed: &PlatformEvent) -> &super::GiteaEvent {
+fn webhook(parsed: &PlatformEvent) -> &super::GiteaWebhook {
     let PlatformData::Gitea(gitea) = &parsed.data else {
         panic!("not a Gitea model")
     };
     gitea
+}
+
+fn model(parsed: &PlatformEvent) -> &super::GiteaWebhookPayload {
+    &webhook(parsed).payload
+}
+
+fn comment(parsed: &PlatformEvent) -> &super::GiteaComment {
+    let super::GiteaWebhookComment::Comment(comment) = model(parsed).comment.value().unwrap()
+    else {
+        panic!("comment object")
+    };
+    comment
 }
 
 #[test]
@@ -165,10 +177,7 @@ fn form_signature_uses_original_decoded_json_not_form_or_reserialized_json() {
         )
         .unwrap(),
     );
-    assert_eq!(
-        model(&parsed).comment.as_ref().unwrap().body.as_deref(),
-        Some("中文 🚀 & + = %")
-    );
+    assert_eq!(comment(&parsed).body.value_deref(), Some("中文 🚀 & + = %"));
     assert_eq!(
         parsed.raw.as_json().unwrap(),
         &serde_json::from_str::<Value>(raw).unwrap()
@@ -229,53 +238,98 @@ fn issues_comments_prs_and_changes_keep_gitea_specific_fields() {
         "future":{"untouched":true}});
     let parsed = receive_json("issues", "issues", &payload);
     let g = model(&parsed);
-    assert_eq!(g.sender.as_ref().unwrap().id, Some(-2));
+    assert_eq!(g.sender.value().unwrap().id.into_value(), Some(-2));
     assert_eq!(
-        g.repository.as_ref().unwrap().owner.as_ref().unwrap().id,
+        g.repository
+            .value()
+            .unwrap()
+            .owner
+            .value()
+            .unwrap()
+            .id
+            .into_value(),
         Some(-1)
     );
     assert_eq!(
-        g.repository.as_ref().unwrap().parent.as_ref().unwrap().id,
+        g.repository
+            .value()
+            .unwrap()
+            .parent
+            .value()
+            .unwrap()
+            .id
+            .into_value(),
         Some(2)
     );
-    assert_eq!(g.repository.as_ref().unwrap().stars_count, Some(9));
-    assert_eq!(g.repository.as_ref().unwrap().licenses, ["MIT"]);
-    let issue = g.issue.as_ref().unwrap();
-    assert_eq!(issue.is_locked, Some(true));
-    assert_eq!(issue.body.as_deref(), Some("  Body\n"));
-    assert_eq!(issue.pull_request.as_ref().unwrap().merged, Some(true));
     assert_eq!(
-        issue.repository.as_ref().unwrap().owner.as_deref(),
+        g.repository.value().unwrap().stars_count.into_value(),
+        Some(9)
+    );
+    assert_eq!(
+        g.repository
+            .value()
+            .unwrap()
+            .licenses
+            .value()
+            .unwrap()
+            .as_slice(),
+        ["MIT"]
+    );
+    let issue = g.issue.value().unwrap();
+    assert_eq!(issue.is_locked.into_value(), Some(true));
+    assert_eq!(issue.body.value_deref(), Some("  Body\n"));
+    assert_eq!(
+        issue.pull_request.value().unwrap().merged.into_value(),
+        Some(true)
+    );
+    assert_eq!(
+        issue.repository.value().unwrap().owner.value_deref(),
         Some("example")
     );
-    assert_eq!(issue.assets[0].uuid.as_deref(), Some("synthetic-file"));
-    assert_eq!(issue.projects[0].id, Some(7));
-    assert_eq!(issue.content_version, Some(2));
     assert_eq!(
-        g.comment.as_ref().unwrap().assets[0].uuid.as_deref(),
+        issue.assets.value().unwrap()[0].uuid.value_deref(),
+        Some("synthetic-file")
+    );
+    assert_eq!(issue.projects.value().unwrap()[0].id.into_value(), Some(7));
+    assert_eq!(issue.content_version.into_value(), Some(2));
+    assert_eq!(
+        comment(&parsed).assets.value().unwrap()[0]
+            .uuid
+            .value_deref(),
         Some("synthetic-reply")
     );
-    let pr = g.pull_request.as_ref().unwrap();
-    assert_eq!(pr.allow_maintainer_edit, Some(true));
-    assert_eq!(pr.head.as_ref().unwrap().repo_id, Some(1));
+    let pr = g.pull_request.value().unwrap();
+    assert_eq!(pr.allow_maintainer_edit.into_value(), Some(true));
+    assert_eq!(pr.head.value().unwrap().repo_id.into_value(), Some(1));
     assert_eq!(
-        pr.requested_reviewers_teams[0].units_map["repo.code"],
+        pr.requested_reviewers_teams.value().unwrap()[0]
+            .units_map
+            .value()
+            .unwrap()["repo.code"],
         "write"
     );
-    assert_eq!(g.requested_reviewer.as_ref().unwrap().id, Some(11));
-    let changes = g.changes.as_ref().unwrap();
     assert_eq!(
-        changes.body.as_ref().unwrap().from.as_deref(),
+        g.requested_reviewer.value().unwrap().id.into_value(),
+        Some(11)
+    );
+    let changes = g.changes.value().unwrap();
+    assert_eq!(
+        changes.body.value().unwrap().from.value_deref(),
         Some("  Old body  ")
     );
     assert_eq!(
-        changes.ref_change.as_ref().unwrap().from.as_deref(),
+        changes.ref_change.value().unwrap().from.value_deref(),
         Some("old")
     );
-    assert_eq!(changes.added_labels[0].exclusive, Some(true));
-    assert!(changes.removed_labels.is_empty());
-    assert_eq!(g.is_pull, Some(true));
-    assert_eq!(g.commit_id.as_deref(), Some("abc"));
+    assert_eq!(
+        changes.added_labels.value().unwrap()[0]
+            .exclusive
+            .into_value(),
+        Some(true)
+    );
+    assert_eq!(changes.removed_labels, Some(None));
+    assert_eq!(g.is_pull.into_value(), Some(true));
+    assert_eq!(g.commit_id.value_deref(), Some("abc"));
 }
 
 #[test]
@@ -291,10 +345,10 @@ fn review_payload_is_type_and_content_not_github_state_and_body() {
             &json!({"action":"reviewed","review":{"type":exact,"content":"  Review\n"},"pull_request":{"number":3,"title":"PR","html_url":"https://example.com/pr/3"}}),
         );
         let g = model(&parsed);
-        assert_eq!(g.event_type.as_deref(), Some(exact));
-        let review = g.review.as_ref().unwrap();
-        assert_eq!(review.review_type.as_deref(), Some(exact));
-        assert_eq!(review.content.as_deref(), Some("  Review\n"));
+        assert_eq!(webhook(&parsed).header.event_type.as_deref(), Some(exact));
+        let review = g.review.value().unwrap();
+        assert_eq!(review.review_type.value_deref(), Some(exact));
+        assert_eq!(review.content.value_deref(), Some("  Review\n"));
         assert_eq!(parsed.to_message_content().content, "Review");
         assert_eq!(
             parsed.to_message_content().url.as_deref(),
@@ -311,23 +365,31 @@ fn push_ref_and_status_use_gitea_commit_and_pusher_shapes() {
         "push",
         &json!({"ref":"refs/heads/main","before":"old","after":"abc","compare_url":"https://example.com/compare","total_commits":1,"commits":[commit],"head_commit":commit,"pusher":{"id":-2,"login":"actions","full_name":"Actions Bot"}}),
     );
-    let push = model(&parsed).push.as_ref().unwrap();
+    let push = model(&parsed);
     assert_eq!(
-        push.compare_url.as_deref(),
+        push.compare_url.value_deref(),
         Some("https://example.com/compare")
     );
-    assert_eq!(push.total_commits, Some(1));
+    assert_eq!(push.total_commits.into_value(), Some(1));
     assert_eq!(
-        push.pusher.as_ref().unwrap().login.as_deref(),
+        push.pusher.value().unwrap().login.value_deref(),
         Some("actions")
     );
     assert_eq!(
-        push.commits[0].author.as_ref().unwrap().username.as_deref(),
+        push.commits.value().unwrap()[0]
+            .author
+            .value()
+            .unwrap()
+            .username
+            .value_deref(),
         Some("author")
     );
-    let verification = push.commits[0].verification.as_ref().unwrap();
-    assert_eq!(verification.verified, Some(true));
-    assert_eq!(verification.payload.as_deref(), Some("  signed data\n"));
+    let verification = push.commits.value().unwrap()[0]
+        .verification
+        .value()
+        .unwrap();
+    assert_eq!(verification.verified.into_value(), Some(true));
+    assert_eq!(verification.payload.value_deref(), Some("  signed data\n"));
     assert_eq!(
         parsed.to_message_content().url.as_deref(),
         Some("https://example.com/compare")
@@ -338,27 +400,11 @@ fn push_ref_and_status_use_gitea_commit_and_pusher_shapes() {
         &json!({"id":7,"sha":"abc","state":"failure","context":"ci","commit":commit,"target_url":"https://example.com/check"}),
     );
     assert_eq!(
-        model(&status)
-            .commit_status
-            .as_ref()
-            .unwrap()
-            .commit
-            .as_ref()
-            .unwrap()
-            .id
-            .as_deref(),
+        model(&status).commit.value().unwrap().id.value_deref(),
         Some("abc")
     );
     assert_eq!(
-        model(&status)
-            .commit_status
-            .as_ref()
-            .unwrap()
-            .commit
-            .as_ref()
-            .unwrap()
-            .message
-            .as_deref(),
+        model(&status).commit.value().unwrap().message.value_deref(),
         Some("  Commit\n")
     );
     let created = receive_json(
@@ -366,24 +412,13 @@ fn push_ref_and_status_use_gitea_commit_and_pusher_shapes() {
         "create",
         &json!({"sha":"abc","ref":"main","ref_type":"branch"}),
     );
-    assert_eq!(
-        model(&created).git_ref.as_ref().unwrap().sha.as_deref(),
-        Some("abc")
-    );
+    assert_eq!(model(&created).sha.value_deref(), Some("abc"));
     let deleted = receive_json(
         "delete",
         "delete",
         &json!({"ref":"main","ref_type":"branch","pusher_type":"user"}),
     );
-    assert_eq!(
-        model(&deleted)
-            .git_ref
-            .as_ref()
-            .unwrap()
-            .pusher_type
-            .as_deref(),
-        Some("user")
-    );
+    assert_eq!(model(&deleted).pusher_type.value_deref(), Some("user"));
 }
 
 #[test]
@@ -393,21 +428,20 @@ fn wiki_fork_package_and_release_have_typed_resources() {
         "wiki",
         &json!({"action":"edited","page":"Home","comment":"  Updated wiki\n"}),
     );
+    assert_eq!(model(&wiki).page.value_deref(), Some("Home"));
     assert_eq!(
-        model(&wiki).wiki.as_ref().unwrap().page.as_deref(),
-        Some("Home")
+        model(&wiki).comment.value(),
+        Some(&super::GiteaWebhookComment::Text("  Updated wiki\n".into()))
     );
-    assert_eq!(
-        model(&wiki).wiki.as_ref().unwrap().comment.as_deref(),
-        Some("  Updated wiki\n")
-    );
-    assert!(model(&wiki).comment.is_none());
     let fork = receive_json(
         "fork",
         "fork",
         &json!({"forkee":{"id":1,"full_name":"example/fork","html_url":"https://example.com/fork"}}),
     );
-    assert_eq!(model(&fork).forkee.as_ref().unwrap().id, Some(1));
+    assert_eq!(
+        model(&fork).forkee.value().unwrap().id.into_value(),
+        Some(1)
+    );
     assert_eq!(fork.to_message_content().content, "example/fork");
     let package = receive_json(
         "package",
@@ -417,35 +451,41 @@ fn wiki_fork_package_and_release_have_typed_resources() {
     assert_eq!(
         model(&package)
             .package
-            .as_ref()
+            .value()
             .unwrap()
             .package_type
-            .as_deref(),
+            .value_deref(),
         Some("container")
     );
     assert_eq!(
         model(&package)
             .organization
-            .as_ref()
+            .value()
             .unwrap()
             .username
-            .as_deref(),
+            .value_deref(),
         Some("org")
     );
-    assert!(model(&package).repository.is_none());
+    assert_eq!(model(&package).repository, Some(None));
     let release = receive_json(
         "release",
         "release",
         &json!({"action":"updated","release":{"id":6,"tag_name":"v1","body":"  Notes\n","draft":false,"prerelease":true,"assets":[{"id":7,"uuid":"file-id","browser_download_url":"https://example.com/file","size":10}]}}),
     );
     assert_eq!(
-        model(&release).release.as_ref().unwrap().body.as_deref(),
+        model(&release).release.value().unwrap().body.value_deref(),
         Some("  Notes\n")
     );
     assert_eq!(
-        model(&release).release.as_ref().unwrap().assets[0]
+        model(&release)
+            .release
+            .value()
+            .unwrap()
+            .assets
+            .value()
+            .unwrap()[0]
             .uuid
-            .as_deref(),
+            .value_deref(),
         Some("file-id")
     );
 }
@@ -458,19 +498,20 @@ fn workflow_ids_actors_completion_times_and_steps_are_typed() {
         &json!({"action":"completed","workflow":{"id":"ci.yml","name":"CI","deleted_at":"0001-01-01T00:00:00Z"},"workflow_run":{"id":1,"display_title":"Build PR","run_attempt":2,"trigger_actor":{"id":-2,"login":"actions"},"started_at":"2026-01-01T00:00:00Z","completed_at":"2026-01-01T00:01:00Z","repository_id":3,"pull_requests":[{"id":4,"number":5,"head":{"ref":"feature","repo":{"id":3}}}]}}),
     );
     let g = model(&parsed);
-    assert_eq!(g.workflow.as_ref().unwrap().id.as_deref(), Some("ci.yml"));
-    let run = g.workflow_run.as_ref().unwrap();
-    assert_eq!(run.trigger_actor.as_ref().unwrap().id, Some(-2));
-    assert_eq!(run.completed_at.as_deref(), Some("2026-01-01T00:01:00Z"));
+    assert_eq!(g.workflow.value().unwrap().id.value_deref(), Some("ci.yml"));
+    let run = g.workflow_run.value().unwrap();
+    assert_eq!(run.trigger_actor.value().unwrap().id.into_value(), Some(-2));
+    assert_eq!(run.completed_at.value_deref(), Some("2026-01-01T00:01:00Z"));
     assert_eq!(
-        run.pull_requests[0]
+        run.pull_requests.value().unwrap()[0]
             .head
-            .as_ref()
+            .value()
             .unwrap()
             .repo
-            .as_ref()
+            .value()
             .unwrap()
-            .id,
+            .id
+            .into_value(),
         Some(3)
     );
     assert_eq!(parsed.to_message_content().content, "Build PR");
@@ -480,9 +521,15 @@ fn workflow_ids_actors_completion_times_and_steps_are_typed() {
         &json!({"workflow_job":{"id":6,"run_id":1,"name":"Build","status":"completed","conclusion":"failure","steps":[{"number":1,"name":"Compile","conclusion":"failure","completed_at":"2026-01-01T00:01:00Z"}]}}),
     );
     assert_eq!(
-        model(&job).workflow_job.as_ref().unwrap().steps[0]
+        model(&job)
+            .workflow_job
+            .value()
+            .unwrap()
+            .steps
+            .value()
+            .unwrap()[0]
             .conclusion
-            .as_deref(),
+            .value_deref(),
         Some("failure")
     );
 }
@@ -524,9 +571,9 @@ fn all_external_event_groups_preserve_exact_event_type_and_normal_priority() {
             exact,
             &json!({"action":"future-action","future":{"keep":true}}),
         );
-        assert_eq!(model(&parsed).event_type.as_deref(), Some(exact));
+        assert_eq!(webhook(&parsed).header.event_type.as_deref(), Some(exact));
         assert_eq!(
-            model(&parsed).installation_target_type.as_deref(),
+            webhook(&parsed).header.installation_target_type.as_deref(),
             Some("repository")
         );
         assert!(parsed.to_message_content().title.starts_with("Gitea "));
@@ -538,21 +585,25 @@ fn sparse_unknown_malformed_fields_and_header_boundaries_remain_safe() {
     let payload = json!({"event_type":"forged","installation_target_type":"forged","issue":{"number":1,"labels":[false,{"id":2}],"user":false},"workflow_run":{"id":"wrong","display_title":"Kept"},"future":[1,2,3]});
     let parsed = receive_json("future_event", "future_exact", &payload);
     let g = model(&parsed);
-    assert_eq!(g.event_type.as_deref(), Some("future_exact"));
     assert_eq!(
-        g.workflow_run.as_ref().unwrap().display_title.as_deref(),
+        webhook(&parsed).header.event_type.as_deref(),
+        Some("future_exact")
+    );
+    assert_eq!(
+        g.workflow_run.value().unwrap().display_title.value_deref(),
         Some("Kept")
     );
-    assert!(g.workflow_run.as_ref().unwrap().id.is_none());
-    assert_eq!(g.issue.as_ref().unwrap().labels.len(), 1);
-    assert!(g.issue.as_ref().unwrap().user.is_none());
+    assert!(g.workflow_run.value().unwrap().id.is_none());
+    assert_eq!(g.issue.value().unwrap().labels.value().unwrap().len(), 1);
+    assert!(g.issue.value().unwrap().user.is_none());
     let h = headers(&[("X-Gitea-Event", "future_event")]);
     let sparse = event(receive_with(Provider::Gitea, Authentication::None, &h, b"{}").unwrap());
-    assert!(model(&sparse).event_type.is_none());
+    assert!(webhook(&sparse).header.event_type.is_none());
     assert!(sparse.metadata.deduplication_key.is_none());
-    for bad in [b"[]".as_slice(), b"null", b"invalid"] {
-        assert!(receive_with(Provider::Gitea, Authentication::None, &h, bad).is_err());
+    for body in [b"[]".as_slice(), b"null"] {
+        assert!(receive_with(Provider::Gitea, Authentication::None, &h, body).is_err());
     }
+    assert!(receive_with(Provider::Gitea, Authentication::None, &h, b"invalid").is_err());
     let github_headers = headers(&[("X-GitHub-Event", "issues")]);
     assert!(
         receive_with(
@@ -563,7 +614,4 @@ fn sparse_unknown_malformed_fields_and_header_boundaries_remain_safe() {
         )
         .is_err()
     );
-    let historical: super::GiteaEvent =
-        serde_json::from_value(json!({"action":"opened","issue":{"number":1}})).unwrap();
-    assert!(historical.issue.unwrap().assets.is_empty());
 }

@@ -38,7 +38,7 @@ src/webhook/
 
 每个平台目录均包含 `mod.rs`、`config.rs` 和 `tests.rs`，修改一个平台只需进入对应目录。配置类型、凭据校验与认证参数构造由平台自己负责；公共 `PlatformConfig` 仅按 provider 分发，不集中实现各平台认证。没有 Parser trait，也不要求各平台采用相同的内部流程。
 
-`PlatformEvent` 是解析结果，`PlatformData` 枚举承载平台专有模型。平台模型的 `to_message_content(metadata, raw)` 执行基础映射，外部使用 `event.to_message_content()` 得到 `MessageContent`，它只表示平台内容，不是带 NoMail 管理状态的完整消息。持久化和产品规则由调用方决定。`nomail_core::webhook::GithubEvent` 等公开路径仍可用，也可按 `nomail_core::webhook::platforms::github::GithubEvent` 定位。
+`PlatformEvent` 是解析结果，`PlatformData` 枚举承载平台专有模型。每个分支统一为 `XxxWebhook { header: XxxWebhookHeader, payload: XxxWebhookPayload }`；例如 `nomail_core::webhook::GithubWebhook`，细分类型位于 `nomail_core::webhook::platforms::github`。平台模型的 `to_message_content(metadata, raw)` 执行基础映射，外部使用 `event.to_message_content()` 得到 `MessageContent`，它只表示平台内容，不是带 NoMail 管理状态的完整消息。持久化和产品规则由调用方决定。
 
 ## 事件模型与可读原始内容
 
@@ -48,7 +48,7 @@ WebhookRequest（签名用的原始字节）+ 可信配置
   → ReceiveOutcome
       ├── Event(Box<PlatformEvent>)
       │     ├── metadata：事件类型、版本、带作用域的去重标识
-      │     ├── data：PlatformData，各平台有意义的专有字段
+      │     ├── data：PlatformData，统一为平台自己的 header/payload
       │     └── raw：EventContent，人类可读的平台完整原始内容
       │           → to_message_content() → 通用业务字段 MessageContent
       │     由调用方决定如何持久化及应用产品规则
@@ -62,11 +62,11 @@ WebhookRequest（签名用的原始字节）+ 可信配置
 
 平台模型提取用于展示和交互的业务语义：例如 GitHub 的事件资源、状态、审核、代码位置及执行步骤，Stripe 的资源引用、飞书的消息类型、Slack 的交互 action、Telegram 的 Update 分支和嵌套消息、媒体、回调等。它不是另一份完整 JSON 副本。完整结构在 raw；映射可同时使用语义模型与 raw，不隐式调用外部 API。
 
-GitHub 的公开类型位于 `webhook::platforms::github`，模型定义集中在 `github/models.rs`。`GithubEvent` 保留原有字段，并提供 `review/thread`、`workflow/workflow_job`、`check_run/check_suite`、`release`、`discussion/answer/old_answer`、`deployment/deployment_status`、`label/assignee/milestone/changes`。根级业务字段分别归入 `push`、`git_ref`（create/delete）和 `commit_status`（status）。Issue 的 `pull_request` 引用用于区分 PR 会话评论；PR 保留 `head_branch/base_branch` 并补充 `head/base`。`GithubTimestamp` 保留仓库时间原来的字符串或 Unix 秒类型。
+GitHub 的模型定义集中在 `github/models.rs`。`GithubWebhook.header` 保留 event/delivery/hook_id 等白名单头；`payload` 提供 `review/thread`、`workflow/workflow_job`、`check_run/check_suite`、`release`、`discussion/answer/old_answer`、`deployment/deployment_status`、`label/assignee/milestone/changes`。Push、Create/Delete、Status 的 `ref/commits/state/context` 等字段留在 payload 根级，不再重组为 `push/git_ref/commit_status`。PR 分支引用只从原有 `head.ref/base.ref` 读取，不生成 `head_branch/base_branch`。`GithubTimestamp` 保留仓库时间原来的字符串或 Unix 秒类型；label 的字符串和对象形式也保留其原有 JSON 类型。
 
-接收仍先验签并解码为 JSON，再逐字段提取；单个字段类型异常不会使整个事件被拒绝或丢弃其他有效字段。正文、代码片段和编辑前正文保留空白，未知字段仍在 raw。新增字段使用默认值以兼容旧的持久化快照；不会从旧 raw 隐式重建历史平台数据，也不改变现有通用摘要或优先级规则。
+接收仍先验签并解码，再逐字段提取。已建模字段使用 `JsonField<T> = Option<Option<T>>` 区分缺失、显式 null 和实际值，缺失时不补 null 或空集合；实际提供的空字符串、空数组、空对象、false 和 0 保留。字符串不裁剪、不做数字或布尔值转换，未知或类型异常的内容仍完整留在 raw。此次模型调整不兼容旧平台快照，升级前需物理清空 notify_messages，不提供旧格式兼容读取。
 
-Generic 明确是 **NoMail 自定义协议**，不是任意平台自动识别器。`GenericEvent::Json` 表达 JSON 字段，`GenericEvent::Text` 表达 `X-NoMail-*` 请求头输入；没有 `GenericDefaults`。JSON 分支不继承文本分支的请求头。非 UTF-8 文本现在显式拒绝，不用有损替换伪装成可读原文。
+Generic 明确是 **NoMail 自定义协议**，不是任意平台自动识别器。`GenericWebhook.header` 表达 `X-NoMail-*` 输入，payload 是支持的 JSON 字段、原样文本或 JSON null。JSON 分支不继承文本分支的请求头。非 UTF-8 文本显式拒绝，不用有损替换伪装成可读原文。
 
 ## 使用
 
@@ -74,7 +74,7 @@ Generic 明确是 **NoMail 自定义协议**，不是任意平台自动识别器
 
 配置采用 `{"provider":"gitea","credentials":{"secret":"replace-with-a-random-secret"}}`，产品要求有效 Secret，不使用 GitHub 或 Gogs 兼容头替代 Gitea 原生签名。现有接收地址只支持 POST，可使用 JSON 或 `payload` 表单；Gitea 的 GET 投递不在当前产品接收范围内。
 
-Gitea 使用独立模型，不复用 GitHub 类型。`metadata.event_type` 是 `X-Gitea-Event` 的归一化值，`GiteaEvent.event_type` 保留 `X-Gitea-Event-Type`。根级业务字段投影到 `push/git_ref/wiki/commit_status`，其余资源保持 `issue/pull_request/review/release/package/workflow/workflow_run/workflow_job` 等字段。用户 ID 使用有符号整数，工作流 ID 使用字符串。模型按上游 v28.3.0 结构定义提取业务信息，兼容缺失/null 和未知字段，完整内容仍在 raw。
+Gitea 使用独立模型，不复用 GitHub 类型。`metadata.event_type` 是 `X-Gitea-Event` 的事件分组；`GiteaWebhook.header.event_type` 保留 `X-Gitea-Event-Type`。根级业务字段不再包装为 `push/git_ref/wiki/commit_status`，其余资源保持 `issue/pull_request/review/release/package/workflow/workflow_run/workflow_job` 等字段。用户 ID 使用有符号整数，工作流 ID 使用字符串；模型按上游 v28.3.0 定义，完整内容仍在 raw。
 
 验签始终针对 Gitea 的原始 JSON 文本：JSON 投递使用原 Body，表单投递先提取解码后的 `payload`，不能重新序列化再验签，也不能对整个编码表单验签。去重使用 `gitea:delivery` 与原生 Delivery ID；Gitea 手动 Replay 生成新 UUID，因此会作为新消息处理。Gitea 的测试投递是普通 Push，不是 GitHub Ping。
 
@@ -82,7 +82,7 @@ Gitea 使用独立模型，不复用 GitHub 类型。`metadata.event_type` 是 `
 
 产品配置使用 `{"provider":"appstoreconnect","credentials":{"secret":"replace-with-a-random-secret"}}`，Secret 是在 App Store Connect Webhook 中设置的独立字符串，不是 API 私钥/JWT，也不是内购共享密钥。接收 POST JSON，使用原始 Body 验证 `x-apple-signature`，前缀严格为 `hmacsha256=`，不是 GitHub 的 `sha256=`。
 
-`AppStoreConnectEvent.data` 保留通知的 `type/id/version/attributes/relationships`。属性分别保留 `newValue/oldValue`、`newExternalBuildState/oldExternalBuildState`、`newState/oldState`、`available/territories/appId/timestamp`，不把不同事件的状态键混成同一字段。普通资源关系使用 `instance.data`，后台资源直接使用 `instance.id/type/links`，模型保留两种结构，Rust 调用方可通过 relationship 的 `reference()/self_url()` 统一访问。`marketplaceApp` 独立建模，允许某些通知没有 `instance`；version 和 timestamp 不作全局必填要求。
+`AppStoreConnectWebhook.payload.data` 保留通知的 `type/id/version/attributes/relationships`，header 当前为空对象。属性分别保留 `newValue/oldValue`、`newExternalBuildState/oldExternalBuildState`、`newState/oldState`、`available/territories/appId/timestamp`，不把不同事件的状态键混成同一字段。普通资源关系使用 `instance.data`，后台资源直接使用 `instance.id/type/links`，模型保留两种结构，Rust 调用方可通过 relationship 的 `reference()/self_url()` 统一访问。`marketplaceApp` 独立建模，允许某些通知没有 `instance`；version 和 timestamp 不作全局必填要求。
 
 事件类型、版本和去重标识分别来自 `data.type`、可选的 `data.version`、`data.id`，去重 scope 为 `appstoreconnect:event`；同一资源的不同事件不会按资源 ID 合并。ID 保持字符串，不要求 UUID。反馈通知只表达资源创建，不包含可直接展示的截图、崩溃日志或完整反馈；Core 不调用 Apple API 补全这些内容。未知事件/状态与未知字段保留 raw，优先级默认 normal。
 
@@ -126,7 +126,7 @@ match receive(&config, &WebhookRequest { headers: &headers, body })? {
 
 `receive()` 是安全接入入口，将配置对应的认证、必要的解密/解码和解析放在同一流程中，避免调用方忘记验签。输出业务请求时是 `ReceiveOutcome::Event(Box<PlatformEvent>)`（Box 避免放大控制结果的枚举大小）；控制请求不伪装成消息。
 
-`to_message_content()` 是纯映射：提取标题、正文、来源、必填 MessageLevel 和链接，不生成 ID、不读取系统时间、不设置用户状态、不调用外部 API。默认文案、字段长度、接收时间、已读、置顶、过期/删除规则均由上层产品决定，不写进平台解析结果。
+`to_message_content()` 是纯映射：提取标题、正文、来源、必填 MessageLevel 和链接，不生成 ID、不读取系统时间、不设置用户状态、不调用外部 API。Core 提供平台基础文案，不改写平台模型或 raw；上层产品再执行字段规范化、长度限制，并决定接收时间、已读、置顶、过期和删除规则。
 
 `MessageLevel` 为 `low / normal / high / urgent`，定义 `priority_rank()` / `is_at_least()`。这是关注优先级，不是结果或故障严重程度。`from_label()` 支持这四个标签（去首尾空白、不区分大小写），未知或旧标签回退 normal；严格解析拒绝其他值。平台成功、失败等状态保留在 data/raw，没有明确优先级规则时默认 normal。Core 不决定保留期、通知或删除行为。
 
@@ -145,9 +145,9 @@ match receive(&config, &WebhookRequest { headers: &headers, body })? {
 | Telegram | 固定 Secret Token；Update 类型分流 | 文本、caption、按钮 data，非文本使用 JSON 回退 |
 | Shopify | Base64 HMAC；主题、API 版本、店铺、投递与事件 ID | title/name 摘要，裁剪字段使用 JSON 回退 |
 
-事件结构采用平台专属类型和必要的子类型（例如 `StripeEvent::Snapshot/Thin`、`SlackEvent::EventsApi/Interaction/SlashCommand`），完整 JSON 保留在 `raw: EventContent::Json`。**当前只建模已支持的关键字段，不是所有上游事件的完整强类型 Schema。** 未知字段不会丢失；未知普通事件一般使用 raw 摘要。版本保留在元数据中，并不表示已验证所有 API 版本的字段兼容性。
+事件结构统一为平台专属的 `XxxWebhook { header, payload }`。Stripe 根据 payload.object 区分 Snapshot/Thin，保留 `data.object` 和 `related_object.type` 原有位置；Slack 保留 Events API 的 event 层、交互的 team/user 对象及 Slash Command 原有参数；飞书保留 payload 内原生 header/event/sender_id，不再生成 content_json。**当前只建模已支持的关键字段，不是所有上游事件的完整强类型 Schema。** 未知字段保留在 raw。版本保留在元数据中，并不表示已验证所有 API 版本的字段兼容性。
 
-Telegram 的 `TelegramEvent` 直接对应 [Bot API Update 请求体](https://core.telegram.org/bots/api#update)（2026-11-10）：顶层为必填 `update_id` 和 29 类可选更新分支，嵌套结构遵循平台原有层级。不再提供从嵌套对象提升的 `chat_id/message_id/callback_query_id`，也没有额外的 `update` 包装；聊天及消息 ID 从 `message.chat.id/message.message_id` 或相应事件路径读取，不回填历史平台数据。嵌套字段采用字段级宽容提取，不强制要求文档中的必填字段，以免一个异常字段丢弃其他信息；类型不匹配不做字符串/数字转换。联合类型按 `type/status/source` 或消息 `date` 分流，未知变体保留为未知对象。文本、caption、回调数据及字符串 ID 原样保存，实体偏移使用 UTF-16 单元；媒体只包含文件标识与元数据，不下载内容。接收端允许仅有 `update_id` 的信封，拒绝多个已知更新分支；未知更新及附加元数据保留在 raw。该接入仅对应 Bot API，不包括 Telegram Gateway。
+Telegram 的 `TelegramWebhook.payload` 直接对应 [Bot API Update 请求体](https://core.telegram.org/bots/api#update)（2026-11-10）：顶层为必填 `update_id` 和 29 类可选更新分支，嵌套结构遵循平台原有层级。不再提供从嵌套对象提升的 `chat_id/message_id/callback_query_id`，也没有额外的 `update` 包装；聊天及消息 ID 从 `payload.message.chat.id/payload.message.message_id` 或相应事件路径读取，不回填历史平台数据。嵌套字段采用字段级宽容提取，不强制要求文档中的必填字段，以免一个异常字段丢弃其他信息；类型不匹配不做字符串/数字转换。联合类型按 `type/status/source` 或消息 `date` 分流，未知变体保留为未知对象。文本、caption、回调数据及字符串 ID 原样保存，实体偏移使用 UTF-16 单元；媒体只包含文件标识与元数据，不下载内容。接收端允许仅有 `update_id` 的信封，拒绝多个已知更新分支；未知更新及附加元数据保留在 raw。该接入仅对应 Bot API，不包括 Telegram Gateway。
 
 GitLab 自定义模板、Shopify 字段裁剪不要求完整资源。Stripe Thin 不会隐式补充查询；如果以后需要详情，应在适配层提供显式的异步补全步骤。交互请求只聚合为通知，不实现 Slack/Telegram 的完整交互机器人流程。
 

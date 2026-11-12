@@ -70,11 +70,11 @@ pub fn document() -> Value {
             ResponseKind::Sse => {
                 json!({"text/event-stream":{"schema":{"type":"string"},"example":"event: ready\ndata: {}\n\n"}})
             }
-            ResponseKind::Raw => {
-                json!({"application/json":{"schema":true},"text/plain":{"schema":{"type":"string"}},"application/octet-stream":{"schema":{"type":"string","format":"binary"}}})
-            }
             ResponseKind::Webhook => {
                 json!({"application/json":{"schema":{"oneOf":[response,{"type":"object","required":["challenge"],"properties":{"challenge":{"type":"string"}}}]}},"text/plain":{"schema":{"type":"string"},"example":"pong"}})
+            }
+            ResponseKind::Raw => {
+                json!({"application/json":{"schema":true},"text/plain":{"schema":{"type":"string"}},"application/octet-stream":{"schema":{"type":"string","format":"binary"}}})
             }
         };
         let mut responses = Map::new();
@@ -215,9 +215,33 @@ mod tests {
         references(&document, &document);
         let schemas = document["components"]["schemas"].as_object().unwrap();
         assert!(schemas.contains_key("MessageDetail"));
-        assert!(schemas.contains_key("GithubEvent"));
+        for platform in [
+            "Generic",
+            "Github",
+            "Gitea",
+            "AppStoreConnect",
+            "Gitlab",
+            "Stripe",
+            "Slack",
+            "Feishu",
+            "Telegram",
+            "Shopify",
+        ] {
+            let name = format!("{platform}Webhook");
+            let wrapper = &schemas[&name];
+            assert_eq!(wrapper["required"], json!(["header", "payload"]));
+            assert_eq!(wrapper["properties"].as_object().unwrap().len(), 2);
+            assert_eq!(
+                wrapper["properties"]["header"]["$ref"],
+                format!("#/components/schemas/{platform}WebhookHeader")
+            );
+            assert_eq!(
+                wrapper["properties"]["payload"]["$ref"],
+                format!("#/components/schemas/{platform}WebhookPayload")
+            );
+        }
         for name in [
-            "TelegramEvent",
+            "TelegramWebhookPayload",
             "TelegramMessage",
             "TelegramUser",
             "TelegramChat",
@@ -271,7 +295,9 @@ mod tests {
             "stopped_message_generation",
         ] {
             assert!(
-                schemas["TelegramEvent"]["properties"].get(field).is_some(),
+                schemas["TelegramWebhookPayload"]["properties"]
+                    .get(field)
+                    .is_some(),
                 "missing Telegram Update field: {field}"
             );
         }
@@ -291,16 +317,47 @@ mod tests {
             schemas["TelegramMessage"]["properties"]["photo"]["items"]["$ref"],
             "#/components/schemas/TelegramPhotoSize"
         );
-        assert_eq!(schemas["TelegramEvent"]["required"], json!(["update_id"]));
+        assert_eq!(
+            schemas["TelegramWebhookPayload"]["required"],
+            json!(["update_id"])
+        );
         for field in ["chat_id", "message_id", "callback_query_id", "update"] {
             assert!(
-                schemas["TelegramEvent"]["properties"].get(field).is_none(),
+                schemas["TelegramWebhookPayload"]["properties"]
+                    .get(field)
+                    .is_none(),
                 "unexpected synthetic Telegram field: {field}"
             );
         }
         assert!(!schemas.contains_key("TelegramUpdate"));
+        for (name, field) in [
+            ("GithubWebhookPayload", "commits"),
+            ("GiteaChanges", "removed_labels"),
+            ("AppStoreConnectAttributes", "territories"),
+            ("TelegramMessage", "entities"),
+        ] {
+            let property = &schemas[name]["properties"][field];
+            assert_eq!(property["type"], json!(["array", "null"]));
+            assert!(
+                property.get("default").is_none(),
+                "missing {name}.{field} must not acquire a synthetic default"
+            );
+            assert!(
+                !schemas[name]["required"]
+                    .as_array()
+                    .is_some_and(|required| required.contains(&json!(field)))
+            );
+        }
+        assert_eq!(
+            schemas["AppStoreConnectWebhookPayload"]["required"],
+            json!(["data"])
+        );
+        assert_eq!(
+            schemas["AppStoreConnectNotification"]["required"],
+            json!(["type"])
+        );
         for name in [
-            "AppStoreConnectEvent",
+            "AppStoreConnectWebhookPayload",
             "AppStoreConnectNotification",
             "AppStoreConnectAttributes",
             "AppStoreConnectRelationship",
@@ -340,10 +397,9 @@ mod tests {
                 .is_some()
         );
         for name in [
-            "GiteaEvent",
+            "GiteaWebhookPayload",
             "GiteaCredentials",
             "GiteaReview",
-            "GiteaPush",
             "GiteaPackage",
             "GiteaWorkflowRun",
         ] {
@@ -355,19 +411,20 @@ mod tests {
         );
         assert_eq!(schemas["GiteaUser"]["properties"]["id"]["format"], "int64");
         for field in [
-            "push",
-            "git_ref",
-            "commit_status",
-            "wiki",
+            "ref",
+            "commits",
+            "state",
+            "page",
             "forkee",
             "package",
             "organization",
             "requested_reviewer",
             "is_pull",
-            "event_type",
         ] {
             assert!(
-                schemas["GiteaEvent"]["properties"].get(field).is_some(),
+                schemas["GiteaWebhookPayload"]["properties"]
+                    .get(field)
+                    .is_some(),
                 "missing Gitea field: {field}"
             );
         }
@@ -382,14 +439,44 @@ mod tests {
             "deployment",
             "deployment_status",
             "changes",
-            "push",
-            "git_ref",
-            "commit_status",
+            "ref",
+            "commits",
+            "state",
         ] {
             assert!(
-                schemas["GithubEvent"]["properties"].get(field).is_some(),
+                schemas["GithubWebhookPayload"]["properties"]
+                    .get(field)
+                    .is_some(),
                 "missing GitHub event field: {field}"
             );
+        }
+        for platform in ["Github", "Gitea"] {
+            let name = format!("{platform}WebhookPayload");
+            for field in [
+                "push",
+                "git_ref",
+                "commit_status",
+                "wiki",
+                "event_type",
+                "installation_target_type",
+            ] {
+                assert!(
+                    schemas[&name]["properties"].get(field).is_none(),
+                    "synthetic payload field {name}.{field}"
+                );
+            }
+        }
+        for name in [
+            "GithubWebhookHeader",
+            "GiteaWebhookHeader",
+            "GitlabWebhookHeader",
+            "SlackWebhookHeader",
+            "ShopifyWebhookHeader",
+            "TelegramWebhookHeader",
+        ] {
+            for field in ["signature", "token", "secret_token", "authorization"] {
+                assert!(schemas[name]["properties"].get(field).is_none());
+            }
         }
         assert!(
             schemas["GithubComment"]["properties"]

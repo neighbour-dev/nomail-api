@@ -1,4 +1,4 @@
-//! UI-facing GitHub semantics. Extraction is field-local and deliberately tolerant;
+//! Native GitHub payload fields. Extraction is field-local and deliberately tolerant;
 //! these are not strict upstream DTOs. Unknown/malformed fields remain in raw.
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -9,13 +9,7 @@ trait GithubValue: Sized {
 
 impl GithubValue for String {
     fn read(value: &Value) -> Option<Self> {
-        let text = match value {
-            Value::String(s) => s.trim().to_owned(),
-            Value::Number(n) => n.to_string(),
-            Value::Bool(b) => b.to_string(),
-            _ => return None,
-        };
-        (!text.is_empty()).then_some(text)
+        value.as_str().map(str::to_owned)
     }
 }
 
@@ -38,23 +32,21 @@ impl GithubValue for Value {
 }
 
 trait Field {
-    fn extract(value: &Value) -> Self;
+    type Output;
+    fn extract(value: &Value) -> Option<Self::Output>;
 }
 
 impl<T: GithubValue> Field for Option<T> {
-    fn extract(value: &Value) -> Self {
+    type Output = T;
+    fn extract(value: &Value) -> Option<T> {
         T::read(value)
     }
 }
 
 impl<T: GithubValue> Field for Vec<T> {
-    fn extract(value: &Value) -> Self {
-        value
-            .as_array()
-            .into_iter()
-            .flatten()
-            .filter_map(T::read)
-            .collect()
+    type Output = Vec<T>;
+    fn extract(value: &Value) -> Option<Vec<T>> {
+        Some(value.as_array()?.iter().filter_map(T::read).collect())
     }
 }
 
@@ -63,27 +55,33 @@ fn body(value: &Value) -> Option<String> {
 }
 
 macro_rules! field {
-    ($value:ident, $name:ident) => {
-        Field::extract(&$value[stringify!($name)])
+    ($value:ident, $key:expr, $ty:ty) => {
+        crate::webhook::platforms::native::read_json_field($value, $key, <$ty as Field>::extract)
     };
-    ($value:ident, $name:ident, $extract:expr) => {
-        ($extract)($value)
+    ($value:ident, $key:expr, $ty:ty, $extract:expr) => {
+        crate::webhook::platforms::native::read_json_field($value, $key, |_| ($extract)($value))
     };
 }
 
-// Keep the serialized models ordinary, defaultable Rust structs. Only inbound
-// extraction is permissive; stored historical snapshots get defaults for additions.
 macro_rules! model {
-    ($name:ident { $($(#[$attr:meta])* $field:ident: $ty:ty $(= $extract:expr)?),* $(,)? }) => {
+    ($name:ident $( [$flat:ident: $flat_ty:ty] )? { $($(#[serde(rename = $key:literal)])? $field:ident: $container:ident<$($ty:ty),+> $(= $extract:expr)?),* $(,)? }) => {
         #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
         #[serde(default)]
         #[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
-        pub struct $name { $($(#[$attr])* pub $field: $ty,)* }
+        pub struct $name {
+            $(#[serde(flatten)] pub $flat: $flat_ty,)?
+            $($(#[serde(rename = $key)])?
+            #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "crate::webhook::platforms::native::deserialize_present")]
+            pub $field: payload_field_type!($container<$($ty),+>),)*
+        }
 
         impl GithubValue for $name {
             fn read(value: &Value) -> Option<Self> {
                 value.as_object()?;
-                Some(Self { $($field: field!(value, $field $(, $extract)?),)* })
+                Some(Self {
+                    $($flat: <$flat_ty>::read(value).unwrap_or_default(),)?
+                    $($field: field!(value, payload_field_key!($field $(, $key)?), $container<$($ty),+> $(, $extract)?),)*
+                })
             }
         }
     };
@@ -108,7 +106,7 @@ impl GithubValue for GithubTimestamp {
     }
 }
 
-model!(GithubEvent {
+model!(GithubWebhookPayload {
     action: Option<String>,
     repository: Option<GithubRepository>,
     sender: Option<GithubUser>,
@@ -137,22 +135,19 @@ model!(GithubEvent {
     after: Option<String>,
     updated_at: Option<String>,
     starred_at: Option<String>,
-    push: Option<GithubPush>,
-    git_ref: Option<GithubRefEvent>,
-    commit_status: Option<GithubCommitStatus>,
+    #[serde(rename = "ref")]
+    ref_name: Option<String> = |v: &Value| String::read(&v["ref"]),
+    base_ref: Option<String>, created: Option<bool>, deleted: Option<bool>, forced: Option<bool>, compare: Option<String>,
+    pusher: Option<GithubCommitAuthor>, commits: Vec<GithubCommit>, head_commit: Option<GithubCommit>,
+    ref_type: Option<String>, master_branch: Option<String>, pusher_type: Option<String>,
+    description: Option<String>, id: Option<u64>, state: Option<String>, context: Option<String>,
+    sha: Option<String>, target_url: Option<String>, name: Option<String>, avatar_url: Option<String>,
+    created_at: Option<String>, commit: Option<GithubStatusCommit>, branches: Vec<GithubStatusBranch>,
 });
 
-impl GithubEvent {
-    pub(super) fn from_payload(kind: &str, payload: &Value) -> Self {
-        let mut event = Self::read(payload).unwrap_or_default();
-        // These events keep their business fields at the root, not in an object.
-        match kind {
-            "push" => event.push = GithubPush::read(payload),
-            "create" | "delete" => event.git_ref = GithubRefEvent::read(payload),
-            "status" => event.commit_status = GithubCommitStatus::read(payload),
-            _ => {}
-        }
-        event
+impl crate::webhook::platforms::native::NativeValue for GithubWebhookPayload {
+    fn read(value: &Value) -> Option<Self> {
+        <Self as GithubValue>::read(value)
     }
 }
 
@@ -170,22 +165,22 @@ model!(GithubLabel {
     default: Option<bool>, archived_at: Option<String>, archived_by: Option<GithubUser>,
 });
 
-fn labels(value: &Value) -> Vec<GithubLabel> {
-    value
-        .as_array()
-        .into_iter()
-        .flatten()
-        .filter_map(|label| {
-            if let Some(name) = label.as_str() {
-                Some(GithubLabel {
-                    name: Some(name.to_owned()),
-                    ..Default::default()
-                })
-            } else {
-                GithubLabel::read(label)
-            }
-        })
-        .collect()
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
+pub enum GithubLabelValue {
+    Name(String),
+    Label(Box<GithubLabel>),
+}
+
+impl GithubValue for GithubLabelValue {
+    fn read(value: &Value) -> Option<Self> {
+        match value {
+            Value::String(name) => Some(Self::Name(name.clone())),
+            Value::Object(_) => GithubLabel::read(value).map(|label| Self::Label(Box::new(label))),
+            _ => None,
+        }
+    }
 }
 
 model!(GithubReactions {
@@ -202,7 +197,7 @@ model!(GithubIssue {
     id: Option<u64>, node_id: Option<String>, number: Option<u64>,
     title: Option<String>, body: Option<String> = |v: &Value| body(&v["body"]),
     state: Option<String>, state_reason: Option<String>, html_url: Option<String>,
-    user: Option<GithubUser>, labels: Vec<GithubLabel> = |v: &Value| labels(&v["labels"]),
+    user: Option<GithubUser>, labels: Vec<GithubLabelValue>,
     assignee: Option<GithubUser>, assignees: Vec<GithubUser>, milestone: Option<GithubMilestone>,
     locked: Option<bool>, active_lock_reason: Option<String>, comments: Option<u64>,
     author_association: Option<String>, created_at: Option<String>, updated_at: Option<String>,
@@ -247,12 +242,8 @@ model!(GithubComment {
     url: Option<String>, issue_url: Option<String>, pull_request_url: Option<String>,
 });
 
-model!(GithubPullRequest {
-    #[serde(flatten)]
-    issue: GithubIssue = |v: &Value| GithubIssue::read(v).unwrap_or_default(),
+model!(GithubPullRequest [issue: GithubIssue] {
     merged: Option<bool>,
-    head_branch: Option<String> = |v: &Value| String::read(&v["head_branch"]).or_else(|| String::read(&v["head"]["ref"])),
-    base_branch: Option<String> = |v: &Value| String::read(&v["base_branch"]).or_else(|| String::read(&v["base"]["ref"])),
     head: Option<GithubBranch>, base: Option<GithubBranch>,
     merged_at: Option<String>, merged_by: Option<GithubUser>, merge_commit_sha: Option<String>,
     mergeable: Option<bool>, mergeable_state: Option<String>, rebaseable: Option<bool>,
@@ -305,14 +296,6 @@ model!(GithubLicense {
     key: Option<String>, name: Option<String>, spdx_id: Option<String>, url: Option<String>, node_id: Option<String>,
 });
 
-model!(GithubPush {
-    #[serde(rename = "ref")]
-    ref_name: Option<String> = |v: &Value| String::read(&v["ref"]),
-    before: Option<String>, after: Option<String>, base_ref: Option<String>,
-    created: Option<bool>, deleted: Option<bool>, forced: Option<bool>, compare: Option<String>,
-    pusher: Option<GithubCommitAuthor>, commits: Vec<GithubCommit>, head_commit: Option<GithubCommit>,
-});
-
 model!(GithubCommitAuthor {
     name: Option<String>, email: Option<String>, username: Option<String>, date: Option<String>,
 });
@@ -323,21 +306,6 @@ model!(GithubCommit {
     timestamp: Option<String>, url: Option<String>, distinct: Option<bool>,
     author: Option<GithubCommitAuthor>, committer: Option<GithubCommitAuthor>,
     added: Vec<String>, removed: Vec<String>, modified: Vec<String>,
-});
-
-model!(GithubRefEvent {
-    #[serde(rename = "ref")]
-    ref_name: Option<String> = |v: &Value| String::read(&v["ref"]),
-    ref_type: Option<String>, master_branch: Option<String>, pusher_type: Option<String>,
-    description: Option<String> = |v: &Value| body(&v["description"]),
-});
-
-model!(GithubCommitStatus {
-    id: Option<u64>, state: Option<String>, context: Option<String>,
-    description: Option<String> = |v: &Value| body(&v["description"]),
-    sha: Option<String>, target_url: Option<String>, name: Option<String>, avatar_url: Option<String>,
-    created_at: Option<String>, updated_at: Option<String>,
-    commit: Option<GithubStatusCommit>, branches: Vec<GithubStatusBranch>,
 });
 
 model!(GithubStatusBranch {
@@ -452,7 +420,7 @@ model!(GithubDiscussion {
     body: Option<String> = |v: &Value| body(&v["body"]),
     html_url: Option<String>, user: Option<GithubUser>, category: Option<GithubDiscussionCategory>,
     state: Option<String>, state_reason: Option<String>, locked: Option<bool>, active_lock_reason: Option<String>,
-    labels: Vec<GithubLabel> = |v: &Value| labels(&v["labels"]), comments: Option<u64>,
+    labels: Vec<GithubLabelValue>, comments: Option<u64>,
     answer_html_url: Option<String>, answer_chosen_at: Option<String>, answer_chosen_by: Option<GithubUser>,
     created_at: Option<String>, updated_at: Option<String>, author_association: Option<String>, reactions: Option<GithubReactions>,
 });

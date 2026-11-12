@@ -88,34 +88,37 @@ async fn one_message_preserves_platform_detail_level_raw_and_independent_user_st
     assert_eq!(before["provider"], "github");
     assert_eq!(before["metadata"]["eventType"], "issue_comment");
     assert_eq!(before["metadata"]["deduplicationKey"]["value"], long_key);
-    assert_eq!(before["platformData"]["event"]["issue"]["number"], 123);
-    assert_eq!(before["platformData"]["event"]["issue"]["id"], 2);
     assert_eq!(
-        before["platformData"]["event"]["issue"]["assignees"][0]["type"],
+        before["platformData"]["event"]["payload"]["issue"]["number"],
+        123
+    );
+    assert_eq!(before["platformData"]["event"]["payload"]["issue"]["id"], 2);
+    assert_eq!(
+        before["platformData"]["event"]["payload"]["issue"]["assignees"][0]["type"],
         "User"
     );
     assert_eq!(
-        before["platformData"]["event"]["issue"]["pull_request"]["html_url"],
+        before["platformData"]["event"]["payload"]["issue"]["pull_request"]["html_url"],
         "https://example.com/pull/123"
     );
     assert_eq!(
-        before["platformData"]["event"]["repository"]["private"],
+        before["platformData"]["event"]["payload"]["repository"]["private"],
         true
     );
     assert_eq!(
-        before["platformData"]["event"]["repository"]["created_at"],
+        before["platformData"]["event"]["payload"]["repository"]["created_at"],
         "2026-01-01T00:00:00Z"
     );
     assert_eq!(
-        before["platformData"]["event"]["comment"]["updated_at"],
+        before["platformData"]["event"]["payload"]["comment"]["updated_at"],
         "2000-01-02T00:00:00Z"
     );
     assert_eq!(
-        before["platformData"]["event"]["issue"]["labels"][0]["name"],
+        before["platformData"]["event"]["payload"]["issue"]["labels"][0]["name"],
         "bug"
     );
     assert_eq!(
-        before["platformData"]["event"]["comment"]["user"]["login"],
+        before["platformData"]["event"]["payload"]["comment"]["user"]["login"],
         "bob"
     );
     assert_ne!(before["createdAt"], "2000-01-01T00:00:00Z");
@@ -182,19 +185,19 @@ async fn one_message_preserves_platform_detail_level_raw_and_independent_user_st
     let workflow: Value = test::read_body_json(response).await;
     assert_eq!(workflow["data"]["level"], "normal");
     assert_eq!(
-        workflow["data"]["platformData"]["event"]["workflow_run"]["run_attempt"],
+        workflow["data"]["platformData"]["event"]["payload"]["workflow_run"]["run_attempt"],
         2
     );
     assert_eq!(
-        workflow["data"]["platformData"]["event"]["workflow_run"]["actor"]["id"],
+        workflow["data"]["platformData"]["event"]["payload"]["workflow_run"]["actor"]["id"],
         4
     );
     assert_eq!(
-        workflow["data"]["platformData"]["event"]["workflow_run"]["conclusion"],
+        workflow["data"]["platformData"]["event"]["payload"]["workflow_run"]["conclusion"],
         "failure"
     );
     assert_eq!(
-        workflow["data"]["platformData"]["event"]["workflow_run"]["head_branch"],
+        workflow["data"]["platformData"]["event"]["payload"]["workflow_run"]["head_branch"],
         "main"
     );
     let received =

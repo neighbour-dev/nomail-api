@@ -91,6 +91,8 @@ fn documented_update_and_nested_field_values_survive_typed_projection() {
         let PlatformData::Telegram(data) = &parsed.data else {
             panic!("Telegram model")
         };
+        assert_eq!(serde_json::to_value(&data.header).unwrap(), json!({}));
+        let data = &data.payload;
         assert_eq!(data.update_id, payload["update_id"].as_i64().unwrap());
         assert_eq!(
             serde_json::to_value(data).unwrap(),
@@ -121,17 +123,21 @@ fn text_entities_and_ids_remain_exact_in_native_payload_structure() {
     let PlatformData::Telegram(data) = &parsed.data else {
         panic!()
     };
+    let data = &data.payload;
     assert_eq!(data.update_id, 0);
     assert!(data.callback_query.is_none());
-    let message = data.message.as_ref().unwrap();
-    assert_eq!(message.chat.as_ref().unwrap().id, Some(-1001234567890));
-    assert_eq!(message.message_id, Some(0));
-    assert_eq!(message.text.as_deref(), Some(" 😀 hello \n"));
-    assert_eq!(message.caption.as_deref(), Some(" caption \n"));
-    let entity = &message.entities.as_ref().unwrap()[0];
-    let units: Vec<_> = message.text.as_ref().unwrap().encode_utf16().collect();
-    let start = entity.offset.unwrap() as usize;
-    let end = start + entity.length.unwrap() as usize;
+    let message = data.message.value().unwrap();
+    assert_eq!(
+        message.chat.value().unwrap().id.into_value(),
+        Some(-1001234567890)
+    );
+    assert_eq!(message.message_id.into_value(), Some(0));
+    assert_eq!(message.text.value_deref(), Some(" 😀 hello \n"));
+    assert_eq!(message.caption.value_deref(), Some(" caption \n"));
+    let entity = &message.entities.value().unwrap()[0];
+    let units: Vec<_> = message.text.value().unwrap().encode_utf16().collect();
+    let start = entity.offset.into_value().unwrap() as usize;
+    let end = start + entity.length.into_value().unwrap() as usize;
     assert_eq!(String::from_utf16(&units[start..end]).unwrap(), "hello");
     let key = parsed.metadata.deduplication_key.as_ref().unwrap();
     assert_eq!(key.value, "0");
@@ -148,23 +154,23 @@ fn union_discriminators_select_the_correct_variant() {
         let PlatformData::Telegram(data) = parsed.data else {
             panic!()
         };
-        let callback = data.callback_query.unwrap();
-        assert_eq!(callback.id.as_deref(), Some("000123"));
+        let callback = data.payload.callback_query.into_value().unwrap();
+        assert_eq!(callback.id.value_deref(), Some("000123"));
         let message = serde_json::to_value(&callback.message).unwrap();
         assert_eq!(message["chat"]["id"], -1001234567890_i64);
         assert_eq!(message["message_id"], 0);
-        assert_eq!(callback.chat_instance.as_deref(), Some("-000456"));
-        assert_eq!(callback.data.as_deref(), Some(" approve "));
+        assert_eq!(callback.chat_instance.value_deref(), Some("-000456"));
+        assert_eq!(callback.data.value_deref(), Some(" approve "));
         assert_eq!(
             matches!(
-                callback.message.as_deref(),
+                callback.message.value_deref(),
                 Some(TelegramMaybeInaccessibleMessage::InaccessibleMessage(_))
             ),
             inaccessible
         );
         assert_eq!(
             matches!(
-                callback.message.as_deref(),
+                callback.message.value_deref(),
                 Some(TelegramMaybeInaccessibleMessage::Message(_))
             ),
             !inaccessible
@@ -208,21 +214,24 @@ fn malformed_fields_are_local_and_future_data_has_a_lossless_fallback() {
     let PlatformData::Telegram(data) = parsed.data else {
         panic!()
     };
-    let message = data.message.unwrap();
+    let message = data.payload.message.into_value().unwrap();
     assert!(message.from.is_none());
-    assert_eq!(message.chat.unwrap().id, Some(-1001234567890));
-    assert_eq!(message.text.as_deref(), Some(""));
+    assert_eq!(
+        message.chat.into_value().unwrap().id.into_value(),
+        Some(-1001234567890)
+    );
+    assert_eq!(message.text.value_deref(), Some(""));
     assert!(message.caption.is_none());
-    let photo = message.photo.unwrap();
+    let photo = message.photo.into_value().unwrap();
     assert_eq!(photo.len(), 1);
-    assert_eq!(photo[0].file_id.as_deref(), Some(""));
+    assert_eq!(photo[0].file_id.value_deref(), Some(""));
     assert!(photo[0].width.is_none());
-    assert_eq!(photo[0].height, Some(90));
-    let entities = message.entities.unwrap();
+    assert_eq!(photo[0].height.into_value(), Some(90));
+    let entities = message.entities.into_value().unwrap();
     assert_eq!(entities.len(), 1);
     assert!(entities[0].offset.is_none());
-    assert_eq!(entities[0].length, Some(0));
-    let origin = message.forward_origin.unwrap();
+    assert_eq!(entities[0].length.into_value(), Some(0));
+    let origin = message.forward_origin.into_value().unwrap();
     assert!(matches!(*origin, TelegramMessageOrigin::Unknown(_)));
     assert_eq!(
         serde_json::to_value(origin).unwrap(),
@@ -258,7 +267,7 @@ fn update_optionality_and_future_branches() {
                 Provider::Telegram,
                 Authentication::None,
                 &headers(&[]),
-                &serde_json::to_vec(&payload).unwrap()
+                &serde_json::to_vec(&payload).unwrap(),
             )
             .is_err()
         );
@@ -273,14 +282,17 @@ fn platform_data_is_the_typed_webhook_body_without_summary_or_update_wrapper() {
     }});
     let parsed = parse(&payload);
     let data = serde_json::to_value(parsed.data).unwrap();
-    assert_eq!(data, json!({"provider":"telegram","event":payload}));
+    assert_eq!(
+        data,
+        json!({"provider":"telegram","event":{"header":{},"payload":payload}})
+    );
     for field in ["chat_id", "message_id", "callback_query_id", "update"] {
         assert!(
-            data["event"].get(field).is_none(),
+            data["event"]["payload"].get(field).is_none(),
             "unexpected synthetic field: {field}"
         );
     }
-    assert!(serde_json::from_value::<TelegramEvent>(json!({"message":{}})).is_err());
+    assert!(serde_json::from_value::<TelegramWebhookPayload>(json!({"message":{}})).is_err());
 }
 
 #[test]

@@ -1,4 +1,4 @@
-//! Gitea UI projections, independently modeled against the MIT-licensed upstream
+//! Native Gitea payload fields, independently modeled against the MIT-licensed upstream
 //! v28.3.0 modules/structs definitions (hook, issue, pull, repo_actions, etc.).
 //! No upstream code is vendored. Inbound extraction is tolerant and field-local;
 //! unknown data stays in raw. Go int64 IDs include negative system-user IDs.
@@ -12,13 +12,7 @@ trait GiteaValue: Sized {
 
 impl GiteaValue for String {
     fn read(value: &Value) -> Option<Self> {
-        let text = match value {
-            Value::String(s) => s.trim().to_owned(),
-            Value::Number(n) => n.to_string(),
-            Value::Bool(b) => b.to_string(),
-            _ => return None,
-        };
-        (!text.is_empty()).then_some(text)
+        value.as_str().map(str::to_owned)
     }
 }
 
@@ -41,34 +35,34 @@ impl<T: GiteaValue> GiteaValue for Box<T> {
 }
 
 trait Field {
-    fn extract(value: &Value) -> Self;
+    type Output;
+    fn extract(value: &Value) -> Option<Self::Output>;
 }
 
 impl<T: GiteaValue> Field for Option<T> {
-    fn extract(value: &Value) -> Self {
+    type Output = T;
+    fn extract(value: &Value) -> Option<T> {
         T::read(value)
     }
 }
 
 impl<T: GiteaValue> Field for Vec<T> {
-    fn extract(value: &Value) -> Self {
-        value
-            .as_array()
-            .into_iter()
-            .flatten()
-            .filter_map(T::read)
-            .collect()
+    type Output = Vec<T>;
+    fn extract(value: &Value) -> Option<Vec<T>> {
+        Some(value.as_array()?.iter().filter_map(T::read).collect())
     }
 }
 
 impl Field for BTreeMap<String, String> {
-    fn extract(value: &Value) -> Self {
-        value
-            .as_object()
-            .into_iter()
-            .flatten()
-            .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_owned())))
-            .collect()
+    type Output = BTreeMap<String, String>;
+    fn extract(value: &Value) -> Option<Self::Output> {
+        Some(
+            value
+                .as_object()?
+                .iter()
+                .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_owned())))
+                .collect(),
+        )
     }
 }
 
@@ -77,56 +71,73 @@ fn verbatim(value: &Value) -> Option<String> {
 }
 
 macro_rules! field {
-    ($value:ident, $name:ident) => {
-        Field::extract(&$value[stringify!($name)])
+    ($value:ident, $key:expr, $ty:ty) => {
+        crate::webhook::platforms::native::read_json_field($value, $key, <$ty as Field>::extract)
     };
-    ($value:ident, $name:ident, $extract:expr) => {
-        ($extract)($value)
+    ($value:ident, $key:expr, $ty:ty, $extract:expr) => {
+        crate::webhook::platforms::native::read_json_field($value, $key, |_| ($extract)($value))
     };
 }
 
 macro_rules! model {
-    ($name:ident { $($(#[$attr:meta])* $field:ident: $ty:ty $(= $extract:expr)?),* $(,)? }) => {
+    ($name:ident { $($(#[serde(rename = $key:literal)])? $field:ident: $container:ident<$($ty:ty),+> $(= $extract:expr)?),* $(,)? }) => {
         #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
         #[serde(default)]
         #[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
-        pub struct $name { $($(#[$attr])* pub $field: $ty,)* }
+        pub struct $name {
+            $($(#[serde(rename = $key)])?
+            #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "crate::webhook::platforms::native::deserialize_present")]
+            pub $field: payload_field_type!($container<$($ty),+>),)*
+        }
 
         impl GiteaValue for $name {
             fn read(value: &Value) -> Option<Self> {
                 value.as_object()?;
-                Some(Self { $($field: field!(value, $field $(, $extract)?),)* })
+                Some(Self { $($field: field!(value, payload_field_key!($field $(, $key)?), $container<$($ty),+> $(, $extract)?),)* })
             }
         }
     };
 }
 
-model!(GiteaEvent {
-    event_type: Option<String>, installation_target_type: Option<String>,
+model!(GiteaWebhookPayload {
     action: Option<String>, number: Option<i64>, commit_id: Option<String>, is_pull: Option<bool>,
     before: Option<String>, after: Option<String>,
     repository: Option<GiteaRepository>, sender: Option<GiteaUser>, organization: Option<GiteaOrganization>,
-    issue: Option<GiteaIssue>, pull_request: Option<GiteaPullRequest>, comment: Option<GiteaComment>,
+    issue: Option<GiteaIssue>, pull_request: Option<GiteaPullRequest>, comment: Option<GiteaWebhookComment>,
     requested_reviewer: Option<GiteaUser>, review: Option<GiteaReview>, changes: Option<GiteaChanges>,
     forkee: Option<GiteaRepository>, release: Option<GiteaRelease>, package: Option<GiteaPackage>,
     workflow: Option<GiteaWorkflow>, workflow_run: Option<GiteaWorkflowRun>, workflow_job: Option<GiteaWorkflowJob>,
-    push: Option<GiteaPush>, git_ref: Option<GiteaRefEvent>, wiki: Option<GiteaWiki>, commit_status: Option<GiteaCommitStatus>,
+    #[serde(rename = "ref")]
+    ref_name: Option<String> = |v: &Value| String::read(&v["ref"]),
+    compare_url: Option<String>, commits: Vec<GiteaCommit>, total_commits: Option<i64>,
+    head_commit: Option<GiteaCommit>, pusher: Option<GiteaUser>,
+    sha: Option<String>, ref_type: Option<String>, pusher_type: Option<String>, page: Option<String>,
+    // Wiki comment is a string, while issue/PR comments are objects.
+    commit: Option<GiteaCommit>, context: Option<String>, created_at: Option<String>,
+    description: Option<String>, id: Option<i64>, state: Option<String>, target_url: Option<String>, updated_at: Option<String>,
 });
 
-impl GiteaEvent {
-    pub(super) fn from_payload(kind: &str, payload: &Value) -> Self {
-        let mut event = Self::read(payload).unwrap_or_default();
-        // Populated by the receiver from native headers, not similarly named JSON fields.
-        event.event_type = None;
-        event.installation_target_type = None;
-        match kind {
-            "push" => event.push = GiteaPush::read(payload),
-            "create" | "delete" => event.git_ref = GiteaRefEvent::read(payload),
-            "wiki" => event.wiki = GiteaWiki::read(payload),
-            "status" => event.commit_status = GiteaCommitStatus::read(payload),
-            _ => {}
+impl crate::webhook::platforms::native::NativeValue for GiteaWebhookPayload {
+    fn read(value: &Value) -> Option<Self> {
+        <Self as GiteaValue>::read(value)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
+pub enum GiteaWebhookComment {
+    Text(String),
+    Comment(Box<GiteaComment>),
+}
+
+impl GiteaValue for GiteaWebhookComment {
+    fn read(value: &Value) -> Option<Self> {
+        match value {
+            Value::String(text) => Some(Self::Text(text.clone())),
+            Value::Object(_) => GiteaComment::read(value).map(|c| Self::Comment(Box::new(c))),
+            _ => None,
         }
-        event
     }
 }
 
@@ -263,12 +274,6 @@ model!(GiteaAttachment {
     created_at: Option<String>, uuid: Option<String>, browser_download_url: Option<String>,
 });
 
-model!(GiteaPush {
-    #[serde(rename = "ref")]
-    ref_name: Option<String> = |v: &Value| String::read(&v["ref"]),
-    before: Option<String>, after: Option<String>, compare_url: Option<String>,
-    commits: Vec<GiteaCommit>, total_commits: Option<i64>, head_commit: Option<GiteaCommit>, pusher: Option<GiteaUser>,
-});
 model!(GiteaCommit {
     id: Option<String>, message: Option<String> = |v: &Value| verbatim(&v["message"]),
     url: Option<String>, author: Option<GiteaCommitUser>, committer: Option<GiteaCommitUser>,
@@ -279,21 +284,6 @@ model!(GiteaCommitVerification {
     verified: Option<bool>, reason: Option<String>, signature: Option<String> = |v: &Value| verbatim(&v["signature"]),
     signer: Option<GiteaCommitUser>, payload: Option<String> = |v: &Value| verbatim(&v["payload"]),
 });
-model!(GiteaRefEvent {
-    sha: Option<String>,
-    #[serde(rename = "ref")]
-    ref_name: Option<String> = |v: &Value| String::read(&v["ref"]),
-    ref_type: Option<String>, pusher_type: Option<String>,
-});
-model!(GiteaWiki {
-    page: Option<String>, comment: Option<String> = |v: &Value| verbatim(&v["comment"]),
-});
-model!(GiteaCommitStatus {
-    commit: Option<GiteaCommit>, context: Option<String>, created_at: Option<String>,
-    description: Option<String> = |v: &Value| verbatim(&v["description"]),
-    id: Option<i64>, sha: Option<String>, state: Option<String>, target_url: Option<String>, updated_at: Option<String>,
-});
-
 model!(GiteaRelease {
     id: Option<i64>, tag_name: Option<String>, target_commitish: Option<String>, name: Option<String>,
     body: Option<String> = |v: &Value| verbatim(&v["body"]),

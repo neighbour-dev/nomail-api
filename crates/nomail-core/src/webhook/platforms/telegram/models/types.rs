@@ -1853,7 +1853,7 @@ model!(#[doc = "https://core.telegram.org/bots/api#uniquegiftsymbol"] TelegramUn
     rarity_per_mille: i64 = "rarity_per_mille",
 });
 
-model!(#[doc = "https://core.telegram.org/bots/api#update"] TelegramEvent [update_id: i64] {
+model!(#[doc = "https://core.telegram.org/bots/api#update"] TelegramWebhookPayload [update_id: i64] {
     message: Box<TelegramMessage> = "message",
     edited_message: Box<TelegramMessage> = "edited_message",
     channel_post: Box<TelegramMessage> = "channel_post",

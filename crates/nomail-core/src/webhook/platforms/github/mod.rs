@@ -5,11 +5,17 @@ pub use models::*;
 #[cfg(test)]
 mod tests;
 use crate::webhook::{
-    Authentication, EventContent, EventMetadata, MessageContent, PlatformData, PlatformEvent,
-    ProtocolResponse, ReceiveOutcome, WebhookConfig, WebhookError, WebhookRequest, crypto,
-    support::*,
+    Authentication, EventContent, EventMetadata, MessageContent, PlatformEvent, ProtocolResponse,
+    ReceiveOutcome, WebhookConfig, WebhookError, WebhookRequest, crypto, support::*,
 };
 use serde_json::Value;
+
+webhook_header!(GithubWebhookHeader {
+    event = "x-github-event", delivery = "x-github-delivery", hook_id = "x-github-hook-id",
+    hook_installation_target_id = "x-github-hook-installation-target-id",
+    hook_installation_target_type = "x-github-hook-installation-target-type",
+});
+webhook!(GithubWebhook, GithubWebhookHeader, GithubWebhookPayload);
 
 pub(in crate::webhook) fn receive(
     config: &WebhookConfig<'_>,
@@ -43,21 +49,21 @@ pub(in crate::webhook) fn receive(
             body: b"pong".to_vec(),
         }));
     }
-    let event = GithubEvent::from_payload(&event_type, &payload);
-    Ok(PlatformEvent {
-        metadata: metadata(
+    Ok(PlatformEvent::from_payload(
+        config.provider,
+        metadata(
             event_type,
             None,
             "github:delivery",
             request.header("x-github-delivery").into(),
         ),
-        data: PlatformData::Github(Box::new(event)),
-        raw: EventContent::Json(payload),
-    }
+        EventContent::Json(payload),
+        request,
+    )?
     .into())
 }
 
-impl GithubEvent {
+impl GithubWebhook {
     pub fn to_message_content(
         &self,
         metadata: &EventMetadata,
@@ -65,16 +71,9 @@ impl GithubEvent {
     ) -> MessageContent {
         let p = raw.as_json().unwrap_or(&Value::Null);
         let kind = metadata.event_type.as_str();
-        let repository = self
-            .repository
-            .as_ref()
-            .and_then(|repo| repo.full_name.as_deref())
-            .unwrap_or("");
+        let repository = text(p, &["repository", "full_name"]);
         let mut title = format!("GitHub {kind}");
-        for part in [
-            self.action.clone().unwrap_or_default(),
-            repository.to_owned(),
-        ] {
+        for part in [text(p, &["action"]), repository.to_owned()] {
             if !part.is_empty() {
                 title.push_str(&format!(": {part}"));
             }
@@ -104,21 +103,12 @@ impl GithubEvent {
             first(&[content, raw.to_string()]),
             first(&[
                 repository.to_owned(),
-                self.sender
-                    .as_ref()
-                    .and_then(|user| user.login.clone())
-                    .unwrap_or_default(),
+                text(p, &["sender", "login"]),
                 "github".into(),
             ]),
             // Outcomes stay in workflow_run.conclusion, not NoMail priority.
             "normal",
-            first(&[
-                url,
-                self.repository
-                    .as_ref()
-                    .and_then(|repo| repo.html_url.clone())
-                    .unwrap_or_default(),
-            ]),
+            first(&[url, text(p, &["repository", "html_url"])]),
         )
     }
 }

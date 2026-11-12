@@ -3,20 +3,32 @@ pub mod config;
 #[cfg(test)]
 mod tests;
 use crate::webhook::{
-    Authentication, EventContent, EventMetadata, MessageContent, PlatformData, PlatformEvent,
-    ReceiveOutcome, WebhookConfig, WebhookError, WebhookRequest, crypto, support::*,
+    Authentication, EventContent, EventMetadata, MessageContent, PlatformEvent, ReceiveOutcome,
+    WebhookConfig, WebhookError, WebhookRequest, crypto, support::*,
 };
 use base64::{Engine, engine::general_purpose::STANDARD};
-use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
-pub struct GitlabEvent {
-    pub instance: Option<String>,
-    pub object_kind: Option<String>,
-    pub project_path: Option<String>,
-    pub action: Option<String>,
-}
+webhook_header!(GitlabWebhookHeader {
+    event = "x-gitlab-event", instance = "x-gitlab-instance",
+    event_uuid = "x-gitlab-event-uuid", webhook_uuid = "x-gitlab-webhook-uuid",
+    webhook_id = "webhook-id", idempotency_key = "idempotency-key",
+});
+native_model!(GitlabWebhookPayload {
+    object_kind: String = "object_kind", event_name: String = "event_name",
+    project: GitlabProject = "project", object_attributes: Value = "object_attributes",
+    user: Value = "user", commits: Vec<Value> = "commits", ref_name: String = "ref",
+    before: String = "before", after: String = "after",
+    // Custom templates can contain arbitrary JSON at native root paths.
+    title: String = "title", message: String = "message",
+});
+native_model!(GitlabProject {
+    id: i64 = "id",
+    name: String = "name",
+    path_with_namespace: String = "path_with_namespace",
+    web_url: String = "web_url",
+});
+webhook!(GitlabWebhook, GitlabWebhookHeader, GitlabWebhookPayload);
 
 pub(in crate::webhook) fn receive(
     config: &WebhookConfig<'_>,
@@ -38,14 +50,9 @@ pub(in crate::webhook) fn receive(
         request.header("x-gitlab-event").into(),
         "missing GitLab event type",
     )?;
-    let event = GitlabEvent {
-        instance: optional(request.header("x-gitlab-instance")),
-        object_kind: optional(text(&payload, &["object_kind"])),
-        project_path: optional(text(&payload, &["project", "path_with_namespace"])),
-        action: optional(text(&payload, &["object_attributes", "action"])),
-    };
-    Ok(PlatformEvent {
-        metadata: metadata(
+    Ok(PlatformEvent::from_payload(
+        config.provider,
+        metadata(
             event_type,
             None,
             "gitlab:message",
@@ -54,9 +61,9 @@ pub(in crate::webhook) fn receive(
                 request.header("idempotency-key").into(),
             ]),
         ),
-        data: PlatformData::Gitlab(event),
-        raw: EventContent::Json(payload),
-    }
+        EventContent::Json(payload),
+        request,
+    )?
     .into())
 }
 
@@ -102,7 +109,7 @@ fn verify_signature(
     Err(WebhookError::Unauthorized)
 }
 
-impl GitlabEvent {
+impl GitlabWebhook {
     pub fn to_message_content(
         &self,
         metadata: &EventMetadata,
@@ -117,7 +124,7 @@ impl GitlabEvent {
                 raw.to_string(),
             ]),
             first(&[
-                self.project_path.clone().unwrap_or_default(),
+                text(p, &["project", "path_with_namespace"]),
                 "gitlab".into(),
             ]),
             "normal",

@@ -39,10 +39,9 @@ fn encrypted_v2_and_nested_text() {
     let body = encrypt_feishu(plain);
     let h = feishu_headers(&body);
     let parsed = event(receive_with(Provider::Feishu, feishu_auth(), &h, &body).unwrap());
-    assert!(matches!(
-        parsed.data,
-        PlatformData::Feishu(FeishuEvent::V2(_))
-    ));
+    assert!(
+        matches!(&parsed.data, PlatformData::Feishu(webhook) if webhook.payload.schema.value_deref() == Some("2.0"))
+    );
     assert_eq!(
         parsed.raw.as_json(),
         Some(&serde_json::from_slice::<Value>(plain).unwrap())
@@ -147,10 +146,9 @@ fn plaintext_token_auth_and_legacy_events() {
         )
         .unwrap(),
     );
-    assert!(matches!(
-        parsed.data,
-        PlatformData::Feishu(FeishuEvent::Legacy(_))
-    ));
+    assert!(
+        matches!(&parsed.data, PlatformData::Feishu(webhook) if webhook.payload.schema.is_none())
+    );
     assert_eq!(parsed.to_message_content().content, "hello");
     assert_eq!(
         receive_with(

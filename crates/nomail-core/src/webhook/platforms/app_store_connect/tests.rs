@@ -36,11 +36,11 @@ fn parse(payload: &Value) -> PlatformEvent {
     parsed
 }
 
-fn model(parsed: &PlatformEvent) -> &super::AppStoreConnectEvent {
+fn model(parsed: &PlatformEvent) -> &super::AppStoreConnectWebhookPayload {
     let PlatformData::AppStoreConnect(value) = &parsed.data else {
         panic!("wrong platform model")
     };
-    value
+    &value.payload
 }
 
 // Every field in the documented sample must appear in the typed projection
@@ -84,6 +84,11 @@ fn all_official_examples_retain_every_documented_field_in_typed_models() {
         let parsed = parse(payload);
         let projection = model(&parsed);
         assert_documented_fields(&serde_json::to_value(projection).unwrap(), payload, "event");
+        assert_eq!(
+            &serde_json::to_value(projection).unwrap(),
+            payload,
+            "invented fields in documented payload"
+        );
         let kind = payload["data"]["type"].as_str().unwrap();
         types.insert(kind);
         assert_eq!(parsed.provider(), Provider::AppStoreConnect);
@@ -93,7 +98,7 @@ fn all_official_examples_retain_every_documented_field_in_typed_models() {
         assert_eq!(key.scope, "appstoreconnect:event");
         assert_eq!(key.value, payload["data"]["id"].as_str().unwrap());
         assert_eq!(
-            projection.data.version,
+            projection.data.version.into_value(),
             payload["data"].get("version").and_then(Value::as_u64)
         );
         assert_eq!(
@@ -260,14 +265,14 @@ fn background_relationships_are_direct_and_marketplace_events_need_no_instance()
         let instance = value
             .data
             .relationships
-            .as_ref()
+            .value()
             .unwrap()
             .instance
-            .as_ref()
+            .value()
             .unwrap();
         assert!(instance.data.is_none());
         assert_eq!(
-            instance.reference().id.as_deref(),
+            instance.reference().id.value_deref(),
             payload["data"]["relationships"]["instance"]["id"].as_str()
         );
         assert_eq!(
@@ -285,16 +290,23 @@ fn background_relationships_are_direct_and_marketplace_events_need_no_instance()
         .unwrap();
     let parsed = parse(payload);
     let value = model(&parsed);
-    let relationships = value.data.relationships.as_ref().unwrap();
+    let relationships = value.data.relationships.value().unwrap();
     assert!(relationships.instance.is_none());
-    let marketplace = relationships.marketplace_app.as_ref().unwrap();
-    assert_eq!(marketplace.reference().id.as_deref(), Some("9876543210"));
+    let marketplace = relationships.marketplace_app.value().unwrap();
+    assert_eq!(marketplace.reference().id.value_deref(), Some("9876543210"));
     assert_eq!(
         parsed.to_message_content().url.as_deref(),
         marketplace.self_url()
     );
     assert_eq!(
-        value.data.attributes.as_ref().unwrap().territories[0],
+        value
+            .data
+            .attributes
+            .value()
+            .unwrap()
+            .territories
+            .value()
+            .unwrap()[0],
         "DNK"
     );
 }
@@ -316,7 +328,7 @@ fn state_keys_are_not_conflated_and_build_upload_needs_no_timestamp_or_old_state
         "IN_BETA_REVIEW → BETA_APPROVED"
     );
     let upload = find("buildUploadStateUpdated");
-    let attrs = model(&upload).data.attributes.as_ref().unwrap();
+    let attrs = model(&upload).data.attributes.value().unwrap();
     assert!(attrs.timestamp.is_none());
     assert!(attrs.old_state.is_none());
     assert!(attrs.new_value.is_none());
@@ -326,7 +338,7 @@ fn state_keys_are_not_conflated_and_build_upload_needs_no_timestamp_or_old_state
         model(&feedback)
             .data
             .attributes
-            .as_ref()
+            .value()
             .unwrap()
             .new_state
             .is_none()
@@ -365,23 +377,26 @@ fn malformed_optional_fields_unknown_events_and_management_ping_are_not_control_
     let parsed = parse(&payload);
     let value = model(&parsed);
     assert!(value.data.version.is_none());
-    let attrs = value.data.attributes.as_ref().unwrap();
+    let attrs = value.data.attributes.value().unwrap();
     assert!(attrs.new_state.is_none());
-    assert_eq!(attrs.available, Some(false));
-    assert_eq!(attrs.territories, ["ZZZ", "DNK"]);
-    assert_eq!(attrs.app_id.as_deref(), Some("123"));
+    assert_eq!(attrs.available.into_value(), Some(false));
+    assert_eq!(
+        attrs.territories.value().unwrap().as_slice(),
+        ["ZZZ", "DNK"]
+    );
+    assert_eq!(attrs.app_id.value_deref(), Some("123"));
     assert_eq!(
         value
             .data
             .relationships
-            .as_ref()
+            .value()
             .unwrap()
             .instance
-            .as_ref()
+            .value()
             .unwrap()
             .reference()
             .id
-            .as_deref(),
+            .value_deref(),
         Some("not-a-uuid")
     );
     assert_eq!(
@@ -414,7 +429,7 @@ fn malformed_optional_fields_unknown_events_and_management_ping_are_not_control_
                 Provider::AppStoreConnect,
                 Authentication::HmacSha256("test-secret"),
                 &h,
-                &body
+                &body,
             ),
             Err(WebhookError::InvalidPayload(_))
         ));

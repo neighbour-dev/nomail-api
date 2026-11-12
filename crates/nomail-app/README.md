@@ -12,7 +12,7 @@ Server / Workers → nomail-app → nomail-core
 - `auth/`：账号、设备、会话、JWT、密码策略与原子存储接口。
 - `message/`：已有消息的管理、查询和状态操作，以及 `MessageAccepted` 业务事件。`Message::from_received_event` 是唯一的完整消息构造入口，集中规范化和初始状态/保留规则，不访问数据库或运行时。
 - `webhook/config/`：开源版接收配置、凭据加密、Key、启停及存储接口。
-- `webhook/service.rs`：收件箱规范化规则；平台配置与认证构造在 Core，产品开放全部七个平台及 Generic。
+- `webhook/service.rs`：收件箱规范化规则；平台配置与认证构造在 Core，产品当前开放 Generic 及九种原生平台接入，共 10 种 provider。
 - `ingestion/`：唯一完整接收用例：查配置、解密凭据、调用协议、区分控制请求、构造消息并幂等入箱。只依赖 `IngestionStore` 的有效配置查询和幂等插入两个操作，不持有 `MessageService` 或继承 `MessageStore`。时间、ID 和密钥由运行时提供；控制请求不创建消息 ID，不入库。只在首次持久化成功且返回 ID 一致时产生业务事件。
 - `http/contract/`：集中定义唯一路由清单、所有 HTTP 请求/响应 DTO、响应包装和 SSE 事件，按认证、消息、配置、公共类型分文件。`http::*` 保留契约重导出。
 - `http/`：完整接口执行、输入解析、业务结果转换、HTTP 错误映射、配置 URL、SSE 编码和 OpenAPI。两端一次接入 `http::execute`，不分别维护路径、方法、DTO 或逐接口 Handler。
@@ -37,7 +37,7 @@ Server / Workers → nomail-app → nomail-core
 
 ## HTTP 契约与检查
 
-`src/http/contract/routes.rs` 是路径、方法、鉴权、输入输出类型和 OpenAPI 的唯一清单；`src/http/dispatch.rs` 是唯一的 Operation → 用例绑定及请求/结果转换边界。消息列表存储仅选预览列；D1 用私有存储行解码，不借用 HTTP 字段别名。`http/contract/events.rs` 定义事件，`http/sse.rs` 只负责帧编码和心跳。新增操作只需修改 App；若遗漏共享分发会编译失败，不要求两个部署补写 Handler。公开 HTTP/数据库行为保持不变。
+`src/http/contract/routes.rs` 是路径、方法、鉴权、输入输出类型和 OpenAPI 的唯一清单；`src/http/dispatch.rs` 是唯一的 Operation → 用例绑定及请求/结果转换边界。消息列表存储仅选预览列；D1 用私有存储行解码，不借用 HTTP 字段别名。`http/contract/events.rs` 定义事件，`http/sse.rs` 只负责帧编码和心跳。新增操作只需修改 App；若遗漏共享分发会编译失败，不要求两个部署补写 Handler。HTTP 契约以当前路由、DTO 和生成的 OpenAPI 为准，数据库契约以迁移及存储实现为准；不兼容变更和升级要求记录在 [CHANGELOG.md](../../CHANGELOG.md)。
 
 平台实现两个小边界：
 

@@ -34,7 +34,13 @@ fn form_signature_covers_original_encoded_body() {
     assert_eq!(parsed.raw.as_json(), Some(&payload));
     assert_eq!(parsed.provider(), Provider::Github);
     assert_eq!(
-        github.repository.as_ref().unwrap().full_name.as_deref(),
+        github
+            .payload
+            .repository
+            .value()
+            .unwrap()
+            .full_name
+            .value_deref(),
         Some("owner/repo")
     );
     assert_eq!(
@@ -104,14 +110,15 @@ fn issue_comments_are_normal_and_retain_structured_detail() {
     let PlatformData::Github(github) = &parsed.data else {
         panic!()
     };
-    assert_eq!(github.issue.as_ref().unwrap().number, Some(123));
+    let github = &github.payload;
+    assert_eq!(github.issue.value().unwrap().number.into_value(), Some(123));
     assert_eq!(
-        github.comment.as_ref().unwrap().body.as_deref(),
+        github.comment.value().unwrap().body.value_deref(),
         Some("  Reply  ")
     );
     assert_eq!(
-        github.issue.as_ref().unwrap().labels[0].name.as_deref(),
-        Some("bug")
+        serde_json::to_value(&github.issue.value().unwrap().labels.value().unwrap()[0]).unwrap()["name"],
+        "bug"
     );
 }
 
@@ -168,7 +175,7 @@ fn malformed_signatures_and_duplicate_form_fields_are_rejected() {
     ));
 }
 
-fn modeled(kind: &str, payload: serde_json::Value) -> super::GithubEvent {
+fn modeled(kind: &str, payload: serde_json::Value) -> super::GithubWebhookPayload {
     let parsed = event(
         receive_with(
             Provider::Github,
@@ -185,7 +192,7 @@ fn modeled(kind: &str, payload: serde_json::Value) -> super::GithubEvent {
     let PlatformData::Github(github) = parsed.data else {
         panic!()
     };
-    *github
+    github.payload
 }
 
 #[test]
@@ -203,36 +210,94 @@ fn issue_pr_and_action_context_are_structured() {
                 "requested_reviewers":[{"id":8}],"requested_teams":[{"id":14,"slug":"team"}],"labels":["legacy",{"id":9,"name":"bug"}]}
         }),
     );
-    let issue = github.issue.unwrap();
-    assert_eq!(issue.id, Some(11));
-    assert_eq!(issue.state_reason.as_deref(), Some("not_planned"));
+    let issue = github.issue.into_value().unwrap();
+    assert_eq!(issue.id.into_value(), Some(11));
+    assert_eq!(issue.state_reason.value_deref(), Some("not_planned"));
     assert!(issue.pull_request.is_some());
-    assert_eq!(issue.assignees[0].id, Some(8));
-    assert_eq!(issue.locked, Some(true));
-    let pr = github.pull_request.unwrap();
-    assert_eq!(pr.issue.draft, Some(true));
-    assert_eq!(pr.head_branch.as_deref(), Some("feature"));
-    assert_eq!(pr.base_branch.as_deref(), Some("main"));
-    assert_eq!(pr.head.unwrap().repo.unwrap().owner.unwrap().id, Some(8));
+    assert_eq!(issue.assignees.value().unwrap()[0].id.into_value(), Some(8));
+    assert_eq!(issue.locked.into_value(), Some(true));
+    let pr = github.pull_request.into_value().unwrap();
+    assert_eq!(pr.issue.draft.into_value(), Some(true));
+    assert_eq!(
+        pr.head.value().unwrap().ref_name.value_deref(),
+        Some("feature")
+    );
+    assert_eq!(
+        pr.base.value().unwrap().ref_name.value_deref(),
+        Some("main")
+    );
+    assert_eq!(
+        pr.head
+            .into_value()
+            .unwrap()
+            .repo
+            .into_value()
+            .unwrap()
+            .owner
+            .into_value()
+            .unwrap()
+            .id
+            .into_value(),
+        Some(8)
+    );
     assert_eq!(
         (
-            pr.additions,
-            pr.deletions,
-            pr.changed_files,
-            pr.commits,
-            pr.review_comments
+            pr.additions.into_value(),
+            pr.deletions.into_value(),
+            pr.changed_files.into_value(),
+            pr.commits.into_value(),
+            pr.review_comments.into_value()
         ),
         (Some(4), Some(2), Some(1), Some(2), Some(3))
     );
-    assert_eq!(pr.requested_reviewers[0].id, Some(8));
-    assert_eq!(pr.requested_teams[0].slug.as_deref(), Some("team"));
-    assert_eq!(pr.issue.labels[0].name.as_deref(), Some("legacy"));
-    assert_eq!(pr.issue.labels[1].id, Some(9));
-    assert_eq!(github.assignee.unwrap().user_type.as_deref(), Some("User"));
-    assert_eq!(github.label.unwrap().default, Some(false));
-    assert_eq!(github.milestone.unwrap().closed_issues, Some(3));
     assert_eq!(
-        github.changes.unwrap().title.unwrap().from.as_deref(),
+        pr.requested_reviewers.value().unwrap()[0].id.into_value(),
+        Some(8)
+    );
+    assert_eq!(
+        pr.requested_teams.value().unwrap()[0].slug.value_deref(),
+        Some("team")
+    );
+    assert_eq!(
+        serde_json::to_value(&pr.issue.labels.value().unwrap()[0]).unwrap(),
+        "legacy"
+    );
+    assert_eq!(
+        serde_json::to_value(&pr.issue.labels.value().unwrap()[1]).unwrap()["id"],
+        9
+    );
+    assert_eq!(
+        github
+            .assignee
+            .into_value()
+            .unwrap()
+            .user_type
+            .value_deref(),
+        Some("User")
+    );
+    assert_eq!(
+        github.label.into_value().unwrap().default.into_value(),
+        Some(false)
+    );
+    assert_eq!(
+        github
+            .milestone
+            .into_value()
+            .unwrap()
+            .closed_issues
+            .into_value(),
+        Some(3)
+    );
+    assert_eq!(
+        github
+            .changes
+            .into_value()
+            .unwrap()
+            .title
+            .into_value()
+            .unwrap()
+            .from
+            .value_deref(),
         Some("Old title")
     );
 }
@@ -244,23 +309,38 @@ fn reviews_preserve_code_locations_reply_threads_and_review_outcome() {
         "pull_request_review_comment",
         json!({"comment":comment,"review":{"id":21,"state":"changes_requested","body":"  Please fix  ","user":{"id":8},"submitted_at":"2026-01-01T00:00:00Z"},"thread":{"node_id":"thread-id","comments":[comment]}}),
     );
-    let review = github.review.unwrap();
-    assert_eq!(review.state.as_deref(), Some("changes_requested"));
-    assert_eq!(review.body.as_deref(), Some("  Please fix  "));
-    let comment = github.comment.unwrap();
-    assert_eq!(comment.path.as_deref(), Some("src/lib.rs"));
+    let review = github.review.into_value().unwrap();
+    assert_eq!(review.state.value_deref(), Some("changes_requested"));
+    assert_eq!(review.body.value_deref(), Some("  Please fix  "));
+    let comment = github.comment.into_value().unwrap();
+    assert_eq!(comment.path.value_deref(), Some("src/lib.rs"));
     assert_eq!(
-        (comment.line, comment.original_line, comment.start_line),
+        (
+            comment.line.into_value(),
+            comment.original_line.into_value(),
+            comment.start_line.into_value()
+        ),
         (Some(2), Some(1), Some(1))
     );
-    assert_eq!(comment.in_reply_to_id, Some(22));
-    assert_eq!(comment.pull_request_review_id, Some(21));
-    assert_eq!(comment.body.as_deref(), Some("  Review\n  "));
-    assert!(comment.diff_hunk.unwrap().ends_with('\n'));
-    assert_eq!(comment.reactions.unwrap().plus_one, Some(2));
-    let thread = github.thread.unwrap();
-    assert_eq!(thread.node_id.as_deref(), Some("thread-id"));
-    assert_eq!(thread.comments[0].id, Some(20));
+    assert_eq!(comment.in_reply_to_id.into_value(), Some(22));
+    assert_eq!(comment.pull_request_review_id.into_value(), Some(21));
+    assert_eq!(comment.body.value_deref(), Some("  Review\n  "));
+    assert!(comment.diff_hunk.into_value().unwrap().ends_with('\n'));
+    assert_eq!(
+        comment
+            .reactions
+            .into_value()
+            .unwrap()
+            .plus_one
+            .into_value(),
+        Some(2)
+    );
+    let thread = github.thread.into_value().unwrap();
+    assert_eq!(thread.node_id.value_deref(), Some("thread-id"));
+    assert_eq!(
+        thread.comments.value().unwrap()[0].id.into_value(),
+        Some(20)
+    );
 }
 
 #[test]
@@ -276,26 +356,49 @@ fn workflow_jobs_steps_and_check_outputs_are_structured() {
         }),
     );
     assert_eq!(
-        github.workflow.unwrap().path.as_deref(),
+        github.workflow.into_value().unwrap().path.value_deref(),
         Some(".github/workflows/ci.yml")
     );
-    let run = github.workflow_run.unwrap();
-    assert_eq!(run.run_attempt, Some(3));
-    assert_eq!(run.actor.unwrap().id, Some(4));
-    assert_eq!(run.triggering_actor.unwrap().id, Some(5));
-    assert_eq!(run.pull_requests[0].number, Some(6));
-    let job = github.workflow_job.unwrap();
-    assert_eq!(job.run_id, Some(2));
-    assert_eq!(job.runner_group_id, Some(8));
-    assert_eq!(job.steps[0].conclusion.as_deref(), Some("failure"));
-    let check = github.check_run.unwrap();
-    assert_eq!(check.app.unwrap().slug.as_deref(), Some("ci"));
-    assert_eq!(check.check_suite.unwrap().id, Some(11));
+    let run = github.workflow_run.into_value().unwrap();
+    assert_eq!(run.run_attempt.into_value(), Some(3));
+    assert_eq!(run.actor.into_value().unwrap().id.into_value(), Some(4));
     assert_eq!(
-        check.output.unwrap().summary.as_deref(),
+        run.triggering_actor.into_value().unwrap().id.into_value(),
+        Some(5)
+    );
+    assert_eq!(
+        run.pull_requests.value().unwrap()[0].number.into_value(),
+        Some(6)
+    );
+    let job = github.workflow_job.into_value().unwrap();
+    assert_eq!(job.run_id.into_value(), Some(2));
+    assert_eq!(job.runner_group_id.into_value(), Some(8));
+    assert_eq!(
+        job.steps.value().unwrap()[0].conclusion.value_deref(),
+        Some("failure")
+    );
+    let check = github.check_run.into_value().unwrap();
+    assert_eq!(
+        check.app.into_value().unwrap().slug.value_deref(),
+        Some("ci")
+    );
+    assert_eq!(
+        check.check_suite.into_value().unwrap().id.into_value(),
+        Some(11)
+    );
+    assert_eq!(
+        check.output.into_value().unwrap().summary.value_deref(),
         Some("  Summary  ")
     );
-    assert_eq!(github.check_suite.unwrap().latest_check_runs_count, Some(1));
+    assert_eq!(
+        github
+            .check_suite
+            .into_value()
+            .unwrap()
+            .latest_check_runs_count
+            .into_value(),
+        Some(1)
+    );
 }
 
 #[test]
@@ -311,28 +414,79 @@ fn releases_discussions_and_deployments_have_business_models() {
             "deployment_status":{"id":11,"state":"failure","environment_url":"https://example.com/preview","log_url":"https://example.com/log"}
         }),
     );
-    let release = github.release.unwrap();
-    assert_eq!(release.tag_name.as_deref(), Some("v1.0.0"));
-    assert_eq!(release.body.as_deref(), Some("  Notes\n"));
-    assert_eq!(release.assets[0].download_count, Some(4));
-    assert_eq!(release.assets[0].uploader.as_ref().unwrap().id, Some(3));
-    let discussion = github.discussion.unwrap();
-    assert_eq!(discussion.category.unwrap().is_answerable, Some(true));
-    assert_eq!(discussion.answer_chosen_by.unwrap().id, Some(3));
-    assert_eq!(github.answer.unwrap().parent_id, Some(8));
-    assert_eq!(github.old_answer.unwrap().id, Some(8));
-    let changes = github.changes.unwrap();
-    assert_eq!(changes.body.unwrap().from.as_deref(), Some(""));
+    let release = github.release.into_value().unwrap();
+    assert_eq!(release.tag_name.value_deref(), Some("v1.0.0"));
+    assert_eq!(release.body.value_deref(), Some("  Notes\n"));
     assert_eq!(
-        changes.category.unwrap().from.unwrap().name.as_deref(),
+        release.assets.value().unwrap()[0]
+            .download_count
+            .into_value(),
+        Some(4)
+    );
+    assert_eq!(
+        release.assets.value().unwrap()[0]
+            .uploader
+            .value()
+            .unwrap()
+            .id
+            .into_value(),
+        Some(3)
+    );
+    let discussion = github.discussion.into_value().unwrap();
+    assert_eq!(
+        discussion
+            .category
+            .into_value()
+            .unwrap()
+            .is_answerable
+            .into_value(),
+        Some(true)
+    );
+    assert_eq!(
+        discussion
+            .answer_chosen_by
+            .into_value()
+            .unwrap()
+            .id
+            .into_value(),
+        Some(3)
+    );
+    assert_eq!(
+        github.answer.into_value().unwrap().parent_id.into_value(),
+        Some(8)
+    );
+    assert_eq!(
+        github.old_answer.into_value().unwrap().id.into_value(),
+        Some(8)
+    );
+    let changes = github.changes.into_value().unwrap();
+    assert_eq!(
+        changes.body.into_value().unwrap().from.value_deref(),
+        Some("")
+    );
+    assert_eq!(
+        changes
+            .category
+            .into_value()
+            .unwrap()
+            .from
+            .into_value()
+            .unwrap()
+            .name
+            .value_deref(),
         Some("General")
     );
-    let deployment = github.deployment.unwrap();
-    assert_eq!(deployment.ref_name.as_deref(), Some("main"));
-    assert_eq!(deployment.production_environment, Some(false));
-    assert_eq!(deployment.payload.unwrap()["custom"], "kept");
+    let deployment = github.deployment.into_value().unwrap();
+    assert_eq!(deployment.ref_name.value_deref(), Some("main"));
+    assert_eq!(deployment.production_environment.into_value(), Some(false));
+    assert_eq!(deployment.payload.into_value().unwrap()["custom"], "kept");
     assert_eq!(
-        github.deployment_status.unwrap().state.as_deref(),
+        github
+            .deployment_status
+            .into_value()
+            .unwrap()
+            .state
+            .value_deref(),
         Some("failure")
     );
 }
@@ -343,43 +497,62 @@ fn root_level_git_events_and_timestamp_variants_are_modeled() {
         "push",
         json!({"ref":"refs/heads/main","before":"a","after":"b","forced":true,"deleted":false,"pusher":{"name":"actor","email":"synthetic@example.com"},"commits":[{"id":"b","message":"  Commit\n","author":{"name":"author"},"added":["new.rs"],"removed":[],"modified":["lib.rs"]}],"head_commit":null,"repository":{"created_at":1,"pushed_at":2,"updated_at":"2026-01-01T00:00:00Z"}}),
     );
-    let push = github.push.unwrap();
-    assert_eq!(push.ref_name.as_deref(), Some("refs/heads/main"));
-    assert_eq!(push.forced, Some(true));
-    assert!(push.head_commit.is_none());
-    assert_eq!(push.commits[0].message.as_deref(), Some("  Commit\n"));
-    assert_eq!(push.commits[0].added, ["new.rs"]);
-    let repository = github.repository.unwrap();
-    assert_eq!(repository.created_at, Some(super::GithubTimestamp::Unix(1)));
+    let push = &github;
+    assert_eq!(push.ref_name.value_deref(), Some("refs/heads/main"));
+    assert_eq!(push.forced.into_value(), Some(true));
+    assert_eq!(push.head_commit, Some(None));
+    assert_eq!(
+        push.commits.value().unwrap()[0].message.value_deref(),
+        Some("  Commit\n")
+    );
+    assert_eq!(
+        push.commits.value().unwrap()[0]
+            .added
+            .value()
+            .unwrap()
+            .as_slice(),
+        ["new.rs"]
+    );
+    let repository = github.repository.into_value().unwrap();
+    assert_eq!(
+        repository.created_at.into_value(),
+        Some(super::GithubTimestamp::Unix(1))
+    );
     assert!(matches!(
-        repository.updated_at,
+        repository.updated_at.into_value(),
         Some(super::GithubTimestamp::Text(_))
     ));
     let github = modeled(
         "delete",
         json!({"ref":"feature","ref_type":"branch","pusher_type":"user"}),
     );
-    assert_eq!(github.git_ref.unwrap().ref_type.as_deref(), Some("branch"));
-    assert!(github.push.is_none());
+    assert_eq!(github.ref_type.value_deref(), Some("branch"));
+    assert!(github.commits.is_none());
     let github = modeled(
         "status",
         json!({"id":3,"state":"error","context":"ci","description":"Failed","sha":"b","commit":{"sha":"b","commit":{"message":"Commit","author":{"name":"author"}}},"branches":[{"name":"main","protected":false}]}),
     );
-    let status = github.commit_status.unwrap();
-    assert_eq!(status.state.as_deref(), Some("error"));
+    let status = github;
+    assert_eq!(status.state.value_deref(), Some("error"));
     assert_eq!(
         status
             .commit
+            .into_value()
             .unwrap()
             .commit
+            .into_value()
             .unwrap()
             .author
+            .into_value()
             .unwrap()
             .name
-            .as_deref(),
+            .value_deref(),
         Some("author")
     );
-    assert_eq!(status.branches[0].protected, Some(false));
+    assert_eq!(
+        status.branches.value().unwrap()[0].protected.into_value(),
+        Some(false)
+    );
 }
 
 #[test]
@@ -388,22 +561,14 @@ fn malformed_new_fields_do_not_discard_siblings_or_reject_events() {
         "workflow_job",
         json!({"issue":{"number":1,"assignees":[false,{"id":2}],"labels":[null,"legacy",{"id":3}]},"workflow_job":{"id":"wrong","name":"Still present","steps":[null,{"number":1,"name":"Step","conclusion":{"unexpected":true}}]},"review":[],"future":{"opaque":true}}),
     );
-    let job = github.workflow_job.unwrap();
+    let job = github.workflow_job.into_value().unwrap();
     assert!(job.id.is_none());
-    assert_eq!(job.name.as_deref(), Some("Still present"));
-    assert_eq!(job.steps.len(), 1);
-    assert!(job.steps[0].conclusion.is_none());
+    assert_eq!(job.name.value_deref(), Some("Still present"));
+    assert_eq!(job.steps.value().unwrap().len(), 1);
+    assert!(job.steps.value().unwrap()[0].conclusion.is_none());
     assert!(github.review.is_none());
-    let issue = github.issue.unwrap();
-    assert_eq!(issue.assignees.len(), 1);
-    assert_eq!(issue.assignees[0].id, Some(2));
-    assert_eq!(issue.labels.len(), 2);
-    let historical: super::GithubEvent = serde_json::from_value(json!({"action":"opened","issue":{"number":42,"labels":[]},"pull_request":{"number":43,"labels":[],"merged":false,"head_branch":"feature","base_branch":"main"}})).unwrap();
-    assert_eq!(historical.issue.unwrap().number, Some(42));
-    assert!(historical.review.is_none());
-    assert!(historical.workflow_job.is_none());
-    assert_eq!(
-        historical.pull_request.unwrap().head_branch.as_deref(),
-        Some("feature")
-    );
+    let issue = github.issue.into_value().unwrap();
+    assert_eq!(issue.assignees.value().unwrap().len(), 1);
+    assert_eq!(issue.assignees.value().unwrap()[0].id.into_value(), Some(2));
+    assert_eq!(issue.labels.value().unwrap().len(), 2);
 }

@@ -26,7 +26,7 @@ fn snapshot_thin_and_rotating_signatures() {
             .unwrap(),
         );
         assert_eq!(
-            matches!(parsed.data, PlatformData::Stripe(StripeEvent::Thin(_))),
+            matches!(&parsed.data, PlatformData::Stripe(webhook) if webhook.payload.object.value_deref() == Some("v2.core.event")),
             is_thin
         );
         if is_thin {
@@ -138,7 +138,7 @@ fn unknown_envelopes_are_rejected() {
             Provider::Stripe,
             Authentication::None,
             &Vec::new(),
-            br#"{"id":"evt_1","type":"test","object":"unknown"}"#
+            br#"{"id":"evt_1","type":"test","object":"unknown"}"#,
         ),
         Err(WebhookError::Unsupported(_))
     ));

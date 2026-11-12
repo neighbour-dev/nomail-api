@@ -17,7 +17,7 @@ fn events_interactions_and_slash_commands() {
     let events = br#"{"type":"event_callback","event_id":"Ev1","team_id":"T1","event":{"type":"message","text":"hello"}}"#;
     let interaction = serde_urlencoded::to_string([(
         "payload",
-        r#"{"type":"block_actions","actions":[{"value":"approve"}]}"#,
+        r#"{"type":"block_actions","team":{"id":"T1"},"user":{"id":"U1"},"actions":[{"value":"approve"}]}"#,
     )])
     .unwrap();
     let command = b"team_id=T1&command=%2Fexample&text=hello";
@@ -39,12 +39,33 @@ fn events_interactions_and_slash_commands() {
             )
             .unwrap(),
         );
-        assert!(matches!(
-            (&parsed.data, kind),
-            (PlatformData::Slack(SlackEvent::EventsApi(_)), 0)
-                | (PlatformData::Slack(SlackEvent::Interaction(_)), 1)
-                | (PlatformData::Slack(SlackEvent::SlashCommand(_)), 2)
-        ));
+        let PlatformData::Slack(webhook) = &parsed.data else {
+            panic!()
+        };
+        match kind {
+            0 => assert_eq!(
+                webhook.payload.event_type.value_deref(),
+                Some("event_callback")
+            ),
+            1 => {
+                assert_eq!(
+                    webhook.payload.event_type.value_deref(),
+                    Some("block_actions")
+                );
+                assert_eq!(
+                    webhook.payload.team.value().unwrap().id.value_deref(),
+                    Some("T1")
+                );
+                assert_eq!(
+                    webhook.payload.user.value().unwrap().id.value_deref(),
+                    Some("U1")
+                );
+                assert!(webhook.payload.team_id.is_none());
+                assert!(webhook.payload.user_id.is_none());
+            }
+            2 => assert_eq!(webhook.payload.command.value_deref(), Some("/example")),
+            _ => unreachable!(),
+        }
         assert!(!parsed.to_message_content().content.is_empty());
         match kind {
             0 => assert_eq!(parsed.raw.as_json().unwrap()["event"]["text"], "hello"),

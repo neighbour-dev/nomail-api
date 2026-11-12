@@ -7,10 +7,28 @@ pub use models::*;
 #[cfg(test)]
 mod tests;
 
+use super::JsonFieldExt;
 use crate::webhook::{
-    Authentication, EventContent, EventMetadata, MessageContent, PlatformData, PlatformEvent,
-    ReceiveOutcome, WebhookConfig, WebhookError, WebhookRequest, crypto, support::*,
+    Authentication, EventContent, EventMetadata, MessageContent, PlatformEvent, ReceiveOutcome,
+    WebhookConfig, WebhookError, WebhookRequest, crypto, support::*,
 };
+
+webhook_header!(AppStoreConnectWebhookHeader {});
+webhook!(
+    AppStoreConnectWebhook,
+    AppStoreConnectWebhookHeader,
+    AppStoreConnectWebhookPayload
+);
+
+impl AppStoreConnectWebhook {
+    pub fn to_message_content(
+        &self,
+        metadata: &EventMetadata,
+        raw: &EventContent,
+    ) -> MessageContent {
+        self.payload.to_message_content(metadata, raw)
+    }
+}
 
 fn verify_signature(secret: &str, request: &WebhookRequest<'_>) -> Result<(), WebhookError> {
     let values = request.headers.values("x-apple-signature");
@@ -42,20 +60,29 @@ pub(in crate::webhook) fn receive(
         _ => return Err(invalid_auth()),
     }
     let payload = object(request.body)?;
-    let event = AppStoreConnectEvent::from_payload(&payload)?;
     // Apple redeliveries share the event ID; the related instance can be shared
     // by many distinct state-change events and must never be the dedup key.
     let metadata = metadata(
-        event.data.event_type.clone(),
-        event.data.version.map(|v| v.to_string()),
+        text(&payload, &["data", "type"]),
+        payload
+            .get("data")
+            .and_then(|v| v.get("version"))
+            .and_then(|v| v.as_u64())
+            .map(|v| v.to_string()),
         "appstoreconnect:event",
-        event.data.id.clone().unwrap_or_default(),
+        payload
+            .get("data")
+            .and_then(|v| v.get("id"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_owned(),
     );
-    Ok(PlatformEvent {
+    Ok(PlatformEvent::from_payload(
+        config.provider,
         metadata,
-        data: PlatformData::AppStoreConnect(Box::new(event)),
-        raw: EventContent::Json(payload),
-    }
+        EventContent::Json(payload),
+        request,
+    )?
     .into())
 }
 
@@ -68,41 +95,41 @@ fn transition(old: Option<&str>, new: Option<&str>) -> String {
     }
 }
 
-impl AppStoreConnectEvent {
+impl AppStoreConnectWebhookPayload {
     pub fn to_message_content(
         &self,
         metadata: &EventMetadata,
         raw: &EventContent,
     ) -> MessageContent {
         let empty = AppStoreConnectAttributes::default();
-        let attrs = self.data.attributes.as_ref().unwrap_or(&empty);
+        let attrs = self.data.attributes.value().unwrap_or(&empty);
         let (label, content) = match metadata.event_type.as_str() {
             "appStoreVersionAppVersionStateUpdated" => (
                 "App version state updated",
-                transition(attrs.old_value.as_deref(), attrs.new_value.as_deref()),
+                transition(attrs.old_value.value_deref(), attrs.new_value.value_deref()),
             ),
             "buildBetaDetailExternalBuildStateUpdated" => (
                 "External beta state updated",
                 transition(
-                    attrs.old_external_build_state.as_deref(),
-                    attrs.new_external_build_state.as_deref(),
+                    attrs.old_external_build_state.value_deref(),
+                    attrs.new_external_build_state.value_deref(),
                 ),
             ),
             "buildUploadStateUpdated" => (
                 "Build upload state updated",
-                transition(attrs.old_state.as_deref(), attrs.new_state.as_deref()),
+                transition(attrs.old_state.value_deref(), attrs.new_state.value_deref()),
             ),
             "backgroundAssetVersionStateUpdated" => (
                 "Background asset state updated",
-                transition(attrs.old_state.as_deref(), attrs.new_state.as_deref()),
+                transition(attrs.old_state.value_deref(), attrs.new_state.value_deref()),
             ),
             "backgroundAssetVersionExternalBetaReleaseStateUpdated" => (
                 "Background asset external beta state updated",
-                transition(attrs.old_state.as_deref(), attrs.new_state.as_deref()),
+                transition(attrs.old_state.value_deref(), attrs.new_state.value_deref()),
             ),
             "backgroundAssetVersionAppStoreReleaseStateUpdated" => (
                 "Background asset App Store release state updated",
-                transition(attrs.old_state.as_deref(), attrs.new_state.as_deref()),
+                transition(attrs.old_state.value_deref(), attrs.new_state.value_deref()),
             ),
             "backgroundAssetVersionInternalBetaReleaseCreated" => (
                 "Background asset internal beta release created",
@@ -124,24 +151,26 @@ impl AppStoreConnectEvent {
             | "alternativeDistributionTerritoryAvailabilityUpdated" => {
                 let availability = attrs
                     .available
-                    .map(|v| if v { "Available" } else { "Unavailable" })
+                    .value()
+                    .map(|v| if *v { "Available" } else { "Unavailable" })
                     .unwrap_or("Availability updated");
-                let content = if attrs.territories.is_empty() {
+                let territories = attrs.territories.value_deref().unwrap_or_default();
+                let content = if territories.is_empty() {
                     availability.into()
                 } else {
-                    format!("{availability}: {}", attrs.territories.join(", "))
+                    format!("{availability}: {}", territories.join(", "))
                 };
                 ("Alternative distribution availability updated", content)
             }
             _ => (metadata.event_type.as_str(), raw.to_string()),
         };
-        let relationships = self.data.relationships.as_ref();
+        let relationships = self.data.relationships.value();
         let url = relationships
-            .and_then(|r| r.instance.as_ref())
+            .and_then(|r| r.instance.value())
             .and_then(AppStoreConnectRelationship::self_url)
             .or_else(|| {
                 relationships
-                    .and_then(|r| r.marketplace_app.as_ref())
+                    .and_then(|r| r.marketplace_app.value())
                     .and_then(AppStoreConnectRelationship::self_url)
             });
         message(

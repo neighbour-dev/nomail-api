@@ -3,20 +3,25 @@ pub mod config;
 #[cfg(test)]
 mod tests;
 use crate::webhook::{
-    Authentication, EventContent, EventMetadata, MessageContent, PlatformData, PlatformEvent,
-    ReceiveOutcome, WebhookConfig, WebhookError, WebhookRequest, crypto, support::*,
+    Authentication, EventContent, EventMetadata, MessageContent, PlatformEvent, ReceiveOutcome,
+    WebhookConfig, WebhookError, WebhookRequest, crypto, support::*,
 };
 use base64::{Engine, engine::general_purpose::STANDARD};
-use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
-pub struct ShopifyEvent {
-    pub shop_domain: String,
-    /// An operation identifier is distinct from the delivery deduplication key.
-    pub operation_id: Option<String>,
-    pub resource_id: Option<String>,
-}
+webhook_header!(ShopifyWebhookHeader {
+    topic = "x-shopify-topic", shop_domain = "x-shopify-shop-domain", api_version = "x-shopify-api-version",
+    event_id = "x-shopify-event-id", webhook_id = "x-shopify-webhook-id", triggered_at = "x-shopify-triggered-at",
+});
+// Shopify permits field-cropped, versioned resources. IDs retain their native
+// JSON number/string representation instead of becoming resource_id strings.
+native_model!(ShopifyWebhookPayload {
+    id: Value = "id",
+    admin_graphql_api_id: String = "admin_graphql_api_id",
+    title: String = "title",
+    name: String = "name",
+});
+webhook!(ShopifyWebhook, ShopifyWebhookHeader, ShopifyWebhookPayload);
 
 pub(in crate::webhook) fn receive(
     config: &WebhookConfig<'_>,
@@ -42,25 +47,21 @@ pub(in crate::webhook) fn receive(
         "missing Shopify shop domain",
     )?;
     let version = optional(request.header("x-shopify-api-version"));
-    let event = ShopifyEvent {
-        resource_id: optional(text(&payload, &["id"])),
-        shop_domain: shop_domain.clone(),
-        operation_id: optional(request.header("x-shopify-event-id")),
-    };
-    Ok(PlatformEvent {
-        metadata: metadata(
+    Ok(PlatformEvent::from_payload(
+        config.provider,
+        metadata(
             topic,
             version,
             &format!("shopify:{shop_domain}:delivery"),
             request.header("x-shopify-webhook-id").into(),
         ),
-        data: PlatformData::Shopify(event),
-        raw: EventContent::Json(payload),
-    }
+        EventContent::Json(payload),
+        request,
+    )?
     .into())
 }
 
-impl ShopifyEvent {
+impl ShopifyWebhook {
     pub fn to_message_content(
         &self,
         metadata: &EventMetadata,
@@ -74,7 +75,7 @@ impl ShopifyEvent {
                 text(payload, &["name"]),
                 raw.to_string(),
             ]),
-            self.shop_domain.clone(),
+            self.header.shop_domain.clone().unwrap_or_default(),
             "normal",
             String::new(),
         )

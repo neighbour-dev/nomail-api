@@ -55,8 +55,9 @@ macro_rules! model {
         #[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
         pub struct $name {
             $(pub $required: $required_ty,)?
-            $(#[serde(rename = $key, skip_serializing_if = "Option::is_none")]
-            pub $field: Option<$ty>,)*
+            $(#[serde(rename = $key, default, skip_serializing_if = "Option::is_none",
+                deserialize_with = "crate::webhook::platforms::native::deserialize_present")]
+            pub $field: crate::webhook::platforms::native::JsonField<$ty>,)*
         }
 
         impl TelegramValue for $name {
@@ -64,7 +65,7 @@ macro_rules! model {
                 value.as_object()?;
                 Some(Self {
                     $($required: <$required_ty>::read(&value[stringify!($required)])?,)?
-                    $($field: <$ty>::read(&value[$key]),)*
+                    $($field: crate::webhook::platforms::native::read_json_field(value, $key, <$ty>::read),)*
                 })
             }
         }

@@ -2,53 +2,51 @@
 pub mod config;
 #[cfg(test)]
 mod tests;
+use super::JsonFieldExt;
 use crate::webhook::{
-    Authentication, EventContent, EventMetadata, MessageContent, PlatformData, PlatformEvent,
-    ReceiveOutcome, WebhookConfig, WebhookError, WebhookRequest, crypto, support::*,
+    Authentication, EventContent, EventMetadata, MessageContent, PlatformEvent, ReceiveOutcome,
+    WebhookConfig, WebhookError, WebhookRequest, crypto, support::*,
 };
-use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
-pub enum SlackEvent {
-    EventsApi(SlackCallback),
-    Interaction(SlackInteraction),
-    SlashCommand(SlackCommand),
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
-pub struct SlackCallback {
-    pub team_id: Option<String>,
-    pub subtype: Option<String>,
-    pub text: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
-pub struct SlackInteraction {
-    pub team_id: Option<String>,
-    pub user_id: Option<String>,
-    pub actions: Vec<SlackAction>,
-    pub text: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
-pub struct SlackAction {
-    pub action_id: Option<String>,
-    pub value: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
-pub struct SlackCommand {
-    pub team_id: Option<String>,
-    pub user_id: Option<String>,
-    pub command: String,
-    pub text: Option<String>,
-}
+webhook_header!(SlackWebhookHeader {
+    retry_num = "x-slack-retry-num", retry_reason = "x-slack-retry-reason",
+});
+webhook!(SlackWebhook, SlackWebhookHeader, SlackWebhookPayload);
+native_model!(SlackWebhookPayload {
+    event_type: String = "type", event_id: String = "event_id", event_time: i64 = "event_time",
+    team_id: String = "team_id", api_app_id: String = "api_app_id", event: SlackCallbackEvent = "event",
+    team: SlackTeam = "team", user: SlackUser = "user", actions: Vec<SlackAction> = "actions",
+    user_id: String = "user_id", command: String = "command", text: String = "text",
+    channel_id: String = "channel_id", channel_name: String = "channel_name",
+    team_domain: String = "team_domain", user_name: String = "user_name",
+    view: Value = "view", message: Value = "message", container: Value = "container",
+});
+native_model!(SlackCallbackEvent {
+    event_type: String = "type",
+    subtype: String = "subtype",
+    text: String = "text",
+    user: String = "user",
+    channel: String = "channel",
+    ts: String = "ts",
+    event_ts: String = "event_ts",
+});
+native_model!(SlackTeam {
+    id: String = "id",
+    domain: String = "domain"
+});
+native_model!(SlackUser {
+    id: String = "id",
+    username: String = "username",
+    name: String = "name",
+    team_id: String = "team_id"
+});
+native_model!(SlackAction {
+    action_id: String = "action_id",
+    value: String = "value",
+    action_type: String = "type",
+    block_id: String = "block_id",
+});
 
 pub(in crate::webhook) fn receive(
     config: &WebhookConfig<'_>,
@@ -61,33 +59,12 @@ pub(in crate::webhook) fn receive(
         }
         _ => return Err(invalid_auth()),
     }
-    let (event, metadata, raw) = if is_form(request) {
+    let (metadata, raw) = if is_form(request) {
         let fields = form(request.body)?;
         if let Some(encoded) = fields.get("payload").and_then(Value::as_str) {
             let payload = object(encoded.as_bytes())?;
             let event_type = required(text(&payload, &["type"]), "missing Slack interaction type")?;
-            let event = SlackEvent::Interaction(SlackInteraction {
-                team_id: optional(first(&[
-                    text(&payload, &["team_id"]),
-                    text(&payload, &["team", "id"]),
-                ])),
-                user_id: optional(text(&payload, &["user", "id"])),
-                actions: payload["actions"]
-                    .as_array()
-                    .map(|actions| {
-                        actions
-                            .iter()
-                            .map(|action| SlackAction {
-                                action_id: optional(text(action, &["action_id"])),
-                                value: optional(text(action, &["value"])),
-                            })
-                            .collect()
-                    })
-                    .unwrap_or_default(),
-                text: optional(text(&payload, &["text"])),
-            });
             (
-                event,
                 metadata(event_type, None, "slack:interaction", String::new()),
                 EventContent::Json(payload),
             )
@@ -98,16 +75,11 @@ pub(in crate::webhook) fn receive(
                     .map(|(key, value)| (key.clone(), value.as_str().unwrap_or("").to_owned()))
                     .collect(),
             );
-            let payload = Value::Object(fields);
-            let event_type = required(text(&payload, &["command"]), "missing Slack command")?;
-            let event = SlackEvent::SlashCommand(SlackCommand {
-                team_id: optional(text(&payload, &["team_id"])),
-                user_id: optional(text(&payload, &["user_id"])),
-                command: event_type.clone(),
-                text: optional(text(&payload, &["text"])),
-            });
+            let event_type = required(
+                text(&Value::Object(fields), &["command"]),
+                "missing Slack command",
+            )?;
             (
-                event,
                 metadata(event_type, None, "slack:command", String::new()),
                 raw,
             )
@@ -127,19 +99,7 @@ pub(in crate::webhook) fn receive(
                     "missing Slack event type",
                 )?;
                 let id = text(&payload, &["event_id"]);
-                let event = SlackEvent::EventsApi(SlackCallback {
-                    team_id: optional(first(&[
-                        text(&payload, &["team_id"]),
-                        text(&payload, &["team", "id"]),
-                    ])),
-                    subtype: optional(text(&payload, &["event", "subtype"])),
-                    text: optional(first(&[
-                        text(&payload, &["event", "text"]),
-                        text(&payload, &["text"]),
-                    ])),
-                });
                 (
-                    event,
                     metadata(event_type, None, "slack:event", id),
                     EventContent::Json(payload),
                 )
@@ -147,12 +107,7 @@ pub(in crate::webhook) fn receive(
             _ => return Err(WebhookError::Unsupported("unsupported Slack request type")),
         }
     };
-    Ok(PlatformEvent {
-        metadata,
-        data: PlatformData::Slack(event),
-        raw,
-    }
-    .into())
+    Ok(PlatformEvent::from_payload(config.provider, metadata, raw, request)?.into())
 }
 
 fn verify_signature(
@@ -173,21 +128,31 @@ fn verify_signature(
     )
 }
 
-impl SlackEvent {
+impl SlackWebhook {
     pub fn to_message_content(
         &self,
         metadata: &EventMetadata,
         raw: &EventContent,
     ) -> MessageContent {
-        let (team_id, text) = match self {
-            Self::EventsApi(event) => (&event.team_id, &event.text),
-            Self::Interaction(event) => (&event.team_id, &event.text),
-            Self::SlashCommand(event) => (&event.team_id, &event.text),
-        };
+        let p = raw.as_json();
+        let team_id = p
+            .map(|p| first(&[text(p, &["team_id"]), text(p, &["team", "id"])]))
+            .unwrap_or_else(|| self.payload.team_id.value().cloned().unwrap_or_default());
+        let content = p
+            .map(|p| first(&[text(p, &["event", "text"]), text(p, &["text"])]))
+            .unwrap_or_else(|| {
+                self.payload
+                    .text
+                    .value()
+                    .map(String::as_str)
+                    .unwrap_or("")
+                    .trim()
+                    .to_owned()
+            });
         message(
             format!("Slack {}", metadata.event_type),
-            first(&[text.clone().unwrap_or_default(), raw.to_string()]),
-            team_id.clone().unwrap_or_else(|| "slack".into()),
+            first(&[content, raw.to_string()]),
+            first(&[team_id, "slack".into()]),
             "normal",
             String::new(),
         )

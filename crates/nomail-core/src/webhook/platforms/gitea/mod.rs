@@ -6,10 +6,16 @@ pub use models::*;
 mod tests;
 
 use crate::webhook::{
-    Authentication, EventContent, EventMetadata, MessageContent, PlatformData, PlatformEvent,
-    ReceiveOutcome, WebhookConfig, WebhookError, WebhookRequest, crypto, support::*,
+    Authentication, EventContent, EventMetadata, MessageContent, PlatformEvent, ReceiveOutcome,
+    WebhookConfig, WebhookError, WebhookRequest, crypto, support::*,
 };
 use serde_json::Value;
+
+webhook_header!(GiteaWebhookHeader {
+    event = "x-gitea-event", event_type = "x-gitea-event-type", delivery = "x-gitea-delivery",
+    hook_id = "x-gitea-hook-id", installation_target_type = "x-gitea-hook-installation-target-type",
+});
+webhook!(GiteaWebhook, GiteaWebhookHeader, GiteaWebhookPayload);
 
 pub(in crate::webhook) fn receive(
     config: &WebhookConfig<'_>,
@@ -51,24 +57,21 @@ pub(in crate::webhook) fn receive(
         request.header("x-gitea-event").into(),
         "missing Gitea event type",
     )?;
-    let mut event = GiteaEvent::from_payload(&event_type, &payload);
-    event.event_type = optional(request.header("x-gitea-event-type"));
-    event.installation_target_type =
-        optional(request.header("x-gitea-hook-installation-target-type"));
-    Ok(PlatformEvent {
-        metadata: metadata(
+    Ok(PlatformEvent::from_payload(
+        config.provider,
+        metadata(
             event_type,
             None,
             "gitea:delivery",
             request.header("x-gitea-delivery").into(),
         ),
-        data: PlatformData::Gitea(Box::new(event)),
-        raw: EventContent::Json(payload),
-    }
+        EventContent::Json(payload),
+        request,
+    )?
     .into())
 }
 
-impl GiteaEvent {
+impl GiteaWebhook {
     pub fn to_message_content(
         &self,
         metadata: &EventMetadata,
@@ -76,13 +79,9 @@ impl GiteaEvent {
     ) -> MessageContent {
         let p = raw.as_json().unwrap_or(&Value::Null);
         let kind = metadata.event_type.as_str();
-        let repository = self
-            .repository
-            .as_ref()
-            .and_then(|r| r.full_name.clone())
-            .unwrap_or_default();
+        let repository = text(p, &["repository", "full_name"]);
         let mut title = format!("Gitea {kind}");
-        for part in [self.action.clone().unwrap_or_default(), repository.clone()] {
+        for part in [text(p, &["action"]), repository.clone()] {
             if !part.is_empty() {
                 title.push_str(": ");
                 title.push_str(&part);
@@ -163,14 +162,7 @@ impl GiteaEvent {
         message(
             title,
             first(&[content, raw.to_string()]),
-            first(&[
-                repository,
-                self.sender
-                    .as_ref()
-                    .and_then(|u| u.login.clone())
-                    .unwrap_or_default(),
-                "gitea".into(),
-            ]),
+            first(&[repository, text(p, &["sender", "login"]), "gitea".into()]),
             "normal",
             first(&[url, text(p, &["repository", "html_url"])]),
         )

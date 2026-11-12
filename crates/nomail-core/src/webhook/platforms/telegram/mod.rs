@@ -5,10 +5,24 @@ pub use models::*;
 #[cfg(test)]
 mod tests;
 use crate::webhook::{
-    Authentication, EventContent, EventMetadata, MessageContent, PlatformData, PlatformEvent,
-    ReceiveOutcome, WebhookConfig, WebhookError, WebhookRequest, crypto, support::*,
+    Authentication, EventContent, EventMetadata, MessageContent, PlatformEvent, ReceiveOutcome,
+    WebhookConfig, WebhookError, WebhookRequest, crypto, support::*,
 };
 use models::TelegramValue;
+
+impl crate::webhook::platforms::native::NativeValue for TelegramWebhookPayload {
+    fn read(value: &serde_json::Value) -> Option<Self> {
+        <Self as TelegramValue>::read(value)
+    }
+}
+
+// The Bot API secret-token header is authentication, not persisted event data.
+webhook_header!(TelegramWebhookHeader {});
+webhook!(
+    TelegramWebhook,
+    TelegramWebhookHeader,
+    TelegramWebhookPayload
+);
 
 pub(in crate::webhook) fn receive(
     config: &WebhookConfig<'_>,
@@ -28,8 +42,8 @@ pub(in crate::webhook) fn receive(
         .ok_or(WebhookError::InvalidPayload("missing Telegram update_id"))?;
     let fields: Vec<_> = payload
         .as_object()
-        .expect("object was checked")
-        .keys()
+        .into_iter()
+        .flat_map(|object| object.keys())
         .filter(|key| key.as_str() != "update_id")
         .cloned()
         .collect();
@@ -42,24 +56,23 @@ pub(in crate::webhook) fn receive(
     }
     // Prefer a known branch over future metadata. Preserve a single unknown
     // branch, and accept update_id-only envelopes (the contract says at most one).
-    let kind = known.first().map(|s| s.as_str()).unwrap_or_else(|| {
-        if fields.len() == 1 {
-            fields[0].as_str()
-        } else {
-            "update"
-        }
-    });
-    let event = TelegramEvent::read(&payload)
-        .ok_or(WebhookError::InvalidPayload("invalid Telegram Update"))?;
-    Ok(PlatformEvent {
-        metadata: metadata(kind.to_owned(), None, "telegram:bot-update", id.to_string()),
-        data: PlatformData::Telegram(Box::new(event)),
-        raw: EventContent::Json(payload),
-    }
+    let kind = if known.len() == 1 {
+        known[0].as_str()
+    } else if fields.len() == 1 {
+        fields[0].as_str()
+    } else {
+        "update"
+    };
+    Ok(PlatformEvent::from_payload(
+        config.provider,
+        metadata(kind.to_owned(), None, "telegram:bot-update", id.to_string()),
+        EventContent::Json(payload),
+        request,
+    )?
     .into())
 }
 
-impl TelegramEvent {
+impl TelegramWebhook {
     pub fn to_message_content(
         &self,
         metadata: &EventMetadata,

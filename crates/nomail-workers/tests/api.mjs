@@ -303,15 +303,15 @@ test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, a
     assert.equal(before.provider, 'github');
     assert.equal(before.metadata.eventType, 'issue_comment');
     assert.equal(before.metadata.deduplicationKey.value, longId);
-    assert.equal(before.platformData.event.issue.number, 123);
-    assert.equal(before.platformData.event.issue.id, 2);
-    assert.equal(before.platformData.event.issue.assignees[0].type, 'User');
-    assert.equal(before.platformData.event.issue.pull_request.html_url, 'https://example.com/pull/123');
-    assert.equal(before.platformData.event.repository.private, true);
-    assert.equal(before.platformData.event.repository.created_at, '2026-01-01T00:00:00Z');
-    assert.equal(before.platformData.event.comment.updated_at, '2000-01-02T00:00:00Z');
-    assert.equal(before.platformData.event.issue.labels[0].name, 'bug');
-    assert.equal(before.platformData.event.comment.user.login, 'bob');
+    assert.equal(before.platformData.event.payload.issue.number, 123);
+    assert.equal(before.platformData.event.payload.issue.id, 2);
+    assert.equal(before.platformData.event.payload.issue.assignees[0].type, 'User');
+    assert.equal(before.platformData.event.payload.issue.pull_request.html_url, 'https://example.com/pull/123');
+    assert.equal(before.platformData.event.payload.repository.private, true);
+    assert.equal(before.platformData.event.payload.repository.created_at, '2026-01-01T00:00:00Z');
+    assert.equal(before.platformData.event.payload.comment.updated_at, '2000-01-02T00:00:00Z');
+    assert.equal(before.platformData.event.payload.issue.labels[0].name, 'bug');
+    assert.equal(before.platformData.event.payload.comment.user.login, 'bob');
     assert.notEqual(before.createdAt, comment.comment.created_at);
     const after = await api('PATCH', replyPath, { status: 'read', pinned: true }, token);
     assert.deepEqual(after.platformData, before.platformData);
@@ -323,10 +323,10 @@ test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, a
     const build = await githubReceive({ action: 'completed', workflow_run: { id: 10, name: 'CI', status: 'completed', conclusion: 'failure', head_branch: 'main', run_number: 11, display_title: 'Build PR', run_attempt: 2, actor: { id: 4, login: 'bob' } } }, 'workflow_run', 'ci-failure');
     const buildDetail = await api('GET', `/api/messages/${build.messageId}`, undefined, token);
     assert.equal(buildDetail.level, 'normal');
-    assert.equal(buildDetail.platformData.event.workflow_run.run_attempt, 2);
-    assert.equal(buildDetail.platformData.event.workflow_run.actor.id, 4);
-    assert.equal(buildDetail.platformData.event.workflow_run.conclusion, 'failure');
-    assert.equal(buildDetail.platformData.event.workflow_run.head_branch, 'main');
+    assert.equal(buildDetail.platformData.event.payload.workflow_run.run_attempt, 2);
+    assert.equal(buildDetail.platformData.event.payload.workflow_run.actor.id, 4);
+    assert.equal(buildDetail.platformData.event.payload.workflow_run.conclusion, 'failure');
+    assert.equal(buildDetail.platformData.event.payload.workflow_run.head_branch, 'main');
     assert.equal(Date.parse(buildDetail.expireAt) - Date.parse(buildDetail.createdAt), 3 * 86_400_000);
     await api('PATCH', `/api/webhook/configs/${github.id}`, { platform: signedGeneric('github-secret') }, token);
     const genericRaw = JSON.stringify({ id: longId, title: 'same value, different scope' });
@@ -342,9 +342,9 @@ test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, a
     const feishuMessage = await api('POST', feishu.url, feishuPayload);
     const feishuDetail = await api('GET', `/api/messages/${feishuMessage.messageId}`, undefined, token);
     assert.equal(feishuDetail.metadata.version, '2.0');
-    assert.equal(feishuDetail.platformData.event.V2.message.content_json.text, 'hello');
-    assert.equal(feishuDetail.platformData.event.V2.message.content_json.unknown, true);
-    assert.equal(feishuDetail.platformData.event.V2.sender.open_id, 'user-open-id');
+    assert.equal(JSON.parse(feishuDetail.platformData.event.payload.event.message.content).text, 'hello');
+    assert.equal(JSON.parse(feishuDetail.platformData.event.payload.event.message.content).unknown, true);
+    assert.equal(feishuDetail.platformData.event.payload.event.sender.sender_id.open_id, 'user-open-id');
     // Both credentials must remain independent through D1 storage/decryption.
     const encryptedFeishu = await api('POST', '/api/webhook/configs', { name: 'Encrypted Feishu', platform: { provider: 'feishu', credentials: { verificationToken: 'verification-token', encryptKey: 'different-encryption-key' } } }, token);
     const iv = Buffer.alloc(16, 7);
@@ -412,7 +412,7 @@ test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, a
           assert.equal(ack.data.duplicate, false);
           const path = `/api/messages/${ack.data.messageId}`;
           const detail = await api('GET', path, undefined, token);
-          assert.deepEqual(detail.platformData.event, fixture);
+          assert.deepEqual(detail.platformData.event.payload, fixture);
           assert.equal(detail.metadata.deduplicationKey.scope, 'telegram:bot-update');
           const original = await fetch(origin + path + '/raw', { headers: { Authorization: `Bearer ${token}` } });
           assert.equal(original.status, 200);
@@ -428,9 +428,9 @@ test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, a
       if (platform.provider === 'gitea') {
         const detail = await api('GET', `/api/messages/${ack.data.messageId}`, undefined, token);
         assert.equal(detail.platformData.provider, 'gitea');
-        assert.equal(detail.platformData.event.sender.id, -2);
-        assert.equal(detail.platformData.event.issue.is_locked, true);
-        assert.equal(detail.platformData.event.event_type, 'issue_assign');
+        assert.equal(detail.platformData.event.payload.sender.id, -2);
+        assert.equal(detail.platformData.event.payload.issue.is_locked, true);
+        assert.equal(detail.platformData.event.header.event_type, 'issue_assign');
         assert.equal(detail.metadata.deduplicationKey.scope, 'gitea:delivery');
         for (const [delivery, duplicate] of [['matrix', true], ['matrix-replay', false]]) {
           const response = await fetch(origin + item.url, { method: 'POST', body: new URLSearchParams({ payload: raw }).toString(), headers: { ...headers, 'X-Gitea-Delivery': delivery, 'Content-Type': 'application/x-www-form-urlencoded' } });
@@ -447,10 +447,10 @@ test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, a
       if (platform.provider === 'appstoreconnect') {
         const detail = await api('GET', `/api/messages/${ack.data.messageId}`, undefined, token);
         assert.equal(detail.platformData.provider, 'appstoreconnect');
-        assert.equal(detail.platformData.event.data.type, 'appStoreVersionAppVersionStateUpdated');
-        assert.equal(detail.platformData.event.data.attributes.oldValue, 'PREPARE_FOR_SUBMISSION');
-        assert.equal(detail.platformData.event.data.attributes.newValue, 'READY_FOR_REVIEW');
-        assert.equal(detail.platformData.event.data.relationships.instance.data.id, 'example-version');
+        assert.equal(detail.platformData.event.payload.data.type, 'appStoreVersionAppVersionStateUpdated');
+        assert.equal(detail.platformData.event.payload.data.attributes.oldValue, 'PREPARE_FOR_SUBMISSION');
+        assert.equal(detail.platformData.event.payload.data.attributes.newValue, 'READY_FOR_REVIEW');
+        assert.equal(detail.platformData.event.payload.data.relationships.instance.data.id, 'example-version');
         assert.equal(detail.metadata.version, '1');
         assert.equal(detail.metadata.deduplicationKey.scope, 'appstoreconnect:event');
         const next = structuredClone(payloads.appstoreconnect);

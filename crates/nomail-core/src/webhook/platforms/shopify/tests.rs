@@ -37,7 +37,8 @@ fn cropped_fields_versions_and_distinct_identifiers() {
     let PlatformData::Shopify(event) = parsed.data else {
         panic!()
     };
-    assert_eq!(event.operation_id.as_deref(), Some("operation-1"));
+    assert_eq!(event.header.event_id.as_deref(), Some("operation-1"));
+    assert_eq!(event.payload.id.into_value(), Some(serde_json::json!(123)));
     assert_eq!(
         receive_with(
             Provider::Shopify,

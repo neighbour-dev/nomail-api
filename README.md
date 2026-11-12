@@ -4,7 +4,7 @@
 
 ## 功能
 
-- 接收 Generic、GitHub、GitLab、Stripe、Slack、飞书、Telegram 和 Shopify Webhook，使用平台专属强类型配置，支持来源认证、平台验证请求与幂等入库。
+- 接收 Generic、GitHub、Gitea、App Store Connect、GitLab、Stripe、Slack、飞书、Telegram 和 Shopify Webhook，使用平台专属强类型配置，支持来源认证、平台验证请求与幂等入库。
 - 保留平台结构化数据和可读原文，提供消息搜索、已读、置顶、软删除和批量操作。
 - 提供账号、设备与会话管理，以及用于在线更新收件箱的 SSE。
 - 两种部署使用同一套业务与 HTTP 接口：

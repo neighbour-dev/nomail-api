@@ -1,5 +1,6 @@
 //! Typed projections of Apple's documented notification examples, not the
 //! Webhook/WebhookEvent management API or App Store Server Notifications/JWS.
+use crate::webhook::platforms::native::{JsonField, JsonFieldExt, read_json_field};
 use crate::webhook::{WebhookError, support::required};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -9,51 +10,56 @@ fn string(value: &Value) -> Option<String> {
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
-#[serde(default)]
 #[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
-pub struct AppStoreConnectEvent {
+pub struct AppStoreConnectWebhookPayload {
     pub data: AppStoreConnectNotification,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
-#[serde(default)]
 #[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
 pub struct AppStoreConnectNotification {
     #[serde(rename = "type")]
     pub event_type: String,
     /// The notification event ID, not the related app/build/feedback resource ID.
-    pub id: Option<String>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "crate::webhook::platforms::native::deserialize_present"
+    )]
+    pub id: JsonField<String>,
     /// Present in some examples, absent in background-asset notifications.
-    pub version: Option<u64>,
-    pub attributes: Option<AppStoreConnectAttributes>,
-    pub relationships: Option<AppStoreConnectRelationships>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "crate::webhook::platforms::native::deserialize_present"
+    )]
+    pub version: JsonField<u64>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "crate::webhook::platforms::native::deserialize_present"
+    )]
+    pub attributes: JsonField<AppStoreConnectAttributes>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "crate::webhook::platforms::native::deserialize_present"
+    )]
+    pub relationships: JsonField<AppStoreConnectRelationships>,
 }
 
-/// Keep the distinct attribute names from each documented event family. State
-/// strings are open-ended; a new Apple state must not reject the notification.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
-#[serde(default, rename_all = "camelCase")]
-#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
-pub struct AppStoreConnectAttributes {
-    pub timestamp: Option<String>,
-    pub new_value: Option<String>,
-    pub old_value: Option<String>,
-    pub new_external_build_state: Option<String>,
-    pub old_external_build_state: Option<String>,
-    pub new_state: Option<String>,
-    pub old_state: Option<String>,
-    pub available: Option<bool>,
-    pub territories: Vec<String>,
-    pub app_id: Option<String>,
-}
+// Keep distinct attribute names. State strings are open-ended.
+native_model!(AppStoreConnectAttributes {
+    timestamp: String = "timestamp", new_value: String = "newValue", old_value: String = "oldValue",
+    new_external_build_state: String = "newExternalBuildState", old_external_build_state: String = "oldExternalBuildState",
+    new_state: String = "newState", old_state: String = "oldState", available: bool = "available",
+    territories: Vec<String> = "territories", app_id: String = "appId",
+});
 
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
-#[serde(default, rename_all = "camelCase")]
-#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
-pub struct AppStoreConnectRelationships {
-    pub instance: Option<AppStoreConnectRelationship>,
-    pub marketplace_app: Option<AppStoreConnectRelationship>,
-}
+native_model!(AppStoreConnectRelationships {
+    instance: AppStoreConnectRelationship = "instance",
+    marketplace_app: AppStoreConnectRelationship = "marketplaceApp",
+});
 
 /// Ordinary events wrap identifiers in `data`; background-asset examples put
 /// id/type/links directly on the relationship. Preserve both documented shapes.
@@ -61,31 +67,28 @@ pub struct AppStoreConnectRelationships {
 #[serde(default)]
 #[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
 pub struct AppStoreConnectRelationship {
-    pub data: Option<AppStoreConnectResourceReference>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "crate::webhook::platforms::native::deserialize_present"
+    )]
+    pub data: JsonField<AppStoreConnectResourceReference>,
     #[serde(flatten)]
     pub direct: AppStoreConnectResourceReference,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
-#[serde(default)]
-#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
-pub struct AppStoreConnectResourceReference {
-    #[serde(rename = "type")]
-    pub resource_type: Option<String>,
-    pub id: Option<String>,
-    pub links: Option<AppStoreConnectLinks>,
-}
+native_model!(AppStoreConnectResourceReference {
+    resource_type: String = "type",
+    id: String = "id",
+    links: AppStoreConnectLinks = "links",
+});
 
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
-#[serde(default)]
-#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
-pub struct AppStoreConnectLinks {
-    #[serde(rename = "self")]
-    pub self_url: Option<String>,
-    pub related: Option<String>,
-}
+native_model!(AppStoreConnectLinks {
+    self_url: String = "self",
+    related: String = "related",
+});
 
-impl AppStoreConnectEvent {
+impl AppStoreConnectWebhookPayload {
     pub(super) fn from_payload(payload: &Value) -> Result<Self, WebhookError> {
         let data =
             payload
@@ -94,52 +97,43 @@ impl AppStoreConnectEvent {
                 .ok_or(WebhookError::InvalidPayload(
                     "missing App Store Connect data object",
                 ))?;
-        let event_type = required(
-            string(&data["type"]).unwrap_or_default(),
-            "missing App Store Connect event type",
-        )?;
+        let event_type = string(&data["type"]).unwrap_or_default();
+        required(event_type.clone(), "missing App Store Connect event type")?;
         Ok(Self {
             data: AppStoreConnectNotification {
                 event_type,
-                id: string(&data["id"]),
-                version: data["version"].as_u64(),
-                attributes: AppStoreConnectAttributes::from_value(&data["attributes"]),
-                relationships: AppStoreConnectRelationships::from_value(&data["relationships"]),
+                id: read_json_field(data, "id", string),
+                version: read_json_field(data, "version", Value::as_u64),
+                attributes: read_json_field(
+                    data,
+                    "attributes",
+                    AppStoreConnectAttributes::from_value,
+                ),
+                relationships: read_json_field(
+                    data,
+                    "relationships",
+                    AppStoreConnectRelationships::from_value,
+                ),
             },
         })
     }
 }
 
+impl crate::webhook::platforms::native::NativeValue for AppStoreConnectWebhookPayload {
+    fn read(value: &Value) -> Option<Self> {
+        Self::from_payload(value).ok()
+    }
+}
+
 impl AppStoreConnectAttributes {
     fn from_value(value: &Value) -> Option<Self> {
-        value.as_object()?;
-        Some(Self {
-            timestamp: string(&value["timestamp"]),
-            new_value: string(&value["newValue"]),
-            old_value: string(&value["oldValue"]),
-            new_external_build_state: string(&value["newExternalBuildState"]),
-            old_external_build_state: string(&value["oldExternalBuildState"]),
-            new_state: string(&value["newState"]),
-            old_state: string(&value["oldState"]),
-            available: value["available"].as_bool(),
-            territories: value["territories"]
-                .as_array()
-                .into_iter()
-                .flatten()
-                .filter_map(string)
-                .collect(),
-            app_id: string(&value["appId"]),
-        })
+        <Self as crate::webhook::platforms::native::NativeValue>::read(value)
     }
 }
 
 impl AppStoreConnectRelationships {
     fn from_value(value: &Value) -> Option<Self> {
-        value.as_object()?;
-        Some(Self {
-            instance: AppStoreConnectRelationship::from_value(&value["instance"]),
-            marketplace_app: AppStoreConnectRelationship::from_value(&value["marketplaceApp"]),
-        })
+        <Self as crate::webhook::platforms::native::NativeValue>::read(value)
     }
 }
 
@@ -147,46 +141,37 @@ impl AppStoreConnectRelationship {
     fn from_value(value: &Value) -> Option<Self> {
         value.as_object()?;
         Some(Self {
-            data: AppStoreConnectResourceReference::from_value(&value["data"]),
+            data: read_json_field(value, "data", AppStoreConnectResourceReference::from_value),
             direct: AppStoreConnectResourceReference::from_value(value).unwrap_or_default(),
         })
     }
 
     pub fn reference(&self) -> &AppStoreConnectResourceReference {
-        self.data.as_ref().unwrap_or(&self.direct)
+        self.data.value().unwrap_or(&self.direct)
     }
 
     pub fn self_url(&self) -> Option<&str> {
         self.direct
             .links
-            .as_ref()
-            .and_then(|l| l.self_url.as_deref())
+            .value()
+            .and_then(|l| l.self_url.value().map(String::as_str))
             .or_else(|| {
                 self.data
-                    .as_ref()
-                    .and_then(|r| r.links.as_ref())
-                    .and_then(|l| l.self_url.as_deref())
+                    .value()
+                    .and_then(|r| r.links.value())
+                    .and_then(|l| l.self_url.value().map(String::as_str))
             })
     }
 }
 
 impl AppStoreConnectResourceReference {
     fn from_value(value: &Value) -> Option<Self> {
-        value.as_object()?;
-        Some(Self {
-            resource_type: string(&value["type"]),
-            id: string(&value["id"]),
-            links: AppStoreConnectLinks::from_value(&value["links"]),
-        })
+        <Self as crate::webhook::platforms::native::NativeValue>::read(value)
     }
 }
 
-impl AppStoreConnectLinks {
-    fn from_value(value: &Value) -> Option<Self> {
-        value.as_object()?;
-        Some(Self {
-            self_url: string(&value["self"]),
-            related: string(&value["related"]),
-        })
+impl crate::webhook::platforms::native::NativeValue for AppStoreConnectRelationship {
+    fn read(value: &Value) -> Option<Self> {
+        Self::from_value(value)
     }
 }

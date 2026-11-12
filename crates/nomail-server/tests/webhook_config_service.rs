@@ -377,7 +377,7 @@ async fn config_service_preserves_sparse_concurrent_updates_credentials_and_scop
                     ack["data"]["messageId"].as_str().unwrap()
                 );
                 let detail = api!(get, &path, json!({})).1;
-                assert_eq!(detail["platformData"]["event"], fixture);
+                assert_eq!(detail["platformData"]["event"]["payload"], fixture);
                 assert_eq!(
                     detail["metadata"]["deduplicationKey"]["scope"],
                     "telegram:bot-update"
@@ -410,10 +410,16 @@ async fn config_service_preserves_sparse_concurrent_updates_credentials_and_scop
         if provider == "gitea" {
             let detail = api!(get, &message_path, json!({})).1;
             assert_eq!(detail["platformData"]["provider"], "gitea");
-            assert_eq!(detail["platformData"]["event"]["sender"]["id"], -2);
-            assert_eq!(detail["platformData"]["event"]["issue"]["is_locked"], true);
             assert_eq!(
-                detail["platformData"]["event"]["event_type"],
+                detail["platformData"]["event"]["payload"]["sender"]["id"],
+                -2
+            );
+            assert_eq!(
+                detail["platformData"]["event"]["payload"]["issue"]["is_locked"],
+                true
+            );
+            assert_eq!(
+                detail["platformData"]["event"]["header"]["event_type"],
                 "issue_assign"
             );
             assert_eq!(
@@ -459,7 +465,7 @@ async fn config_service_preserves_sparse_concurrent_updates_credentials_and_scop
         if provider == "appstoreconnect" {
             let detail = api!(get, &message_path, json!({})).1;
             assert_eq!(detail["platformData"]["provider"], "appstoreconnect");
-            let data = &detail["platformData"]["event"]["data"];
+            let data = &detail["platformData"]["event"]["payload"]["data"];
             assert_eq!(data["type"], "appStoreVersionAppVersionStateUpdated");
             assert_eq!(data["attributes"]["oldValue"], "PREPARE_FOR_SUBMISSION");
             assert_eq!(data["attributes"]["newValue"], "READY_FOR_REVIEW");

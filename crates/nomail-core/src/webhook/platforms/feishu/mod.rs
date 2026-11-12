@@ -3,62 +3,57 @@ pub mod config;
 #[cfg(test)]
 mod tests;
 use crate::webhook::{
-    Authentication, EventContent, EventMetadata, MessageContent, PlatformData, PlatformEvent,
-    ReceiveOutcome, WebhookConfig, WebhookError, WebhookRequest, crypto, support::*,
+    Authentication, EventContent, EventMetadata, MessageContent, PlatformEvent, ReceiveOutcome,
+    WebhookConfig, WebhookError, WebhookRequest, crypto, support::*,
 };
 use aes::cipher::{BlockDecryptMut, KeyIvInit, block_padding::Pkcs7};
 use base64::{Engine, engine::general_purpose::STANDARD};
-use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
-pub enum FeishuEvent {
-    V2(Box<FeishuV2Event>),
-    Legacy(FeishuLegacyEvent),
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
-pub struct FeishuV2Event {
-    pub app_id: Option<String>,
-    pub tenant_key: Option<String>,
-    pub message: Option<FeishuMessage>,
-    pub sender: Option<FeishuSender>,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
-pub struct FeishuSender {
-    pub open_id: Option<String>,
-    pub user_id: Option<String>,
-    pub union_id: Option<String>,
-    pub sender_type: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
-pub struct FeishuMessage {
-    pub message_id: Option<String>,
-    pub message_type: Option<String>,
-    /// Feishu's original content string; text messages contain nested JSON here.
-    pub content: Option<String>,
-    /// Decoded nested content for platform-specific text/post/media rendering.
-    /// Preserve the original content string as well, including unknown formats.
-    pub content_json: Option<Value>,
-    pub chat_id: Option<String>,
-    pub chat_type: Option<String>,
-    pub create_time: Option<String>,
-    pub parent_id: Option<String>,
-    pub root_id: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
-pub struct FeishuLegacyEvent {
-    pub uuid: Option<String>,
-}
+webhook_header!(FeishuWebhookHeader {});
+webhook!(FeishuWebhook, FeishuWebhookHeader, FeishuWebhookPayload);
+native_model!(FeishuWebhookPayload {
+    schema: String = "schema",
+    header: FeishuEventHeader = "header",
+    event: FeishuEventPayload = "event",
+    uuid: String = "uuid",
+    event_type: String = "type",
+    ts: Value = "ts",
+});
+// This header is part of the native v2 JSON payload, not an HTTP header.
+// Its verification token is deliberately not included in the persisted model.
+native_model!(FeishuEventHeader {
+    event_id: String = "event_id",
+    event_type: String = "event_type",
+    create_time: String = "create_time",
+    app_id: String = "app_id",
+    tenant_key: String = "tenant_key",
+});
+native_model!(FeishuEventPayload {
+    message: FeishuMessage = "message",
+    sender: FeishuSender = "sender",
+});
+native_model!(FeishuSender {
+    sender_id: FeishuSenderId = "sender_id",
+    sender_type: String = "sender_type",
+    tenant_key: String = "tenant_key",
+});
+native_model!(FeishuSenderId {
+    open_id: String = "open_id",
+    user_id: String = "user_id",
+    union_id: String = "union_id",
+});
+native_model!(FeishuMessage {
+    message_id: String = "message_id",
+    message_type: String = "message_type",
+    content: String = "content",
+    chat_id: String = "chat_id",
+    chat_type: String = "chat_type",
+    create_time: String = "create_time",
+    parent_id: String = "parent_id",
+    root_id: String = "root_id",
+});
 
 pub(in crate::webhook) fn receive(
     config: &WebhookConfig<'_>,
@@ -128,48 +123,15 @@ pub(in crate::webhook) fn receive(
         text(&payload, &["header", "event_id"]),
         text(&payload, &["uuid"]),
     ]);
-    let event = match schema.as_str() {
-        "2.0" => FeishuEvent::V2(Box::new(FeishuV2Event {
-            app_id: optional(text(&payload, &["header", "app_id"])),
-            tenant_key: optional(text(&payload, &["header", "tenant_key"])),
-            message: payload["event"]
-                .get("message")
-                .filter(|value| value.is_object())
-                .map(|value| FeishuMessage {
-                    message_id: optional(text(value, &["message_id"])),
-                    message_type: optional(text(value, &["message_type"])),
-                    content: optional(text(value, &["content"])),
-                    content_json: value["content"]
-                        .as_str()
-                        .and_then(|s| serde_json::from_str(s).ok()),
-                    chat_id: optional(text(value, &["chat_id"])),
-                    chat_type: optional(text(value, &["chat_type"])),
-                    create_time: optional(text(value, &["create_time"])),
-                    parent_id: optional(text(value, &["parent_id"])),
-                    root_id: optional(text(value, &["root_id"])),
-                }),
-            sender: payload["event"]["sender"]
-                .as_object()
-                .map(|_| FeishuSender {
-                    open_id: optional(text(&payload, &["event", "sender", "sender_id", "open_id"])),
-                    user_id: optional(text(&payload, &["event", "sender", "sender_id", "user_id"])),
-                    union_id: optional(text(
-                        &payload,
-                        &["event", "sender", "sender_id", "union_id"],
-                    )),
-                    sender_type: optional(text(&payload, &["event", "sender", "sender_type"])),
-                }),
-        })),
-        "" => FeishuEvent::Legacy(FeishuLegacyEvent {
-            uuid: optional(text(&payload, &["uuid"])),
-        }),
-        _ => return Err(WebhookError::Unsupported("unsupported Feishu schema")),
-    };
-    Ok(PlatformEvent {
-        metadata: metadata(event_type, optional(schema), "feishu:event", id),
-        data: PlatformData::Feishu(event),
-        raw: EventContent::Json(payload),
+    if schema != "2.0" && !schema.is_empty() {
+        return Err(WebhookError::Unsupported("unsupported Feishu schema"));
     }
+    Ok(PlatformEvent::from_payload(
+        config.provider,
+        metadata(event_type, optional(schema), "feishu:event", id),
+        EventContent::Json(payload),
+        request,
+    )?
     .into())
 }
 
@@ -230,23 +192,15 @@ fn first_header<'a>(request: &'a WebhookRequest<'_>, name: &str, alternate: &str
     }
 }
 
-impl FeishuEvent {
+impl FeishuWebhook {
     pub fn to_message_content(
         &self,
         metadata: &EventMetadata,
         raw: &EventContent,
     ) -> MessageContent {
         let p = raw.as_json().unwrap_or(&Value::Null);
-        let message_fields = match self {
-            Self::V2(event) => event.message.as_ref(),
-            Self::Legacy(_) => None,
-        };
-        let raw_content = message_fields
-            .and_then(|message| message.content.clone())
-            .unwrap_or_else(|| text(p, &["event", "message", "content"]));
-        let message_type = message_fields
-            .and_then(|message| message.message_type.clone())
-            .unwrap_or_else(|| text(p, &["event", "message", "message_type"]));
+        let raw_content = text(p, &["event", "message", "content"]);
+        let message_type = text(p, &["event", "message", "message_type"]);
         let content = if message_type == "text" {
             serde_json::from_str::<Value>(&raw_content)
                 .ok()

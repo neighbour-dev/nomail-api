@@ -1,5 +1,336 @@
 //! Cross-platform API contracts. Platform cases and fixtures live in platforms/*/tests.rs.
 use super::{test_support::*, *};
+use serde_json::{Value, json};
+
+#[test]
+fn every_platform_binds_allowlisted_headers_to_native_payload_fields() {
+    let cases = [
+        (
+            Provider::Generic,
+            vec![("X-NoMail-Idempotency-Key", "generic-1")],
+            json!({"id":123,"title":" verbatim ","content":"","eventType":"created"}),
+            json!({"idempotency_key":"generic-1"}),
+        ),
+        (
+            Provider::Github,
+            vec![
+                ("X-GitHub-Event", "push"),
+                ("X-GitHub-Delivery", "github-1"),
+                ("X-GitHub-Hook-Id", "000123"),
+            ],
+            json!({"ref":"refs/heads/main","before":"aaa","after":"bbb","forced":false,"pusher":{"name":" Actor "},"commits":[{"id":"bbb","message":" commit\n"}]}),
+            json!({"event":"push","delivery":"github-1","hook_id":"000123"}),
+        ),
+        (
+            Provider::Gitea,
+            vec![
+                ("X-Gitea-Event", "wiki"),
+                ("X-Gitea-Event-Type", "wiki"),
+                ("X-Gitea-Delivery", "gitea-1"),
+                ("X-Gitea-Hook-Installation-Target-Type", "repository"),
+            ],
+            json!({"action":"edited","page":"Home","comment":" update\n"}),
+            json!({"event":"wiki","event_type":"wiki","delivery":"gitea-1","installation_target_type":"repository"}),
+        ),
+        (
+            Provider::AppStoreConnect,
+            vec![],
+            json!({"data":{"type":"buildUploadStateUpdated","id":"apple-1","attributes":{"oldState":"PROCESSING","newState":"COMPLETE"}}}),
+            json!({}),
+        ),
+        (
+            Provider::Gitlab,
+            vec![
+                ("X-Gitlab-Event", "Issue Hook"),
+                ("X-Gitlab-Instance", "https://example.invalid"),
+                ("webhook-id", "gitlab-1"),
+            ],
+            json!({"object_kind":"issue","project":{"path_with_namespace":"example/repo"},"object_attributes":{"action":"open","title":" issue "}}),
+            json!({"event":"Issue Hook","instance":"https://example.invalid","webhook_id":"gitlab-1"}),
+        ),
+        (
+            Provider::Stripe,
+            vec![],
+            json!({"id":"evt_1","type":"payment_intent.succeeded","object":"event","created":1794268800,"data":{"object":{"id":"pi_1","object":"payment_intent","amount":100}}}),
+            json!({}),
+        ),
+        (
+            Provider::Slack,
+            vec![
+                ("X-Slack-Retry-Num", "1"),
+                ("X-Slack-Retry-Reason", "http_timeout"),
+            ],
+            json!({"type":"event_callback","event_id":"Ev1","team_id":"T1","event":{"type":"message","text":" text\n","subtype":"bot_message"}}),
+            json!({"retry_num":"1","retry_reason":"http_timeout"}),
+        ),
+        (
+            Provider::Feishu,
+            vec![],
+            json!({"schema":"2.0","header":{"event_id":"feishu-1","event_type":"im.message.receive_v1","app_id":"app-1"},"event":{"sender":{"sender_id":{"open_id":"ou_1"},"sender_type":"user"},"message":{"content":"{\"text\":\"hello\"}","message_type":"text"}}}),
+            json!({}),
+        ),
+        (
+            Provider::Telegram,
+            vec![],
+            json!({"update_id":1,"message":{"message_id":0,"date":1794268800,"chat":{"id":-1001234567890_i64,"type":"supergroup"},"text":" hi "}}),
+            json!({}),
+        ),
+        (
+            Provider::Shopify,
+            vec![
+                ("X-Shopify-Topic", "products/update"),
+                ("X-Shopify-Shop-Domain", "example.myshopify.com"),
+                ("X-Shopify-Api-Version", "2026-10"),
+                ("X-Shopify-Webhook-Id", "shopify-1"),
+                ("X-Shopify-Event-Id", "operation-1"),
+            ],
+            json!({"id":123,"title":" product "}),
+            json!({"topic":"products/update","shop_domain":"example.myshopify.com","api_version":"2026-10","webhook_id":"shopify-1","event_id":"operation-1"}),
+        ),
+    ];
+    for (provider, mut input_headers, payload, expected_header) in cases {
+        input_headers.extend([
+            ("Authorization", "Bearer private-test-credential"),
+            ("X-Telegram-Bot-Api-Secret-Token", "private-test-credential"),
+            ("X-Gitlab-Token", "private-test-credential"),
+            ("X-Hub-Signature-256", "private-test-signature"),
+            ("X-Gitea-Signature", "private-test-signature"),
+            ("Stripe-Signature", "private-test-signature"),
+            ("X-Slack-Signature", "private-test-signature"),
+        ]);
+        let parsed = event(
+            receive_with(
+                provider,
+                Authentication::None,
+                &headers(&input_headers),
+                &serde_json::to_vec(&payload).unwrap(),
+            )
+            .unwrap(),
+        );
+        assert_eq!(parsed.raw.as_json(), Some(&payload));
+        let data = serde_json::to_value(&parsed.data).unwrap();
+        let envelope = &data["event"];
+        assert_eq!(envelope.as_object().unwrap().len(), 2);
+        assert_eq!(envelope["header"], expected_header, "{provider:?}");
+        assert_eq!(
+            envelope["payload"], payload,
+            "{provider:?}: payload changed supplied fields or invented defaults"
+        );
+        assert!(!data.to_string().contains("private-test-"));
+        assert_eq!(
+            serde_json::from_value::<PlatformEvent>(serde_json::to_value(&parsed).unwrap())
+                .unwrap(),
+            parsed
+        );
+    }
+}
+
+#[test]
+fn native_payloads_preserve_missing_null_and_supplied_values_exactly() {
+    let cases = [
+        (
+            Provider::Generic,
+            vec![],
+            json!({"title":null,"content":"","level":"normal","id":0}),
+        ),
+        (
+            Provider::Github,
+            vec![("X-GitHub-Event", "star")],
+            json!({"action":"deleted","starred_at":null}),
+        ),
+        (
+            Provider::Github,
+            vec![("X-GitHub-Event", "pull_request")],
+            json!({"action":"opened","pull_request":{"body":null,"title":"","assignees":[],"head":{"ref":"feature","repo":null},"base":null,"mergeable":null,"merged":false,"additions":0}}),
+        ),
+        (
+            Provider::Gitea,
+            vec![("X-Gitea-Event", "issues")],
+            json!({"issue":{"id":0,"title":"","milestone":null,"assignee":null,"labels":[],"is_locked":false},"changes":{"removed_labels":null}}),
+        ),
+        (
+            Provider::AppStoreConnect,
+            vec![],
+            json!({"data":{"type":"alternativeDistributionTerritoryAvailabilityUpdated","id":null,"version":null,"attributes":{"timestamp":null,"available":false,"territories":[],"appId":""},"relationships":{"instance":{"data":null}}}}),
+        ),
+        (
+            Provider::AppStoreConnect,
+            vec![],
+            json!({"data":{"type":" futureEvent ","attributes":{"oldValue":null,"newValue":" value "}}}),
+        ),
+        (
+            Provider::Gitlab,
+            vec![("X-Gitlab-Event", "Issue Hook")],
+            json!({"object_kind":"issue","project":null,"object_attributes":{"milestone_id":null,"time_estimate":0,"description":""},"commits":[null,0,false,""]}),
+        ),
+        (
+            Provider::Stripe,
+            vec![],
+            json!({"id":"evt_presence","object":"event","type":"customer.updated","api_version":null,"request":null,"livemode":false,"pending_webhooks":0,"data":{"object":{"id":"cus_1","email":null},"previous_attributes":{"email":null,"metadata":{"key":null}}}}),
+        ),
+        (
+            Provider::Slack,
+            vec![],
+            json!({"type":"event_callback","team_id":null,"event":{"type":"message","text":"","user":null},"view":{"state":{"values":{"input":{"value":null,"selected_conversations":[]}}}}}),
+        ),
+        (
+            Provider::Feishu,
+            vec![],
+            json!({"schema":"2.0","header":{"event_type":"im.message.receive_v1","tenant_key":null},"event":{"sender":{"sender_id":{"open_id":"ou_1","union_id":null}},"message":{"message_id":"m1","parent_id":null,"content":"","message_type":"text"}}}),
+        ),
+        (
+            Provider::Telegram,
+            vec![],
+            json!({"update_id":0,"message":{"message_id":0,"date":1,"chat":{"id":0,"type":"private"},"from":null,"text":"","entities":[],"reply_to_message":null}}),
+        ),
+        (
+            Provider::Shopify,
+            vec![
+                ("X-Shopify-Topic", "products/update"),
+                ("X-Shopify-Shop-Domain", "example.myshopify.com"),
+            ],
+            json!({"id":0,"title":"","name":null}),
+        ),
+    ];
+    for (provider, input_headers, payload) in cases {
+        let parsed = event(
+            receive_with(
+                provider,
+                Authentication::None,
+                &headers(&input_headers),
+                &serde_json::to_vec(&payload).unwrap(),
+            )
+            .unwrap(),
+        );
+        let data = serde_json::to_value(&parsed.data).unwrap();
+        assert_eq!(
+            data["event"]["payload"], payload,
+            "{provider:?}: presence/type/value changed"
+        );
+        let restored: PlatformEvent =
+            serde_json::from_value(serde_json::to_value(&parsed).unwrap()).unwrap();
+        assert_eq!(
+            restored, parsed,
+            "{provider:?}: stored snapshot lost presence state"
+        );
+    }
+    // Dynamic JSON values, including nested nulls and null array elements, are
+    // values too; they are not recursively pruned by the Option serializer.
+    for value in [
+        Value::Null,
+        json!([]),
+        json!({}),
+        json!(""),
+        json!(false),
+        json!(0),
+        json!([null, false, 0, "", []]),
+        json!({"null":null}),
+    ] {
+        let payload = json!({"id":value});
+        let parsed = event(
+            receive_with(
+                Provider::Generic,
+                Authentication::None,
+                &headers(&[]),
+                &serde_json::to_vec(&payload).unwrap(),
+            )
+            .unwrap(),
+        );
+        assert_eq!(
+            serde_json::to_value(parsed.data).unwrap()["event"]["payload"],
+            payload
+        );
+    }
+}
+
+#[test]
+fn github_and_gitea_do_not_serialize_synthetic_payload_groups() {
+    for (provider, prefix) in [
+        (Provider::Github, "X-GitHub-Event"),
+        (Provider::Gitea, "X-Gitea-Event"),
+    ] {
+        for (kind, body) in [
+            (
+                "push",
+                json!({"ref":"refs/heads/main","before":"a","after":"b","commits":[]}),
+            ),
+            ("create", json!({"ref":"main","ref_type":"branch"})),
+            (
+                "status",
+                json!({"id":1,"state":"success","sha":"b","context":"ci"}),
+            ),
+        ] {
+            let parsed = event(
+                receive_with(
+                    provider,
+                    Authentication::None,
+                    &headers(&[(prefix, kind)]),
+                    &serde_json::to_vec(&body).unwrap(),
+                )
+                .unwrap(),
+            );
+            let data = serde_json::to_value(parsed.data).unwrap();
+            for field in [
+                "push",
+                "git_ref",
+                "commit_status",
+                "wiki",
+                "event_type",
+                "installation_target_type",
+            ] {
+                assert!(data["event"]["payload"].get(field).is_none());
+            }
+            for (field, value) in body.as_object().unwrap() {
+                assert_eq!(&data["event"]["payload"][field], value);
+            }
+        }
+    }
+}
+
+#[test]
+fn native_payload_extraction_does_not_coerce_scalars_or_copy_verification_tokens() {
+    for (provider, event_header) in [
+        (Provider::Github, "x-github-event"),
+        (Provider::Gitea, "x-gitea-event"),
+    ] {
+        let body = json!({"ref":123,"repository":{"name":" name ","description":""},"sender":{"login":false}});
+        let parsed = event(
+            receive_with(
+                provider,
+                Authentication::None,
+                &headers(&[(event_header, "push")]),
+                &serde_json::to_vec(&body).unwrap(),
+            )
+            .unwrap(),
+        );
+        let model = serde_json::to_value(&parsed.data).unwrap();
+        assert!(model["event"]["payload"]["ref"].is_null());
+        assert!(model["event"]["payload"]["sender"]["login"].is_null());
+        assert_eq!(model["event"]["payload"]["repository"]["name"], " name ");
+        assert_eq!(model["event"]["payload"]["repository"]["description"], "");
+        assert_eq!(parsed.raw.as_json(), Some(&body));
+    }
+    let body = json!({"schema":"2.0","header":{"token":"verification-secret","event_id":"feishu-1","event_type":"im.message.receive_v1"},"event":{"message":{"message_type":"text","content":"{\"text\":\"hello\"}"}}});
+    let parsed = event(
+        receive_with(
+            Provider::Feishu,
+            Authentication::None,
+            &headers(&[]),
+            &serde_json::to_vec(&body).unwrap(),
+        )
+        .unwrap(),
+    );
+    let model = serde_json::to_value(&parsed.data).unwrap();
+    assert!(!model.to_string().contains("verification-secret"));
+    assert!(
+        model["event"]["payload"]["event"]["message"]
+            .get("content_json")
+            .is_none()
+    );
+    // Raw retains its existing complete-decoded-content contract; the safe
+    // typed model is not a promise to redact arbitrary upstream raw content.
+    assert_eq!(parsed.raw.as_json(), Some(&body));
+}
 
 #[test]
 fn configuration_is_explicit_and_headers_are_case_insensitive() {

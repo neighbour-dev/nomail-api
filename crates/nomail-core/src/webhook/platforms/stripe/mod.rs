@@ -2,44 +2,56 @@
 pub mod config;
 #[cfg(test)]
 mod tests;
+use super::native::NativeValue;
 use crate::webhook::{
-    Authentication, EventContent, EventMetadata, MessageContent, PlatformData, PlatformEvent,
-    ReceiveOutcome, WebhookConfig, WebhookError, WebhookRequest, crypto, support::*,
+    Authentication, EventContent, EventMetadata, MessageContent, PlatformEvent, ReceiveOutcome,
+    WebhookConfig, WebhookError, WebhookRequest, crypto, support::*,
 };
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
+
+webhook_header!(StripeWebhookHeader {});
+webhook!(StripeWebhook, StripeWebhookHeader, StripeWebhookPayload);
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
 #[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
-pub enum StripeEvent {
-    Snapshot(StripeSnapshot),
-    /// No API request is performed. Mapping provides a metadata-only summary.
-    Thin(StripeThinNotification),
+pub enum StripeCreated {
+    Unix(i64),
+    Text(String),
 }
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
-pub struct StripeSnapshot {
-    pub object_id: Option<String>,
-    pub object_type: Option<String>,
-    pub created: Option<i64>,
-    pub livemode: Option<bool>,
+impl NativeValue for StripeCreated {
+    fn read(value: &Value) -> Option<Self> {
+        value
+            .as_i64()
+            .map(Self::Unix)
+            .or_else(|| value.as_str().map(|s| Self::Text(s.to_owned())))
+    }
 }
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
-pub struct StripeThinNotification {
-    pub created: Option<String>,
-    pub related_object: Option<StripeRelatedObject>,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
-pub struct StripeRelatedObject {
-    pub id: Option<String>,
-    pub object_type: Option<String>,
-    /// API resource path, not a user-facing URL or an instruction to fetch it.
-    pub url: Option<String>,
-}
+native_model!(StripeWebhookPayload {
+    id: String = "id",
+    object: String = "object",
+    event_type: String = "type",
+    api_version: String = "api_version",
+    created: StripeCreated = "created",
+    livemode: bool = "livemode",
+    data: StripeEventData = "data",
+    related_object: StripeRelatedObject = "related_object",
+    account: String = "account",
+    context: String = "context",
+    pending_webhooks: i64 = "pending_webhooks",
+    request: Value = "request",
+});
+native_model!(StripeEventData {
+    // Resource shape depends on the event type and Stripe API version.
+    object: Value = "object",
+    previous_attributes: Value = "previous_attributes",
+});
+native_model!(StripeRelatedObject {
+    id: String = "id",
+    object_type: String = "type",
+    url: String = "url",
+});
 
 pub(in crate::webhook) fn receive(
     config: &WebhookConfig<'_>,
@@ -66,40 +78,20 @@ pub(in crate::webhook) fn receive(
     let event_type = required(text(&payload, &["type"]), "missing Stripe event type")?;
     let id = required(text(&payload, &["id"]), "missing Stripe event id")?;
     let version = optional(text(&payload, &["api_version"]));
-    let thin = match text(&payload, &["object"]).as_str() {
-        "v2.core.event" => true,
-        "event" => false,
+    match text(&payload, &["object"]).as_str() {
+        "v2.core.event" | "event" => {}
         _ => {
             return Err(WebhookError::Unsupported(
                 "unsupported Stripe event envelope",
             ));
         }
-    };
-    let event = if thin {
-        StripeEvent::Thin(StripeThinNotification {
-            created: payload["created"].as_str().map(str::to_owned),
-            related_object: payload
-                .get("related_object")
-                .filter(|value| value.is_object())
-                .map(|value| StripeRelatedObject {
-                    id: optional(text(value, &["id"])),
-                    object_type: optional(text(value, &["type"])),
-                    url: optional(text(value, &["url"])),
-                }),
-        })
-    } else {
-        StripeEvent::Snapshot(StripeSnapshot {
-            object_id: optional(text(&payload, &["data", "object", "id"])),
-            object_type: optional(text(&payload, &["data", "object", "object"])),
-            created: payload["created"].as_i64(),
-            livemode: payload["livemode"].as_bool(),
-        })
-    };
-    Ok(PlatformEvent {
-        metadata: metadata(event_type, version, "stripe:event", id),
-        data: PlatformData::Stripe(event),
-        raw: EventContent::Json(payload),
     }
+    Ok(PlatformEvent::from_payload(
+        config.provider,
+        metadata(event_type, version, "stripe:event", id),
+        EventContent::Json(payload),
+        request,
+    )?
     .into())
 }
 
@@ -138,14 +130,17 @@ fn verify_signature(
     Err(WebhookError::Unauthorized)
 }
 
-impl StripeEvent {
+impl StripeWebhook {
     pub fn to_message_content(
         &self,
         metadata: &EventMetadata,
         raw: &EventContent,
     ) -> MessageContent {
         let kind = &metadata.event_type;
-        let content = if matches!(self, Self::Thin(_)) {
+        let content = if raw
+            .as_json()
+            .is_some_and(|p| text(p, &["object"]) == "v2.core.event")
+        {
             format!(
                 "Stripe event {} (thin notification; details not fetched): {}",
                 raw.as_json()
