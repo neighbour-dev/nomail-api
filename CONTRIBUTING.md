@@ -75,7 +75,7 @@ cargo run --locked -p nomail-app --features openapi --example export-openapi -- 
 cargo test --locked -p nomail-app --features openapi --lib
 ```
 
-Commit generator/contract changes and their tests, not the generated JSON. Tests compare the local generated file with current contracts and check routes, schemas, and references; Workers tests also validate actual responses against it. CI always generates and verifies a fresh file, then shares that exact artifact with its test jobs and the release workflow. Swagger generation or validation failure blocks all release builds and publishing. Releases attach `swagger.json` separately and include it in `SHA256SUMS`; it is not added to binary archives or Docker images. Use the attachment for the version you run, not necessarily the latest release. Older releases may not have it; generate locally when needed.
+Commit generator/contract changes and their tests, not the generated JSON. Tests check consistency with current contracts, routes, schemas, and references; Workers tests also validate actual responses against it. CI generates and verifies a fresh file, then shares that exact artifact with its test jobs and the release workflow.
 
 Update `nomail-docs/guide/install.md` for changes to user procedures, and maintain API usage documentation in `nomail-docs/reference/`. Update this guide when contribution procedures change; keep the README limited to the project introduction and documentation links. See the [nomail-docs](https://git.neighbour.sg/neighbour/nomail-docs) documentation repository.
 
@@ -145,6 +145,7 @@ their pagination handling before upgrading.
 - Record user-facing changes under `Unreleased` in `CHANGELOG.md`.
 - Before a release, update the version, run `cargo check` to synchronize `Cargo.lock`, and move pending entries under the corresponding version and actual release date while retaining the `Unreleased` section. Commit after checks pass.
 - GitHub Release notes come from the `CHANGELOG.md` entry that exactly matches the tag (for example, `v0.2.0` matches `## [0.2.0] - YYYY-MM-DD`). Do not use GitHub-generated notes or `Unreleased`. Prereleases require their own full-version entries. Release checks fail if an entry is missing, duplicated, or empty. Rerunning an existing release updates assets only and does not overwrite its original notes.
+- Swagger generation or validation failure blocks release builds and publishing. The release workflow attaches the CI-verified `swagger.json` separately and includes it in `SHA256SUMS`, not in binary archives or Docker images.
 - Push a tag matching the project version according to the [Git tag conventions](docs/tagging.md) to automatically publish images and a GitHub Release. Do not publish older stable versions retroactively, as this could overwrite `latest`.
 - CI for regular pushes and pull requests first generates and verifies OpenAPI, then runs formatting checks, Rust tests for the default workspace members, workflow/release-note script tests, and a separate Workers WASM/local D1/DO job using the verified artifact. It does not replace the full checks above. Run the script tests locally with `python3 -m unittest discover -s .github/scripts -p 'test_*.py'`.
 

@@ -20,7 +20,7 @@
 - [更新日志](CHANGELOG.md)
 - [Git Tag 规范](docs/tagging.md)
 - [贡献指南](CONTRIBUTING.md)
-- [HTTP 接口定义（OpenAPI 3.1，本地生成方法）](CONTRIBUTING.md#updating-api-documentation)；新版 GitHub Release 另附 `swagger.json`，请选取对应版本。
+- HTTP 接口定义（OpenAPI 3.1）：[GitHub Releases](https://github.com/neighbour-dev/nomail-api/releases) 新版附带 `swagger.json`，应选择与运行版本对应的附件。旧版无附件时，可按[生成方法](CONTRIBUTING.md#updating-api-documentation)从对应版本源码导出。
 - [平台协议库](crates/nomail-core/README.md)
 - [开源版应用架构](crates/nomail-app/README.md)
 

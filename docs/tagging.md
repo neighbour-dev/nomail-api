@@ -41,7 +41,7 @@ git tag -a v0.1.0 -m "Release v0.1.0"
 git push origin v0.1.0
 ```
 
-推送版本标签会触发镜像和 GitHub Release 自动发布，发布前的准备见[贡献指南](../CONTRIBUTING.md#版本维护)。
+推送版本标签会触发镜像和 GitHub Release 自动发布，发布前的准备见[贡献指南](../CONTRIBUTING.md#version-maintenance)。
 
 ## 4. 不可变原则
 

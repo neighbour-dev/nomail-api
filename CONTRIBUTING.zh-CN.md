@@ -75,7 +75,7 @@ cargo run --locked -p nomail-app --features openapi --example export-openapi -- 
 cargo test --locked -p nomail-app --features openapi --lib
 ```
 
-接口变更提交生成器/契约及相关测试，不提交生成的 JSON。测试会核对本地生成文件与当前契约是否一致，并检查路由、Schema 和引用；Workers 还用该文件校验实际响应。CI 每次重新生成并校验文件，通过后将同一份产物供测试任务和发布工作流使用；生成或校验失败会阻止所有发布构建和发布操作。Release 单独附带 swagger.json，并将其纳入 SHA256SUMS，不放入各架构的二进制压缩包或 Docker 镜像。使用与运行版本对应的附件，不一定是最新版；旧 Release 可能没有此附件，需要时自行生成。
+接口变更提交生成器/契约及相关测试，不提交生成的 JSON。测试会核对文件与当前契约是否一致，并检查路由、Schema 和引用；Workers 还用该文件校验实际响应。CI 每次重新生成并校验文件，通过后将同一份产物供测试任务和发布工作流使用。
 
 用户操作变化更新 `nomail-docs/guide/install.md`，接口使用说明在 `nomail-docs/reference/` 中维护；贡献流程变化更新本文件，README 仅保留项目简介和文档入口。文档仓库见 [nomail-docs](https://git.neighbour.sg/neighbour/nomail-docs)。
 
@@ -145,6 +145,7 @@ their pagination handling before upgrading.
 - 面向用户的变更记录在 `CHANGELOG.md` 的 `Unreleased` 中。
 - 发布前更新版本，运行 `cargo check` 同步 `Cargo.lock`，将待发布条目整理到对应版本和实际发布日期下，保留 `Unreleased` 区域；检查通过后提交。
 - GitHub Release 正文取自 `CHANGELOG.md` 中与标签精确对应的版本条目（例如 `v0.2.0` 对应 `## [0.2.0] - 日期`），不使用 GitHub 自动生成说明，也不使用 `Unreleased`。预发布需单独记录完整版本号；条目缺失、重复或为空时，发布检查失败。已有 Release 重跑仅更新附件，不覆盖原正文。
+- Swagger 生成或校验失败会阻止发布构建和发布操作。发布工作流单独附带 CI 校验通过的同一份 `swagger.json`，并将其纳入 `SHA256SUMS`，不放入二进制压缩包或 Docker 镜像。
 - 按 [Git Tag 规范](docs/tagging.md) 推送与项目版本一致的标签，会自动发布镜像和 GitHub Release；不要补发旧稳定版本，以免覆盖 `latest`。
 - 普通 push / PR 的 CI 先生成并校验 OpenAPI，再执行格式检查、默认成员的 Rust 测试、工作流/发布说明脚本测试及独立的 Workers WASM/本地 D1/DO 检查，测试任务使用已校验的同一份产物，不能替代上述完整检查。脚本测试可在本地运行：`python3 -m unittest discover -s .github/scripts -p 'test_*.py'`。
 
