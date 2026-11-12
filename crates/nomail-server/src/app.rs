@@ -49,21 +49,31 @@ struct ActixRequest {
 }
 impl ActixRequest {
     fn new(req: HttpRequest, payload: web::Payload) -> Self {
+        let headers = req
+            .headers()
+            .iter()
+            .filter_map(|(name, value)| {
+                value
+                    .to_str()
+                    .ok()
+                    .map(|value| (name.to_string(), value.to_owned()))
+            })
+            .collect();
+        let raw_headers = Some(
+            req.headers()
+                .iter()
+                .map(|(name, value)| {
+                    nomail_app::webhook::RawHeader::from_bytes(name.as_str(), value.as_bytes())
+                })
+                .collect(),
+        );
         Self {
             head: RequestHead {
                 method: req.method().as_str().into(),
                 path: req.path().into(),
                 query: req.query_string().into(),
-                headers: req
-                    .headers()
-                    .iter()
-                    .filter_map(|(name, value)| {
-                        value
-                            .to_str()
-                            .ok()
-                            .map(|value| (name.to_string(), value.to_owned()))
-                    })
-                    .collect(),
+                headers,
+                raw_headers,
                 metadata: RequestMeta::new(
                     crate::client_ip::resolve(&req).to_string(),
                     req.headers()
@@ -140,6 +150,7 @@ mod tests {
                 path: "/api/unknown".into(),
                 query: String::new(),
                 headers: Vec::new(),
+                raw_headers: None,
                 metadata: RequestMeta::default(),
             },
             body_reads: 0,
@@ -175,6 +186,8 @@ mod tests {
             .peer_addr("127.0.0.1:1234".parse().unwrap())
             .append_header(("X-Repeated", "one"))
             .append_header(("X-Repeated", "two"))
+            .append_header(("X-Empty", ""))
+            .append_header(("X-Tab", "one\ttwo"))
             .insert_header(("X-Forwarded-For", "untrusted"))
             .to_http_parts();
         let payload = <web::Payload as actix_web::FromRequest>::from_request(&req, &mut payload)
@@ -182,6 +195,71 @@ mod tests {
             .unwrap();
         let request = ActixRequest::new(req, payload);
         assert_eq!(request.head.values("X-Repeated"), ["one", "two"]);
+        let raw = request.head.entries();
+        assert_eq!(
+            raw.iter()
+                .filter(|h| h.name == "x-repeated")
+                .map(|h| h.value.as_str())
+                .collect::<Vec<_>>(),
+            ["one", "two"]
+        );
+        assert!(
+            raw.iter()
+                .any(|h| h.name == "x-empty" && h.value.is_empty())
+        );
+        assert_eq!(request.head.values("X-Tab"), ["one\ttwo"]);
         assert_eq!(request.head.metadata.ip, "127.0.0.1");
+    }
+
+    #[actix_web::test]
+    async fn request_adapter_preserves_opaque_headers_without_using_them_for_authentication() {
+        for name in ["X-NoMail-Title", "X-Unknown", "Authorization"] {
+            // DEL/control bytes are already rejected by Actix's HeaderValue.
+            for value in ["中文".as_bytes(), &[0xff]] {
+                let (req, mut payload) = actix_web::test::TestRequest::get()
+                    .uri("/api/health")
+                    .append_header((
+                        name,
+                        actix_web::http::header::HeaderValue::from_bytes(value).unwrap(),
+                    ))
+                    .to_http_parts();
+                let payload =
+                    <web::Payload as actix_web::FromRequest>::from_request(&req, &mut payload)
+                        .await
+                        .unwrap();
+                let request = ActixRequest::new(req, payload);
+                assert!(request.head.values(name).is_empty());
+                let expected =
+                    nomail_app::webhook::RawHeader::from_bytes(name.to_ascii_lowercase(), value);
+                assert!(request.head.entries().contains(&expected));
+            }
+        }
+    }
+
+    #[actix_web::test]
+    async fn unrelated_non_ascii_header_does_not_block_health() {
+        let environment = UnconfiguredEnvironment {
+            service_calls: std::cell::Cell::new(0),
+        };
+        for (name, value) in [("X-NoMail-Title", "中文"), ("Authorization", "Bearer é")] {
+            let mut request = UnreadableRequest {
+                head: RequestHead {
+                    method: "GET".into(),
+                    path: "/api/health".into(),
+                    query: String::new(),
+                    headers: vec![(name.into(), value.into())],
+                    raw_headers: None,
+                    metadata: RequestMeta::default(),
+                },
+                body_reads: 0,
+            };
+            let outcome = http::execute(&mut request, &environment).await.unwrap();
+            let HttpReply::Response(response) = outcome.reply else {
+                panic!()
+            };
+            assert_eq!(response.status, 200);
+            assert_eq!(request.body_reads, 0);
+        }
+        assert_eq!(environment.service_calls.get(), 0);
     }
 }

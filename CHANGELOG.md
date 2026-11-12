@@ -8,23 +8,37 @@
 
 ### 新增
 
+- 原始事件增加 `raw.header`：统一使用大小写不敏感的请求头黑名单，排除已知鉴权、Cookie 和签名头，其余运行时可见的未知/自定义头、重复值与空值全部保留。不因无关头包含非 ASCII 而拒收；Server 非 UTF-8 头值带 Base64 标记无损保存，Workers 保存运行时可见的字符串。类型化头只投影 ASCII，接收与读取规则一致；鉴权仍独立使用原有文本查询，不以 raw 的编码值替代。黑名单外的自定义敏感头仍会保存，payload 不进行递归脱敏。
+
 - 扩展 Telegram Bot API 结构化数据：`TelegramWebhook.payload` 直接按官方 Update 请求体建模，提供 29 类更新及消息、媒体元数据、富文本实体、回调、成员状态、投票、支付和 Business 等嵌套类型。区分可访问/不可访问消息，原样保留文本与字符串标识；未知字段保留在 raw。不下载媒体、不调用 Bot API，也不接入 Telegram Gateway。
 
 - 新增 App Store Connect 平台（`appstoreconnect`）：使用独立 Webhook Secret 验证 `x-apple-signature: hmacsha256=...`，支持官方文档列出的 12 类通知，结构化保留状态变化、地区可用性和关联资源。兼容普通与后台资源两种 relationship 结构、可缺失的 version/timestamp，按通知事件 ID 去重；不隐式调用 Apple API 补全反馈或资源详情，不混用内购/订阅的 JWS 通知协议。
 
-- 新增独立 Gitea 平台：配置使用 `provider: gitea` 和 Webhook Secret，支持 POST JSON/表单及原生 HMAC-SHA256 验签；结构化保留 Issue/PR、审核、标签变更、Push/提交签名、引用、Fork、Wiki、Release/附件、Package、Workflow/步骤等信息。区分归一化事件和原始事件类型，保留负数系统用户 ID；手动 Replay 的新 Delivery ID 按新投递处理。Server/Workers 共用接收逻辑，无需数据库迁移。
+- 新增独立 Gitea 平台：配置使用 `provider: gitea` 和 Webhook Secret，支持 POST JSON/表单及原生 HMAC-SHA256 验签；结构化保留 Issue/PR、审核、标签变更、Push/提交签名、引用、Fork、Wiki、Release/附件、Package、Workflow/步骤等信息。区分归一化事件和原始事件类型，保留负数系统用户 ID；手动 Replay 的新 Delivery ID 按新投递处理。Server/Workers 共用接收逻辑，Gitea 接入本身无需额外表结构迁移；本版整体升级仍须执行下述 raw 存储迁移。
 
 - 扩展 GitHub 消息的结构化平台数据：补齐 Issue/PR 状态、指派、里程碑、审核与代码评论位置，新增 Push/引用/提交状态、Workflow Job/步骤、Check Run/Suite、Release/附件、Discussion/答案、Deployment/状态和编辑前信息，供客户端按事件展示。保持字段级宽容解析及完整 raw；仓库时间兼容字符串和 Unix 秒。平台数据响应结构的不兼容调整见下文。
 
 ### 变更
 
-- **平台数据模型不兼容变更：**全部平台统一为 `platformData.event = { header, payload }`，按平台原来的字段名、值类型和嵌套路径返回数据；不再给缺失字段补 null 或空集合，显式 null 和实际值保持区分。移除 GitHub/Gitea 人为分组及其他平台派生摘要。升级前需清空旧消息，不提供旧平台快照兼容读取。
+- **平台建模不再作为接收门槛：**鉴权并完成必要解码/解密后，未知事件/版本、缺少展示元数据或无法生成平台模型不再阻止消息入库；模型不可用时使用通用展示回退，完整数据仍保存在 raw。缺少可靠事件 ID 时不猜测去重键。协议控制请求仍按原协议处理，鉴权、解密、格式解码、大小限制和存储失败不返回成功 ACK。
+
+- **raw 存储不兼容变更：**数据库分列保存过滤后的 `raw_headers`、完整解析/解密后的 `raw_payload` 及描述 payload 格式的 `content_type`；raw_payload 不含 header/format/value 包装，也不保存密文。JSON、文本、已解码表单分别按 JSON、原字符串、规范化 URL 编码保存。Core 内存中的 `PlatformEvent.raw` 使用 `{ header, payload: { format, value } }`。
+
+- **平台数据改为读取投影：**删除数据库 `platform_data` 列，详情接口的 `platformData` 从消息自身的 provider 和 raw 即时生成，不重新验签、解密或读取当前配置凭据；飞书 Encrypt Key 轮换不影响已接收消息。模型失败时返回 `platformData: null` 和可排查的 `platformDataError`，正常时后者为 null，不影响详情、raw 查询、已读/置顶和删除。通用展示字段、元数据和用户状态仍以保存的记录为准。
+
+- **平台数据模型不兼容变更：**全部平台统一为 `platformData.event = { header, payload }`。`header` 仅保存平台投递信息白名单，不包含鉴权凭据与签名；`payload` 保持已建模字段的官方路径。GitHub/Gitea 移除人为的 `push/git_ref/commit_status/wiki` 分组，PR 分支名称改从 `head.ref/base.ref` 读取；Gitea 精确事件类型移至 header。GitLab、Stripe、Slack、飞书和 Shopify 移除提升/派生字段，保留原生层级与值类型。已支持的常规事件沿用既有基础消息映射、鉴权及去重规则；模型不可用时的展示回退及缺少可靠 ID 时的接收行为见上文。不提供历史消息转换或旧格式兼容。
 
 - **Telegram 平台数据不兼容变更：**移除自定义的 `chat_id/message_id/callback_query_id` 摘要字段，聊天、消息和回调 ID 改从 `platformData.event.payload` 下的平台原有嵌套路径读取；`update_id` 是官方请求体字段，在 payload 顶层保留。没有额外的 `update` 包装，不迁移或回填旧平台数据。
 
 ### 修复
 
+- 平台 payload 的可缺失已建模字段区分缺失、显式 null 和实际值：仅省略不存在的 key，保留 null、空数组/对象、空字符串、false 和 0；不再补出缺失的 null/空集合。使用标准双层 Option 与统一 Serde 适配，Server/Workers 存储及返回时保留相同状态；未知或类型异常内容仍由完整 raw 兜底。
+
 - Docker 构建阶段升级至 Alpine 3.24，运行镜像升级至包含安全修复的 Alpine 3.24.4；两个阶段均在构建时更新系统包，获取该分支已发布的安全更新。
+
+### 升级说明
+
+- **破坏性变更：旧消息不兼容，不提供历史消息数据迁移或兼容读取。** 升级前按需备份并暂停旧实例写入，由部署者手动物理清空消息表 `notify_messages`（包含软删除记录），无需清空整个数据库。第 3 个迁移仅新增 `raw_headers`、删除 `platform_data`；非空消息表会使迁移失败，应用不会自动删除或转换消息。Server 启动时事务性迁移，Workers 在切换新代码前应用 `0003_raw_storage.sql`。账号、设备和配置保留不变；需要保留旧消息时不能直接采用此升级方式。
 
 ## [0.3.0] - 2026-11-07
 

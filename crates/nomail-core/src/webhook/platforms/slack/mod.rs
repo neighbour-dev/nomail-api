@@ -60,32 +60,30 @@ pub(in crate::webhook) fn receive(
         _ => return Err(invalid_auth()),
     }
     let (metadata, raw) = if is_form(request) {
-        let fields = form(request.body)?;
-        if let Some(encoded) = fields.get("payload").and_then(Value::as_str) {
-            let payload = object(encoded.as_bytes())?;
-            let event_type = required(text(&payload, &["type"]), "missing Slack interaction type")?;
+        let fields: Vec<(String, String)> = serde_urlencoded::from_bytes(request.body)
+            .map_err(|_| WebhookError::InvalidPayload("invalid form payload"))?;
+        let mut interaction = fields.iter().filter(|(key, _)| key == "payload");
+        let encoded = interaction.next().filter(|_| interaction.next().is_none());
+        if let Some((_, encoded)) = encoded {
+            let payload = json_payload(encoded.as_bytes())?;
+            let event_type = text(&payload, &["type"]);
             (
                 metadata(event_type, None, "slack:interaction", String::new()),
                 EventContent::Json(payload),
             )
         } else {
-            let raw = EventContent::Form(
-                fields
-                    .iter()
-                    .map(|(key, value)| (key.clone(), value.as_str().unwrap_or("").to_owned()))
-                    .collect(),
-            );
-            let event_type = required(
-                text(&Value::Object(fields), &["command"]),
-                "missing Slack command",
-            )?;
+            let event_type = fields
+                .iter()
+                .find(|(key, _)| key == "command")
+                .map(|(_, value)| value.trim().to_owned())
+                .unwrap_or_default();
             (
                 metadata(event_type, None, "slack:command", String::new()),
-                raw,
+                EventContent::Form(fields),
             )
         }
     } else {
-        let payload = object(request.body)?;
+        let payload = json_payload(request.body)?;
         match text(&payload, &["type"]).as_str() {
             "url_verification" => return challenge(&payload),
             "app_rate_limited" => {
@@ -94,20 +92,25 @@ pub(in crate::webhook) fn receive(
                 });
             }
             "event_callback" => {
-                let event_type = required(
-                    text(&payload, &["event", "type"]),
-                    "missing Slack event type",
-                )?;
+                let event_type = text(&payload, &["event", "type"]);
                 let id = text(&payload, &["event_id"]);
                 (
                     metadata(event_type, None, "slack:event", id),
                     EventContent::Json(payload),
                 )
             }
-            _ => return Err(WebhookError::Unsupported("unsupported Slack request type")),
+            _ => (
+                metadata(
+                    text(&payload, &["type"]),
+                    None,
+                    "slack:event",
+                    text(&payload, &["event_id"]),
+                ),
+                EventContent::Json(payload),
+            ),
         }
     };
-    Ok(PlatformEvent::from_payload(config.provider, metadata, raw, request)?.into())
+    Ok(PlatformEvent::from_raw(config.provider, metadata, raw, request).into())
 }
 
 fn verify_signature(

@@ -63,7 +63,7 @@ fn signed_json_and_text_mapping() {
     );
     assert!(parsed.metadata().deduplication_key.is_none());
     assert_eq!(parsed.raw.as_text(), Some(" Backup done "));
-    let PlatformData::Generic(webhook) = &parsed.data else {
+    let Some(PlatformData::Generic(webhook)) = &parsed.data else {
         panic!()
     };
     assert_eq!(webhook.header.title.as_deref(), Some("Backup"));
@@ -82,7 +82,7 @@ fn json_protocol_fields_are_not_text_header_defaults() {
     ]);
     let body = br#"{"eventType":"backup","message":"done","unknown":{"retained":true}}"#;
     let parsed = event(receive_with(Provider::Generic, Authentication::None, &h, body).unwrap());
-    let PlatformData::Generic(webhook) = &parsed.data else {
+    let Some(PlatformData::Generic(webhook)) = &parsed.data else {
         panic!()
     };
     let super::GenericWebhookPayload::Json(fields) = &webhook.payload else {
@@ -122,7 +122,7 @@ fn legacy_outcome_labels_are_not_priority_aliases_and_remain_in_platform_data() 
             .unwrap(),
         );
         assert_eq!(parsed.to_message_content().level, MessageLevel::Normal);
-        let PlatformData::Generic(webhook) = &parsed.data else {
+        let Some(PlatformData::Generic(webhook)) = &parsed.data else {
             panic!()
         };
         let super::GenericWebhookPayload::Json(fields) = &webhook.payload else {

@@ -35,7 +35,7 @@ macro_rules! webhook_header {
 mod native;
 mod parse;
 pub use native::{JsonField, JsonFieldExt};
-use parse::parse_payload;
+pub use parse::parse_raw;
 pub mod app_store_connect;
 pub mod feishu;
 pub mod generic;
@@ -58,7 +58,7 @@ pub use slack::SlackWebhook;
 pub use stripe::StripeWebhook;
 pub use telegram::TelegramWebhook;
 
-use super::{EventContent, EventMetadata, MessageContent, Provider, WebhookError, WebhookRequest};
+use super::{EventContent, EventMetadata, MessageContent, Provider, RawWebhook, WebhookRequest};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -78,13 +78,16 @@ pub enum PlatformData {
 }
 
 /// A received business event: common processing information, platform semantics,
-/// and complete decoded content. Typed delivery headers are allowlisted.
+/// and complete decoded content. Typed delivery headers are allowlisted; raw
+/// headers are captured separately using the shared blacklist, never wire bytes.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
 pub struct PlatformEvent {
+    /// Trusted endpoint provider, independent of successful semantic modeling.
+    pub provider: Provider,
     pub metadata: EventMetadata,
-    pub data: PlatformData,
-    pub raw: EventContent,
+    pub data: Option<PlatformData>,
+    pub raw: RawWebhook,
 }
 
 impl PlatformEvent {
@@ -93,53 +96,79 @@ impl PlatformEvent {
     }
 
     pub const fn provider(&self) -> Provider {
-        match &self.data {
-            PlatformData::Generic(_) => Provider::Generic,
-            PlatformData::Github(_) => Provider::Github,
-            PlatformData::Gitea(_) => Provider::Gitea,
-            PlatformData::AppStoreConnect(_) => Provider::AppStoreConnect,
-            PlatformData::Gitlab(_) => Provider::Gitlab,
-            PlatformData::Stripe(_) => Provider::Stripe,
-            PlatformData::Slack(_) => Provider::Slack,
-            PlatformData::Feishu(_) => Provider::Feishu,
-            PlatformData::Telegram(_) => Provider::Telegram,
-            PlatformData::Shopify(_) => Provider::Shopify,
-        }
+        self.provider
     }
 
     /// Called only after authentication and transport decoding/decryption.
-    pub(super) fn from_payload(
+    /// Modeling failure must never discard an accepted, decoded delivery.
+    pub(super) fn from_raw(
         provider: Provider,
         metadata: EventMetadata,
         payload: EventContent,
         request: &WebhookRequest<'_>,
-    ) -> Result<Self, WebhookError> {
-        let data = parse_payload(provider, &payload, request)?;
-        Ok(Self {
+    ) -> Self {
+        let mut raw: RawWebhook = payload.into();
+        raw.capture_headers(request.headers);
+        let data = parse_raw(provider, &raw).ok();
+        Self {
+            provider,
             metadata,
             data,
-            raw: payload,
-        })
+            raw,
+        }
     }
 
     /// Apply built-in inbox mappings without network or storage access.
     /// Only common business fields are mapped. This does NOT replace the platform
     /// data/raw, nor assign database identity, retention or NoMail user state.
     pub fn to_message_content(&self) -> MessageContent {
-        let data = &self.data;
-        match data {
-            PlatformData::Generic(event) => event.to_message_content(&self.metadata, &self.raw),
-            PlatformData::Github(event) => event.to_message_content(&self.metadata, &self.raw),
-            PlatformData::Gitea(event) => event.to_message_content(&self.metadata, &self.raw),
-            PlatformData::AppStoreConnect(event) => {
-                event.to_message_content(&self.metadata, &self.raw)
+        let Some(data) = &self.data else {
+            return super::support::message(
+                format!("{} notification", self.provider.as_str()),
+                self.raw.payload.to_readable_string(),
+                self.provider.as_str().into(),
+                "normal",
+                String::new(),
+            );
+        };
+        let mut common = match data {
+            PlatformData::Generic(event) => {
+                event.to_message_content(&self.metadata, &self.raw.payload)
             }
-            PlatformData::Gitlab(event) => event.to_message_content(&self.metadata, &self.raw),
-            PlatformData::Stripe(event) => event.to_message_content(&self.metadata, &self.raw),
-            PlatformData::Slack(event) => event.to_message_content(&self.metadata, &self.raw),
-            PlatformData::Feishu(event) => event.to_message_content(&self.metadata, &self.raw),
-            PlatformData::Telegram(event) => event.to_message_content(&self.metadata, &self.raw),
-            PlatformData::Shopify(event) => event.to_message_content(&self.metadata, &self.raw),
+            PlatformData::Github(event) => {
+                event.to_message_content(&self.metadata, &self.raw.payload)
+            }
+            PlatformData::Gitea(event) => {
+                event.to_message_content(&self.metadata, &self.raw.payload)
+            }
+            PlatformData::AppStoreConnect(event) => {
+                event.to_message_content(&self.metadata, &self.raw.payload)
+            }
+            PlatformData::Gitlab(event) => {
+                event.to_message_content(&self.metadata, &self.raw.payload)
+            }
+            PlatformData::Stripe(event) => {
+                event.to_message_content(&self.metadata, &self.raw.payload)
+            }
+            PlatformData::Slack(event) => {
+                event.to_message_content(&self.metadata, &self.raw.payload)
+            }
+            PlatformData::Feishu(event) => {
+                event.to_message_content(&self.metadata, &self.raw.payload)
+            }
+            PlatformData::Telegram(event) => {
+                event.to_message_content(&self.metadata, &self.raw.payload)
+            }
+            PlatformData::Shopify(event) => {
+                event.to_message_content(&self.metadata, &self.raw.payload)
+            }
+        };
+        if common.title.trim().is_empty() {
+            common.title = format!("{} notification", self.provider.as_str());
         }
+        if common.content.is_empty() {
+            common.content = self.raw.payload.to_readable_string();
+        }
+        common
     }
 }

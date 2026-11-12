@@ -34,14 +34,11 @@ pub(in crate::webhook) fn receive(
             .get("payload")
             .and_then(Value::as_str)
             .ok_or(WebhookError::InvalidPayload("missing GitHub form payload"))?;
-        object(encoded.as_bytes())?
+        json_payload(encoded.as_bytes())?
     } else {
-        object(request.body)?
+        json_payload(request.body)?
     };
-    let event_type = required(
-        request.header("x-github-event").into(),
-        "missing GitHub event type",
-    )?;
+    let event_type = request.header("x-github-event").trim().to_owned();
     if event_type == "ping" {
         return Ok(ReceiveOutcome::Respond(ProtocolResponse {
             status: 200,
@@ -49,7 +46,7 @@ pub(in crate::webhook) fn receive(
             body: b"pong".to_vec(),
         }));
     }
-    Ok(PlatformEvent::from_payload(
+    Ok(PlatformEvent::from_raw(
         config.provider,
         metadata(
             event_type,
@@ -59,7 +56,7 @@ pub(in crate::webhook) fn receive(
         ),
         EventContent::Json(payload),
         request,
-    )?
+    )
     .into())
 }
 

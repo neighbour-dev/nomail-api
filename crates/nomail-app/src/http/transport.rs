@@ -1,6 +1,9 @@
 //! The platform boundary contains transport capabilities, never API operations.
 use super::{ApiFailure, ApiResponse, Endpoint, HttpResult};
-use crate::{auth::RequestMeta, webhook::HeaderLookup};
+use crate::{
+    auth::RequestMeta,
+    webhook::{HeaderLookup, RawHeader},
+};
 use chrono::{DateTime, Utc};
 
 pub struct RequestHead {
@@ -8,9 +11,16 @@ pub struct RequestHead {
     pub path: String,
     pub query: String,
     pub headers: Vec<(String, String)>,
+    /// Complete runtime-visible bytes, separate from text authentication lookup.
+    pub raw_headers: Option<Vec<RawHeader>>,
     pub metadata: RequestMeta,
 }
 impl HeaderLookup for RequestHead {
+    fn entries(&self) -> Vec<RawHeader> {
+        self.raw_headers
+            .clone()
+            .unwrap_or_else(|| self.headers.entries())
+    }
     fn values(&self, name: &str) -> Vec<&str> {
         self.headers.values(name)
     }

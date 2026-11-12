@@ -56,14 +56,17 @@ pub async fn connect(config: &Config) -> Result<DatabaseConnection, ConnectError
         .await
         .map_err(ConnectError::Connection)?;
     let db = SqlxSqliteConnector::from_sqlx_sqlite_pool(pool);
-    Migrator::up(&db, None)
+    let migration = db.begin().await.map_err(ConnectError::Migration)?;
+    Migrator::up(&migration, None)
         .await
         .map_err(ConnectError::Migration)?;
     // No legacy configuration migration is provided. Fail at startup rather
     // than silently accepting old single-secret schemas or deleting user data.
-    db.execute_unprepared("SELECT encrypted_platform FROM webhook_configs LIMIT 0")
+    migration
+        .execute_unprepared("SELECT encrypted_platform FROM webhook_configs LIMIT 0")
         .await
         .map_err(ConnectError::Migration)?;
+    migration.commit().await.map_err(ConnectError::Migration)?;
     Ok(db)
 }
 

@@ -1,4 +1,4 @@
-use super::{PlatformEvent, WebhookError};
+use super::{PlatformEvent, RawHeader, WebhookError};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{fmt, str::FromStr};
@@ -59,6 +59,9 @@ impl FromStr for Provider {
 /// Lookup must be ASCII case-insensitive and preserve all values of repeated headers.
 pub trait HeaderLookup {
     fn values(&self, name: &str) -> Vec<&str>;
+    /// Enumerate all runtime-visible headers, retaining repeats and empty values.
+    /// Raw capture must not drop non-text bytes or unknown headers.
+    fn entries(&self) -> Vec<RawHeader>;
 
     fn get(&self, name: &str) -> Option<&str> {
         self.values(name).into_iter().next()
@@ -66,6 +69,11 @@ pub trait HeaderLookup {
 }
 
 impl HeaderLookup for Vec<(String, String)> {
+    fn entries(&self) -> Vec<RawHeader> {
+        self.iter()
+            .map(|(name, value)| RawHeader::from_bytes(name, value.as_bytes()))
+            .collect()
+    }
     fn values(&self, name: &str) -> Vec<&str> {
         self.iter()
             .filter(|(key, _)| key.eq_ignore_ascii_case(name))

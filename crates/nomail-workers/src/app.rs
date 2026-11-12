@@ -48,6 +48,7 @@ impl WorkersRequest {
                 path: request.path(),
                 query: request.url()?.query().unwrap_or("").into(),
                 headers: request.headers().entries().collect(),
+                raw_headers: None,
                 metadata: RequestMeta::new(
                     request
                         .headers()
@@ -65,6 +66,9 @@ impl http::HttpRequest for WorkersRequest {
         &self.head
     }
     async fn read_body(&mut self) -> HttpResult<Vec<u8>> {
+        if self.request.inner().body().is_none() {
+            return Ok(Vec::new());
+        }
         let mut bytes = Vec::new();
         let mut stream = self.request.stream().map_err(|_| ApiFailure::internal())?;
         while let Some(chunk) = stream.next().await {

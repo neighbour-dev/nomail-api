@@ -39,8 +39,16 @@ fn encrypted_v2_and_nested_text() {
     let body = encrypt_feishu(plain);
     let h = feishu_headers(&body);
     let parsed = event(receive_with(Provider::Feishu, feishu_auth(), &h, &body).unwrap());
+    let stored = RawWebhook::from_stored(
+        parsed.raw.header.clone(),
+        &parsed.raw.stored_payload(),
+        parsed.raw.payload_content_type(),
+    )
+    .unwrap();
+    assert!(!stored.stored_payload().contains("\"encrypt\""));
+    assert_eq!(parse_raw(Provider::Feishu, &stored).ok(), parsed.data);
     assert!(
-        matches!(&parsed.data, PlatformData::Feishu(webhook) if webhook.payload.schema.value_deref() == Some("2.0"))
+        matches!(&parsed.data, Some(PlatformData::Feishu(webhook)) if webhook.payload.schema.value_deref() == Some("2.0"))
     );
     assert_eq!(
         parsed.raw.as_json(),
@@ -147,7 +155,7 @@ fn plaintext_token_auth_and_legacy_events() {
         .unwrap(),
     );
     assert!(
-        matches!(&parsed.data, PlatformData::Feishu(webhook) if webhook.payload.schema.is_none())
+        matches!(&parsed.data, Some(PlatformData::Feishu(webhook)) if webhook.payload.schema.is_none())
     );
     assert_eq!(parsed.to_message_content().content, "hello");
     assert_eq!(
@@ -166,7 +174,7 @@ fn plaintext_token_auth_and_legacy_events() {
 }
 
 #[test]
-fn malformed_encryption_and_unknown_version_fail() {
+fn malformed_encryption_fails_but_unknown_versions_are_retained() {
     for body in [
         br#"{"encrypt":"bad-base64"}"#.as_slice(),
         br#"{"encrypt":"YQ=="}"#,
@@ -174,10 +182,10 @@ fn malformed_encryption_and_unknown_version_fail() {
         assert!(receive_with(Provider::Feishu, feishu_auth(), &Vec::new(), body).is_err());
     }
     let body = br#"{"schema":"3.0","header":{"event_type":"future"}}"#;
-    assert!(matches!(
-        receive_with(Provider::Feishu, Authentication::None, &Vec::new(), body),
-        Err(WebhookError::Unsupported(_))
-    ));
+    let parsed =
+        event(receive_with(Provider::Feishu, Authentication::None, &Vec::new(), body).unwrap());
+    assert_eq!(parsed.metadata.version.as_deref(), Some("3.0"));
+    assert_eq!(parsed.raw.as_json().unwrap()["schema"], "3.0");
 }
 
 #[test]

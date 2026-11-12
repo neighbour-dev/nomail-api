@@ -35,20 +35,19 @@ impl<S: MessageStore> MessageService<S> {
     pub async fn unread_count(&self, user_id: i64) -> MessageResult<u64> {
         self.store.count_unread_owned(user_id).await
     }
-    pub async fn get(&self, user_id: i64, id: Uuid) -> MessageResult<MessageWithConfig> {
-        self.store.get_owned(user_id, id).await?.ok_or_else(missing)
+    pub async fn get(&self, user_id: i64, id: Uuid) -> MessageResult<MessageView> {
+        Ok(MessageView::from_stored(
+            self.store
+                .get_owned(user_id, id)
+                .await?
+                .ok_or_else(missing)?,
+        ))
     }
     pub async fn raw(&self, user_id: i64, id: Uuid) -> MessageResult<RawContent> {
-        let mut raw = self
-            .store
+        self.store
             .get_raw_owned(user_id, id)
             .await?
-            .filter(|v| !v.text.is_empty())
-            .ok_or(MessageError::NotFound("raw payload not found"))?;
-        if raw.content_type.is_empty() {
-            raw.content_type = "application/octet-stream".into();
-        }
-        Ok(raw)
+            .ok_or(MessageError::NotFound("raw payload not found"))
     }
     pub async fn update(
         &self,
@@ -56,7 +55,7 @@ impl<S: MessageStore> MessageService<S> {
         id: Uuid,
         request: UpdateMessage,
         now: DateTime<Utc>,
-    ) -> MessageResult<MessageWithConfig> {
+    ) -> MessageResult<MessageView> {
         let read = request.status.map(|s| match s {
             ReadStatus::Read => ReadChange::Read { at: now },
             ReadStatus::Unread => ReadChange::Unread,
@@ -66,10 +65,14 @@ impl<S: MessageStore> MessageService<S> {
             pinned: request.pinned,
             updated_at: now,
         };
-        self.store
+        let updated = self
+            .store
             .update_owned(user_id, id, &patch)
             .await?
-            .ok_or_else(missing)
+            .ok_or_else(missing)?;
+        // Projection is best-effort and cannot turn a committed state update
+        // into an error. Ownership/visibility remains protected by the store.
+        Ok(MessageView::from_stored(updated))
     }
     pub async fn delete(&self, user_id: i64, id: Uuid, now: DateTime<Utc>) -> MessageResult<()> {
         if self

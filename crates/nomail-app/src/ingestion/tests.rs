@@ -87,6 +87,9 @@ fn encrypted(provider: Provider, secret: Option<&str>) -> String {
         Provider::Github => {
             json!({"provider":"github","credentials":{"secret":secret.unwrap_or("secret")}})
         }
+        Provider::Telegram => {
+            json!({"provider":"telegram","credentials":{"secretToken":secret.unwrap_or("secret")}})
+        }
         Provider::Feishu => {
             json!({"provider":"feishu","credentials":{"verificationToken":secret.unwrap(),"encryptKey":"separate-encryption-key"}})
         }
@@ -154,6 +157,52 @@ async fn application_owns_acceptance_defaults_and_duplicate_effects() {
     assert_eq!(duplicate.outcome, InsertOutcome::Duplicate(row.id));
     assert!(duplicate.created_event.is_none());
     assert_eq!(service.store.rows.borrow().len(), 1);
+}
+
+#[tokio::test]
+async fn authenticated_unmodeled_deliveries_are_stored_before_acknowledgement() {
+    let mut service = service(Provider::Telegram, Some("secret"));
+    let payload = json!({"update_id":"future-id","future":{"keep":true}});
+    let body = serde_json::to_vec(&payload).unwrap();
+    let headers = vec![
+        ("X-Telegram-Bot-Api-Secret-Token".into(), "secret".into()),
+        ("X-NoMail-Title".into(), "中文".into()),
+    ];
+    let request = WebhookRequest {
+        headers: &headers,
+        body: &body,
+    };
+    for _ in 0..2 {
+        let received = accepted(service.receive("enabled", &request).await.unwrap());
+        assert!(!received.outcome.duplicate());
+        assert!(received.created_event.is_some());
+        let rows = service.store.rows.borrow();
+        let message = &rows[&received.outcome.id()];
+        assert_eq!(message.provider, Provider::Telegram);
+        assert!(message.metadata.deduplication_key.is_none());
+        assert_eq!(message.raw().unwrap().as_json(), Some(&payload));
+        assert!(message.platform_data().is_err());
+        assert!(!message.common.title.is_empty());
+        assert!(!message.common.content.is_empty());
+    }
+    assert_eq!(service.store.rows.borrow().len(), 2);
+    service.store.fail_write = true;
+    assert!(service.receive("enabled", &request).await.is_err());
+    assert_eq!(service.store.rows.borrow().len(), 2);
+    let wrong = vec![("X-Telegram-Bot-Api-Secret-Token".into(), "wrong".into())];
+    assert!(
+        service
+            .receive(
+                "enabled",
+                &WebhookRequest {
+                    headers: &wrong,
+                    body: &body
+                }
+            )
+            .await
+            .is_err()
+    );
+    assert_eq!(service.store.rows.borrow().len(), 2);
 }
 
 #[tokio::test]

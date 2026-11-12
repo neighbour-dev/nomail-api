@@ -37,17 +37,11 @@ pub(in crate::webhook) fn receive(
         }
         _ => return Err(invalid_auth()),
     }
-    let payload = object(request.body)?;
-    let topic = required(
-        request.header("x-shopify-topic").into(),
-        "missing Shopify topic",
-    )?;
-    let shop_domain = required(
-        request.header("x-shopify-shop-domain").into(),
-        "missing Shopify shop domain",
-    )?;
+    let payload = json_payload(request.body)?;
+    let topic = request.header("x-shopify-topic").trim().to_owned();
+    let shop_domain = request.header("x-shopify-shop-domain").trim().to_owned();
     let version = optional(request.header("x-shopify-api-version"));
-    Ok(PlatformEvent::from_payload(
+    Ok(PlatformEvent::from_raw(
         config.provider,
         metadata(
             topic,
@@ -57,7 +51,7 @@ pub(in crate::webhook) fn receive(
         ),
         EventContent::Json(payload),
         request,
-    )?
+    )
     .into())
 }
 

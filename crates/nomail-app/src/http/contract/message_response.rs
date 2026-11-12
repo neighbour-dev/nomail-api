@@ -1,11 +1,11 @@
-use crate::message::{MessagePreview, MessageWithConfig};
+use crate::message::{MessagePreview, MessageView};
 use crate::webhook::{MessageLevel, PlatformData, Provider};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 /// HTTP list projection only, not another business message. Repositories select
-/// these columns without loading platform JSON or raw payloads for each row.
+/// these columns without loading raw headers/payloads or parsing platform data.
 #[derive(Serialize, Deserialize)]
 #[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
@@ -54,7 +54,10 @@ pub struct MessageDetail {
     pub webhook_config: MessageConfigSummary,
     pub provider: Provider,
     pub metadata: MessageMetadata,
-    pub platform_data: PlatformData,
+    /// Computed from decoded raw on read; never a database platform snapshot.
+    pub platform_data: Option<PlatformData>,
+    /// Present when platformData is unavailable; raw and message state remain usable.
+    pub platform_data_error: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub expire_at: Option<DateTime<Utc>>,
@@ -63,11 +66,13 @@ pub struct MessageDetail {
     pub has_raw_payload: bool,
     pub raw_content_type: String,
 }
-impl From<MessageWithConfig> for MessageDetail {
-    fn from(row: MessageWithConfig) -> Self {
-        let MessageWithConfig {
+impl From<MessageView> for MessageDetail {
+    fn from(row: MessageView) -> Self {
+        let MessageView {
             message: m,
             config_name,
+            platform_data,
+            platform_data_error,
         } = row;
         let content = m.common;
         MessageDetail {
@@ -89,13 +94,15 @@ impl From<MessageWithConfig> for MessageDetail {
                 version: m.metadata.version,
                 deduplication_key: m.metadata.deduplication_key,
             },
-            platform_data: m.platform_data,
+            platform_data,
+            platform_data_error,
             created_at: m.received_at,
             updated_at: m.updated_at,
             expire_at: m.expires_at,
             read_at: m.read_at,
             url: content.url.unwrap_or_default(),
-            has_raw_payload: !m.raw_payload.is_empty(),
+            // Raw storage is mandatory; an empty decoded form/text is still raw.
+            has_raw_payload: true,
             raw_content_type: m.content_type,
         }
     }

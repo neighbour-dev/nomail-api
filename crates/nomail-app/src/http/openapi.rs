@@ -74,7 +74,7 @@ pub fn document() -> Value {
                 json!({"application/json":{"schema":{"oneOf":[response,{"type":"object","required":["challenge"],"properties":{"challenge":{"type":"string"}}}]}},"text/plain":{"schema":{"type":"string"},"example":"pong"}})
             }
             ResponseKind::Raw => {
-                json!({"application/json":{"schema":true},"text/plain":{"schema":{"type":"string"}},"application/octet-stream":{"schema":{"type":"string","format":"binary"}}})
+                json!({"application/json":{"schema":true},"text/plain":{"schema":{"type":"string"}},"application/x-www-form-urlencoded":{"schema":{"type":"string"}},"application/octet-stream":{"schema":{"type":"string","format":"binary"}}})
             }
         };
         let mut responses = Map::new();
@@ -130,7 +130,7 @@ pub fn document() -> Value {
             BodyKind::Raw => {
                 operation["requestBody"] = json!({"required":true,"content":{"application/json":{"schema":true},"text/plain":{"schema":{"type":"string"}},"application/x-www-form-urlencoded":{"schema":{"type":"string"}},"application/octet-stream":{"schema":{"type":"string","format":"binary"}}}});
                 operation["description"] = json!(
-                    "保留原始字节验签；认证方式由接收配置决定，不要求 Bearer JWT。平台验证/Ping 直接返回协议响应，普通消息入库后返回 NoMail ACK。"
+                    "保留原始字节验签；认证方式由接收配置决定，不要求 Bearer JWT。无关非 ASCII 请求头、未知事件/版本或平台建模失败不阻止已鉴权且已解码/解密的消息入库；详情模型不可用时 platformData=null，并提供 platformDataError，完整 raw 仍可查询。鉴权、解密、格式解码和存储失败仍报错。平台验证/Ping 直接返回协议响应，普通消息入库后返回 NoMail ACK。"
                 );
             }
             BodyKind::None => (),

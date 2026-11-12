@@ -1,6 +1,7 @@
 use super::{DEFAULT_RETENTION_DAYS, MessageAccepted, MessageError, MessageResult};
 use crate::webhook::{
-    EventMetadata, PlatformData, PlatformEvent, Provider, service::apply_inbox_rules,
+    EventMetadata, PlatformData, PlatformEvent, Provider, RawHeader, RawWebhook, parse_raw,
+    service::apply_inbox_rules,
 };
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
@@ -33,7 +34,8 @@ pub struct Message {
     pub common: MessageContent,
     pub provider: Provider,
     pub metadata: EventMetadata,
-    pub platform_data: PlatformData,
+    pub raw_headers: Vec<RawHeader>,
+    /// Only the decoded/decrypted payload, without a header/format/value wrapper.
     pub raw_payload: String,
     pub content_type: String,
     /// NoMail receipt time, not the upstream platform's occurrence time.
@@ -68,10 +70,10 @@ impl Message {
             webhook_config_id: config_id,
             common,
             provider,
-            raw_payload: event.raw.to_readable_string(),
-            content_type: event.raw.media_type().into(),
+            raw_payload: event.raw.stored_payload(),
+            content_type: event.raw.payload_content_type().into(),
+            raw_headers: event.raw.header,
             metadata: event.metadata,
-            platform_data: event.data,
             received_at,
             updated_at: received_at,
             deleted_at: None,
@@ -81,6 +83,19 @@ impl Message {
             read_at: None,
         })
     }
+
+    pub fn raw(&self) -> MessageResult<RawWebhook> {
+        RawWebhook::from_stored(
+            self.raw_headers.clone(),
+            &self.raw_payload,
+            &self.content_type,
+        )
+        .map_err(|e| MessageError::Internal(e.to_string()))
+    }
+
+    pub fn platform_data(&self) -> MessageResult<PlatformData> {
+        parse_raw(self.provider, &self.raw()?).map_err(|e| MessageError::Internal(e.to_string()))
+    }
 }
 
 /// A coherent detail read, not another business message or ORM entity.
@@ -88,8 +103,34 @@ pub struct MessageWithConfig {
     pub message: Message,
     pub config_name: String,
 }
-/// Raw response view; no need to load/decode platform JSON just to inspect raw.
+
+/// Computed read projection, never a persisted platform snapshot.
+pub struct MessageView {
+    pub message: Message,
+    pub config_name: String,
+    pub platform_data: Option<PlatformData>,
+    /// Safe diagnostic for unavailable projections; complete raw remains readable.
+    pub platform_data_error: Option<String>,
+}
+impl MessageView {
+    pub fn from_stored(row: MessageWithConfig) -> Self {
+        let (platform_data, platform_data_error) = match row.message.platform_data() {
+            Ok(data) => (Some(data), None),
+            Err(error) => (None, Some(error.to_string())),
+        };
+        Self {
+            message: row.message,
+            config_name: row.config_name,
+            platform_data,
+            platform_data_error,
+        }
+    }
+}
+
+/// Raw-only storage view; no platform model or current credentials are loaded.
 pub struct RawContent {
+    /// JSON array contents as stored; do not project through typed header models.
+    pub header: Vec<serde_json::Value>,
     pub text: String,
     pub content_type: String,
 }

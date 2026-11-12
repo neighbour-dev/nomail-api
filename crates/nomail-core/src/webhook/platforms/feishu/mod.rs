@@ -112,31 +112,25 @@ pub(in crate::webhook) fn receive(
         crypto::equal(token.as_bytes(), actual.as_bytes())?;
     }
     let schema = text(&payload, &["schema"]);
-    let event_type = required(
-        first(&[
-            text(&payload, &["header", "event_type"]),
-            text(&payload, &["type"]),
-        ]),
-        "missing Feishu event type",
-    )?;
+    let event_type = first(&[
+        text(&payload, &["header", "event_type"]),
+        text(&payload, &["type"]),
+    ]);
     let id = first(&[
         text(&payload, &["header", "event_id"]),
         text(&payload, &["uuid"]),
     ]);
-    if schema != "2.0" && !schema.is_empty() {
-        return Err(WebhookError::Unsupported("unsupported Feishu schema"));
-    }
-    Ok(PlatformEvent::from_payload(
+    Ok(PlatformEvent::from_raw(
         config.provider,
         metadata(event_type, optional(schema), "feishu:event", id),
         EventContent::Json(payload),
         request,
-    )?
+    )
     .into())
 }
 
 fn decode(body: &[u8], encrypt_key: Option<&str>) -> Result<Value, WebhookError> {
-    let outer = object(body)?;
+    let outer = json_payload(body)?;
     if let Some(encrypted) = outer.get("encrypt") {
         let key = encrypt_key.ok_or(WebhookError::Unauthorized)?;
         let encrypted = encrypted
@@ -153,7 +147,7 @@ fn decode(body: &[u8], encrypt_key: Option<&str>) -> Result<Value, WebhookError>
             .map_err(|_| WebhookError::InvalidPayload("invalid encrypted payload"))?
             .decrypt_padded_vec_mut::<Pkcs7>(&buffer[16..])
             .map_err(|_| WebhookError::InvalidPayload("invalid encrypted payload"))?;
-        object(&plaintext)
+        json_payload(&plaintext)
     } else {
         Ok(outer)
     }

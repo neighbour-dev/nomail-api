@@ -33,12 +33,15 @@ pub(super) fn first(values: &[String]) -> String {
 }
 
 pub(super) fn object(body: &[u8]) -> Result<Value, WebhookError> {
-    let value: Value = serde_json::from_slice(body)
-        .map_err(|_| WebhookError::InvalidPayload("invalid JSON payload"))?;
+    let value = json_payload(body)?;
     if !value.is_object() {
         return Err(WebhookError::InvalidPayload("expected a JSON object"));
     }
     Ok(value)
+}
+
+pub(super) fn json_payload(body: &[u8]) -> Result<Value, WebhookError> {
+    serde_json::from_slice(body).map_err(|_| WebhookError::InvalidPayload("invalid JSON payload"))
 }
 
 pub(super) fn form(body: &[u8]) -> Result<Map<String, Value>, WebhookError> {

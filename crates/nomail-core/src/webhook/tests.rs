@@ -108,6 +108,18 @@ fn every_platform_binds_allowlisted_headers_to_native_payload_fields() {
             .unwrap(),
         );
         assert_eq!(parsed.raw.as_json(), Some(&payload));
+        let stored = RawWebhook::from_stored(
+            parsed.raw.header.clone(),
+            &parsed.raw.stored_payload(),
+            parsed.raw.payload_content_type(),
+        )
+        .unwrap();
+        assert_eq!(stored, parsed.raw);
+        assert_eq!(
+            parse_raw(provider, &stored).ok(),
+            parsed.data,
+            "{provider:?}: raw-only read projection differs from ingestion"
+        );
         let data = serde_json::to_value(&parsed.data).unwrap();
         let envelope = &data["event"];
         assert_eq!(envelope.as_object().unwrap().len(), 2);
@@ -370,7 +382,7 @@ fn configuration_is_explicit_and_headers_are_case_insensitive() {
 }
 
 #[test]
-fn invalid_json_objects_are_rejected() {
+fn undecodable_json_is_rejected_but_unmodeled_json_is_retained() {
     for provider in [
         Provider::Gitea,
         Provider::AppStoreConnect,
@@ -381,8 +393,20 @@ fn invalid_json_objects_are_rejected() {
         Provider::Telegram,
         Provider::Shopify,
     ] {
-        for body in [b"null".as_slice(), b"[]", b"invalid"] {
+        for body in [b"invalid".as_slice(), b"{"] {
             assert!(receive_with(provider, Authentication::None, &Vec::new(), body).is_err());
+        }
+        for body in [b"null".as_slice(), b"[]", b"{}"] {
+            let parsed =
+                event(receive_with(provider, Authentication::None, &Vec::new(), body).unwrap());
+            assert_eq!(parsed.provider(), provider);
+            assert_eq!(
+                parsed.raw.as_json().unwrap(),
+                &serde_json::from_slice::<Value>(body).unwrap()
+            );
+            assert!(!parsed.to_message_content().title.is_empty());
+            assert!(!parsed.to_message_content().content.is_empty());
+            assert!(parsed.metadata.deduplication_key.is_none());
         }
     }
 }

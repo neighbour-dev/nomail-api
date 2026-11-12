@@ -31,12 +31,12 @@ fn decode_message(mut row: Value) -> MessageResult<MessageWithConfig> {
         .ok_or_else(|| invalid("missing message config name"))?
         .to_owned();
     row["pinned"] = json!(row["pinned"].as_i64() == Some(1));
-    let data = row["platform_data"]
+    let data = row["raw_headers"]
         .as_str()
-        .ok_or_else(|| invalid("missing platform data"))?;
+        .ok_or_else(|| invalid("missing raw headers"))?;
     let data: Value =
-        serde_json::from_str(data).map_err(|e| invalid(format!("invalid platform data: {e}")))?;
-    row["platform_data"] = data;
+        serde_json::from_str(data).map_err(|e| invalid(format!("invalid raw headers: {e}")))?;
+    row["raw_headers"] = data;
     row["metadata"] = json!({"event_type":row["event_type"],"version":row["event_version"],"deduplication_key":
         if row["deduplication_key"].is_null(){Value::Null}else{json!({"scope":row["deduplication_scope"],"value":row["deduplication_key"]})}});
     Ok(MessageWithConfig {
@@ -234,7 +234,7 @@ impl MessageStore for Store<'_> {
         self.0
             .rows(
                 &format!(
-                    "SELECT raw_payload,content_type FROM notify_messages WHERE {OWNED} AND id=?"
+                    "SELECT raw_headers,raw_payload,content_type FROM notify_messages WHERE {OWNED} AND id=?"
                 ),
                 vec![json!(user_id), json!(id)],
             )
@@ -244,6 +244,8 @@ impl MessageStore for Store<'_> {
             .next()
             .map(|row| {
                 Ok(RawContent {
+                    header: serde_json::from_str(row["raw_headers"].as_str().ok_or_else(|| invalid("missing raw headers"))?)
+                        .map_err(|e| invalid(format!("invalid raw headers: {e}")))?,
                     text: row["raw_payload"]
                         .as_str()
                         .ok_or_else(|| invalid("invalid raw payload"))?
@@ -332,8 +334,8 @@ impl IngestionStore for Store<'_> {
     }
     async fn insert_once(&self, m: &Message) -> MessageResult<InsertOutcome> {
         let key = m.metadata.deduplication_key.as_ref();
-        let data = serde_json::to_string(&m.platform_data).map_err(|e| invalid(e.to_string()))?;
-        let rows=self.0.rows("INSERT INTO notify_messages (id,webhook_config_id,provider,event_type,event_version,deduplication_scope,deduplication_key,platform_data,title,content,source,level,url,raw_payload,content_type,created_at,updated_at,expire_at,status,pinned,read_at,deleted_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(webhook_config_id,deduplication_scope,deduplication_key) DO NOTHING RETURNING id",
+        let data = serde_json::to_string(&m.raw_headers).map_err(|e| invalid(e.to_string()))?;
+        let rows=self.0.rows("INSERT INTO notify_messages (id,webhook_config_id,provider,event_type,event_version,deduplication_scope,deduplication_key,raw_headers,title,content,source,level,url,raw_payload,content_type,created_at,updated_at,expire_at,status,pinned,read_at,deleted_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(webhook_config_id,deduplication_scope,deduplication_key) DO NOTHING RETURNING id",
             vec![json!(m.id),json!(m.webhook_config_id),json!(m.provider),json!(m.metadata.event_type),json!(m.metadata.version),
                 json!(key.map(|k|&k.scope)),json!(key.map(|k|&k.value)),json!(data),json!(m.common.title),json!(m.common.content),
                 json!(m.common.source),json!(m.common.level),json!(m.common.url),json!(m.raw_payload),json!(m.content_type),

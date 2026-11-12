@@ -26,7 +26,7 @@ fn snapshot_thin_and_rotating_signatures() {
             .unwrap(),
         );
         assert_eq!(
-            matches!(&parsed.data, PlatformData::Stripe(webhook) if webhook.payload.object.value_deref() == Some("v2.core.event")),
+            matches!(&parsed.data, Some(PlatformData::Stripe(webhook)) if webhook.payload.object.value_deref() == Some("v2.core.event")),
             is_thin
         );
         if is_thin {
@@ -132,14 +132,16 @@ fn typed_configuration_accepts_rotation_keys_but_never_unsigned_or_stale_deliver
 }
 
 #[test]
-fn unknown_envelopes_are_rejected() {
-    assert!(matches!(
+fn unknown_envelopes_are_retained_without_guessing_a_new_event_type() {
+    let parsed = event(
         receive_with(
             Provider::Stripe,
             Authentication::None,
             &Vec::new(),
             br#"{"id":"evt_1","type":"test","object":"unknown"}"#,
-        ),
-        Err(WebhookError::Unsupported(_))
-    ));
+        )
+        .unwrap(),
+    );
+    assert_eq!(parsed.raw.as_json().unwrap()["object"], "unknown");
+    assert_eq!(parsed.metadata.event_type, "test");
 }

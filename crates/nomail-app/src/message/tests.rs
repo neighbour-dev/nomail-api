@@ -160,6 +160,11 @@ impl MessageStore for Store {
             .get(&id)
             .filter(|m| self.visible(user_id, m))
             .map(|m| RawContent {
+                header: m
+                    .raw_headers
+                    .iter()
+                    .map(|header| serde_json::to_value(header).unwrap())
+                    .collect(),
                 text: m.raw_payload.clone(),
                 content_type: m.content_type.clone(),
             }))
@@ -305,11 +310,12 @@ fn received_message_factory_preserves_platform_content_and_sets_inbox_defaults()
     assert_eq!(record.webhook_config_id, 1);
     assert_eq!(record.provider, original.provider());
     assert_eq!(record.metadata, original.metadata);
-    assert_eq!(record.platform_data, original.data);
-    assert_eq!(record.raw_payload, original.raw.to_readable_string());
+    assert_eq!(record.platform_data().ok(), original.data);
+    assert_eq!(record.raw_headers, original.raw.header);
+    assert_eq!(record.raw_payload, original.raw.stored_payload());
     assert_eq!(record.received_at, now());
     assert_eq!(record.updated_at, now());
-    assert_eq!(record.content_type, original.raw.media_type());
+    assert_eq!(record.content_type, original.raw.payload_content_type());
     assert!(record.deleted_at.is_none());
     assert!(record.read_at.is_none());
     assert_eq!(
@@ -325,6 +331,94 @@ fn received_message_factory_rejects_an_unrepresentable_expiry() {
         Message::from_received_event(1, event(None, "normal"), Uuid::from_u128(1), DateTime::<Utc>::MAX_UTC),
         Err(MessageError::Internal(message)) if message == "invalid message expiry"
     ));
+}
+
+#[tokio::test]
+async fn failed_platform_projection_keeps_details_raw_and_state_updates_available() {
+    let service = MessageService {
+        store: Store::new(),
+    };
+    let id = Uuid::from_u128(1);
+    service.store.seed(1, event(None, "normal"), id);
+    {
+        let mut rows = service.store.rows.borrow_mut();
+        let message = rows.get_mut(&id).unwrap();
+        assert!(
+            serde_json::to_value(&*message)
+                .unwrap()
+                .get("platform_data")
+                .is_none()
+        );
+        message.raw_payload = json!({"title":"raw-only title","content":null}).to_string();
+    }
+    let detail = service.get(7, id).await.unwrap();
+    let view = serde_json::to_value(detail.platform_data).unwrap();
+    assert_eq!(
+        view["event"]["payload"],
+        json!({"title":"raw-only title","content":null})
+    );
+    assert_ne!(
+        detail.message.common.title, "raw-only title",
+        "stored common display content must not be regenerated"
+    );
+    service
+        .store
+        .rows
+        .borrow_mut()
+        .get_mut(&id)
+        .unwrap()
+        .provider = Provider::Telegram;
+    let writes = service.store.writes.get();
+    let detail = service.get(7, id).await.unwrap();
+    assert!(detail.platform_data.is_none());
+    assert!(detail.platform_data_error.is_some());
+    let updated = service
+        .update(7, id, UpdateMessage::new(None, Some(true)).unwrap(), now())
+        .await
+        .unwrap();
+    assert!(updated.platform_data.is_none());
+    assert!(updated.platform_data_error.is_some());
+    assert_eq!(service.store.writes.get(), writes + 1);
+    assert!(service.store.rows.borrow()[&id].pinned);
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&service.raw(7, id).await.unwrap().text).unwrap()
+            ["title"],
+        "raw-only title"
+    );
+}
+
+#[tokio::test]
+async fn raw_queries_do_not_decode_payloads_or_normalize_content_types() {
+    let service = MessageService {
+        store: Store::new(),
+    };
+    let id = Uuid::from_u128(1);
+    service.store.seed(1, event(None, "normal"), id);
+    for (payload, content_type) in [
+        (" {\n \"title\":\"中文\"\n}\n", "application/json"),
+        ("{invalid JSON", "application/json"),
+        ("", "text/plain"),
+        (
+            "text=%20one%20&text=two",
+            "application/x-www-form-urlencoded",
+        ),
+        ("opaque", "application/custom; version=1"),
+        ("", ""),
+    ] {
+        {
+            let mut rows = service.store.rows.borrow_mut();
+            let message = rows.get_mut(&id).unwrap();
+            message.raw_payload = payload.into();
+            message.content_type = content_type.into();
+        }
+        let raw = service.raw(7, id).await.unwrap();
+        assert_eq!(raw.text, payload);
+        assert_eq!(raw.content_type, content_type);
+        assert_eq!(
+            serde_json::to_value(raw.header).unwrap(),
+            serde_json::to_value(&service.store.rows.borrow()[&id].raw_headers).unwrap()
+        );
+    }
 }
 
 #[tokio::test]
@@ -380,7 +474,10 @@ async fn state_updates_are_sparse_preserve_content_and_use_one_operation_timesta
     assert!(pinned.pinned);
     assert_eq!(pinned.status, "read");
     assert_eq!(pinned.read_at, Some(read_time));
-    assert_eq!(pinned.platform_data, before.platform_data);
+    assert_eq!(
+        pinned.platform_data().unwrap(),
+        before.platform_data().unwrap()
+    );
     assert_eq!(pinned.metadata.event_type, before.metadata.event_type);
     assert_eq!(pinned.received_at, before.received_at);
     let repeated = service
@@ -511,10 +608,7 @@ async fn expiry_is_not_an_implicit_visibility_filter_and_raw_is_a_separate_view(
         .unwrap()
         .content_type
         .clear();
-    assert_eq!(
-        service.raw(7, id).await.unwrap().content_type,
-        "application/octet-stream"
-    );
+    assert_eq!(service.raw(7, id).await.unwrap().content_type, "");
     service
         .store
         .rows
@@ -523,10 +617,14 @@ async fn expiry_is_not_an_implicit_visibility_filter_and_raw_is_a_separate_view(
         .unwrap()
         .raw_payload
         .clear();
-    assert!(matches!(
-        service.raw(7, id).await,
-        Err(MessageError::NotFound(_))
-    ));
+    service
+        .store
+        .rows
+        .borrow_mut()
+        .get_mut(&id)
+        .unwrap()
+        .content_type = "text/plain".into();
+    assert_eq!(service.raw(7, id).await.unwrap().text, "");
     service.store.configs.borrow_mut().get_mut(&1).unwrap().2 = true;
     assert_eq!(
         service

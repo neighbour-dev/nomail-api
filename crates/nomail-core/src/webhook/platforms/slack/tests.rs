@@ -13,6 +13,40 @@ fn slack_headers(body: &[u8], content_type: &str) -> Vec<(String, String)> {
 }
 
 #[test]
+fn duplicate_form_values_survive_even_when_the_model_cannot_represent_them() {
+    let body = b"command=%2Fexample&text=one&text=two";
+    let h = slack_headers(body, "application/x-www-form-urlencoded");
+    let parsed = event(
+        receive_with(
+            Provider::Slack,
+            Authentication::SlackSigningSecret("slack-secret"),
+            &h,
+            body,
+        )
+        .unwrap(),
+    );
+    assert!(parsed.data.is_none());
+    let restored = RawWebhook::from_stored(
+        parsed.raw.header.clone(),
+        &parsed.raw.stored_payload(),
+        parsed.raw.payload_content_type(),
+    )
+    .unwrap();
+    assert_eq!(restored, parsed.raw);
+    let EventContent::Form(fields) = restored.payload else {
+        panic!()
+    };
+    assert_eq!(
+        fields,
+        vec![
+            ("command".into(), "/example".into()),
+            ("text".into(), "one".into()),
+            ("text".into(), "two".into())
+        ]
+    );
+}
+
+#[test]
 fn events_interactions_and_slash_commands() {
     let events = br#"{"type":"event_callback","event_id":"Ev1","team_id":"T1","event":{"type":"message","text":"hello"}}"#;
     let interaction = serde_urlencoded::to_string([(
@@ -39,7 +73,7 @@ fn events_interactions_and_slash_commands() {
             )
             .unwrap(),
         );
-        let PlatformData::Slack(webhook) = &parsed.data else {
+        let Some(PlatformData::Slack(webhook)) = &parsed.data else {
             panic!()
         };
         match kind {
@@ -67,6 +101,14 @@ fn events_interactions_and_slash_commands() {
             _ => unreachable!(),
         }
         assert!(!parsed.to_message_content().content.is_empty());
+        let stored = RawWebhook::from_stored(
+            parsed.raw.header.clone(),
+            &parsed.raw.stored_payload(),
+            parsed.raw.payload_content_type(),
+        )
+        .unwrap();
+        assert_eq!(stored, parsed.raw);
+        assert_eq!(parse_raw(Provider::Slack, &stored).ok(), parsed.data);
         match kind {
             0 => assert_eq!(parsed.raw.as_json().unwrap()["event"]["text"], "hello"),
             1 => assert_eq!(
@@ -74,7 +116,7 @@ fn events_interactions_and_slash_commands() {
                 "approve"
             ),
             2 => {
-                let EventContent::Form(fields) = &parsed.raw else {
+                let EventContent::Form(fields) = &parsed.raw.payload else {
                     panic!()
                 };
                 assert!(fields.contains(&("command".into(), "/example".into())));

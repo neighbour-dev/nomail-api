@@ -37,7 +37,7 @@ fn parse(payload: &Value) -> PlatformEvent {
 }
 
 fn model(parsed: &PlatformEvent) -> &super::AppStoreConnectWebhookPayload {
-    let PlatformData::AppStoreConnect(value) = &parsed.data else {
+    let Some(PlatformData::AppStoreConnect(value)) = &parsed.data else {
         panic!("wrong platform model")
     };
     &value.payload
@@ -424,17 +424,19 @@ fn malformed_optional_fields_unknown_events_and_management_ping_are_not_control_
     ] {
         let body = serde_json::to_vec(&payload).unwrap();
         let h = headers(&[("X-Apple-Signature", &signature("test-secret", &body))]);
-        assert!(matches!(
+        let parsed = event(
             receive_with(
                 Provider::AppStoreConnect,
                 Authentication::HmacSha256("test-secret"),
                 &h,
                 &body,
-            ),
-            Err(WebhookError::InvalidPayload(_))
-        ));
+            )
+            .unwrap(),
+        );
+        assert!(parsed.data.is_none());
+        assert_eq!(parsed.raw.as_json(), Some(&payload));
     }
-    for body in [b"[]".as_slice(), b"null", b"invalid", b"payload=%7B%7D"] {
+    for body in [b"invalid".as_slice(), b"payload=%7B%7D"] {
         let h = headers(&[("X-Apple-Signature", &signature("test-secret", body))]);
         assert!(matches!(
             receive_with(

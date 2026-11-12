@@ -19,19 +19,21 @@ npm test
 
 ## 与 Server 的边界
 
-- 详情的 platformData.event 统一为 `{ header, payload }`，payload 按平台原来的字段路径返回；缺失字段不补 null 或空集合，显式 null、空值、false 和 0 原样保留。该结构变化不改变鉴权策略，未知字段仍完整保留在 raw。
+- 不额外以非 ASCII 请求头拒收消息；raw 保留黑名单之外的运行时可见字符串，类型化头仅投影 ASCII，正文和 JSON 支持 UTF-8。HTTP 传输语法由运行时处理，鉴权和必要解密不降级。
 - 通过 App 使用 Core 的平台协议与基础内容映射；开源版收件箱规则、Message、AuthService、DTO、分页、凭据存储加密及 Token hash 全部属于 App。依赖方向是 `Workers → App → Core`。
-- 单张消息表同时保存通用字段、类型/版本/完整去重键、带标签的 platform_data JSON、可读原始内容及 NoMail 状态。列表必含 level；详情返回 metadata/platformData，原文继续使用 raw 接口。配置修改和已读/置顶操作不会重写平台快照。
-- 初始 Schema 与 Server 约束对齐：完整作用域去重、平台 JSON/provider 一致性、合法等级、读状态及外键。不转换旧的本地数据库，也不会自动清空已有开发数据。
+- 单张消息表保存通用字段、类型/版本/完整去重键、raw 和 NoMail 状态，不再有 platform_data 列。raw_headers 为黑名单过滤后的请求头 JSON；raw_payload 只保存完整解码/解密数据，不包 header/format/value；content_type 描述该数据的 JSON、文本或表单格式。详情里的 platformData 由 App/Core 从 raw 即时解析，不重新验签、不访问当前 Webhook 凭据；飞书 Key 轮换不影响历史解密数据读取。列表不加载 raw，不解析平台数据；状态修改不重写 raw。
+- 最新 Schema 与 Server 约束对齐：完整作用域去重、raw_headers JSON 数组、合法等级、读状态及外键。第 3 个迁移只调整存储列，要求消息表物理清空，不转换旧记录，也不自动清空开发数据。
 - Server 使用 SeaORM/SQLite 的原生 UUID BLOB 与日期编码；D1 使用 UUID TEXT 与规范化 UTC RFC3339 毫秒字符串。通过各自适配层保持同一 HTTP 数据契约，不直接交换数据库文件。
 - `src/auth/` 只包含密码执行和 AuthStore 的 D1 实现，不维护第二套 JWT、密码策略或业务流程。多步骤登录/改密使用 batch；刷新使用条件 UPDATE 与受影响行数保护，并在同一批次更新设备 IP/User-Agent/最近活动时间；不能将 Server 的持有事务对象方式搬到 Workers。
-- `src/message/` 只保留存储适配。D1 MessageStore 接收类型化查询与局部状态命令，更新/详情读取使用同一 batch；批量通过 `json_each(?)` 绑定一个 JSON ID 数组，支持 100 个 ID 的单次原子写入，不用陈旧完整记录覆盖并发操作。
+- `src/message/` 只保留存储适配。D1 MessageStore 的更新/详情记录读取使用同一 batch，按所有权和可见性原子写入；平台模型失败不阻止入库、详情或状态操作，详情返回 platformData=null 和 platformDataError，不把建模失败变成已提交写入后的 500。批量通过 `json_each(?)` 绑定一个 JSON ID 数组，支持 100 个 ID 的单次原子写入，不用陈旧完整记录覆盖并发操作。
 - `src/webhook/configs/repository.rs` 原子更新配置并返回不含 URL/凭据的 ConfigView，App HTTP 层构造公开响应；空 PATCH 不写入。
 - 查配置、解密、验签及入箱由 App IngestionService 完成，App HTTP 执行器转换 ACK 和 SSE 效果，Workers 只写响应和尽力而为地广播。D1 错误先转为存储/业务错误，不依赖 HTTP 状态码。
 - SSE 为每用户一个 DO，单实例最多 32 个订阅、每订阅 32 条缓冲，20 秒心跳，到访问令牌过期时关闭。无重放、无离线投递，慢客户端可能丢事件；重新连接后应刷新列表。
-- HTTP 配置开放 Generic 及 GitHub/Gitea/App Store Connect/GitLab/Stripe/Slack/飞书/Telegram/Shopify，使用 Core 按平台目录定义的严格 platform 配置；Gitea 要求 Secret，支持 POST JSON/表单并使用原生签名头；App Store Connect 使用 `appstoreconnect` 和 Webhook Secret，按通知事件 ID 去重，不查询 Apple API；飞书的 Token/Encrypt Key 独立，Generic 匿名需显式选择。App 整体加密配置并返回无秘密的平台摘要，D1 原子更新 provider 与 encrypted_platform；配置不再有 source。旧数据库不迁移，需备份后使用新数据库基线。
+- HTTP 配置开放 Generic 及 GitHub/Gitea/App Store Connect/GitLab/Stripe/Slack/飞书/Telegram/Shopify，使用 Core 按平台目录定义的严格 platform 配置；Gitea 要求 Secret，支持 POST JSON/表单并使用原生签名头；App Store Connect 使用 `appstoreconnect` 和 Webhook Secret，按通知事件 ID 去重，不查询 Apple API；飞书的 Token/Encrypt Key 独立，Generic 匿名需显式选择。App 整体加密配置并返回无秘密的平台摘要，D1 原子更新 provider 与 encrypted_platform；配置不再有 source。不提供当前基线之前的单 Secret 配置数据库迁移。
 - 本地测试不代表免费套餐 CPU 可满足 bcrypt cost=10。发布前用实际套餐测试登录开销；SSE 会产生 DO 使用费用。没有请求级应用限流，生产需要在 Cloudflare 配置入口限流与防滥用措施。
 - 不包含通知推送或通知中转功能，没有推送接口、状态字段或 Token 存储；SSE 只负责在线收件箱更新，不接入 APNs/FCM/厂商通知。
 - 没有持久化推送任务、队列、自动过期清理，也没有旧 PostgreSQL 数据迁移。
 
-`wrangler.toml` 中的 D1 migrations 是新安装的建表初始化；不是旧数据库兼容迁移。
+`wrangler.toml` 中的 D1 migrations 包含基线、游标索引及 0003_raw_storage.sql，不提供旧 PostgreSQL 或单 Secret 配置数据库迁移。升级前按需备份，暂停旧 Worker 和请求写入，由部署者物理清空 notify_messages，应用第 3 个表结构迁移后再启用新版；非空表会使迁移失败并回滚，账号、设备和配置无需清空，不提供消息 JSON 转换或旧格式兼容。
+
+raw 查询不依赖平台模型，沿用直接返回 raw_payload 的原文响应方式。表单保存为 URL 编码字符串，文本原样保存，JSON 保存为 JSON 文本。入箱时 HTTP 头只按 Core 黑名单排除；未知敏感头也会保留，body 不自动脱敏。保存的请求头供详情的平台模型重建使用。

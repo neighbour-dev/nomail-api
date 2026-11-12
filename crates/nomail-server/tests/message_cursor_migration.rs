@@ -11,8 +11,12 @@ async fn cursor_migration_upgrades_existing_data_and_supports_indexed_seek_in_bo
     db.execute_unprepared(r#"WITH RECURSIVE n(i) AS (VALUES(1) UNION ALL SELECT i+1 FROM n WHERE i<5000)
         INSERT INTO notify_messages(id,created_at,updated_at,webhook_config_id,provider,event_type,platform_data,title,content,level,raw_payload,content_type)
         SELECT randomblob(16),printf('2040-01-01T00:%02d:%02d.123+00:00',i/600,(i/10)%60),'2026',i%2+1,'generic','message','{"provider":"generic"}','title','body','normal','{}','application/json' FROM n"#).await.unwrap();
-    Migrator::up(&db, None).await.unwrap();
-    Migrator::up(&db, None).await.unwrap();
+    // This test targets cursor version 2. Later incompatible raw-storage
+    // migrations intentionally require an empty inbox and are tested separately.
+    Migrator::up(&db, Some(1)).await.unwrap();
+    db.execute_unprepared(include_str!("../migrations/002_message_cursor.sql"))
+        .await
+        .unwrap();
     let count = db
         .query_one(Statement::from_string(
             DbBackend::Sqlite,

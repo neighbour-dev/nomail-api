@@ -14,7 +14,7 @@ pub struct Model {
     pub event_version: Option<String>,
     pub deduplication_scope: Option<String>,
     pub deduplication_key: Option<String>,
-    pub platform_data: String,
+    pub raw_headers: String,
     pub source: Option<String>,
     pub title: String,
     pub content: String,
@@ -59,7 +59,7 @@ impl TryFrom<&Model> for nomail_app::message::Message {
                     .zip(m.deduplication_key.clone())
                     .map(|(scope, value)| nomail_app::webhook::DeduplicationKey { scope, value }),
             },
-            platform_data: serde_json::from_str(&m.platform_data)?,
+            raw_headers: serde_json::from_str(&m.raw_headers)?,
             raw_payload: m.raw_payload.clone(),
             content_type: m.content_type.clone(),
             expires_at: m.expire_at,

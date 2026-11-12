@@ -62,6 +62,7 @@ impl TryFrom<ListRow> for MessagePreview {
 }
 #[derive(FromQueryResult)]
 struct RawRow {
+    raw_headers: String,
     raw_payload: String,
     content_type: String,
 }
@@ -265,18 +266,26 @@ impl MessageStore for Store<'_> {
         Ok(result)
     }
     async fn get_raw_owned(&self, user_id: i64, id: Uuid) -> MessageResult<Option<RawContent>> {
-        Ok(owned(user_id)
+        owned(user_id)
             .filter(message::Column::Id.eq(id))
             .select_only()
-            .columns([message::Column::RawPayload, message::Column::ContentType])
+            .columns([
+                message::Column::RawHeaders,
+                message::Column::RawPayload,
+                message::Column::ContentType,
+            ])
             .into_model::<RawRow>()
             .one(self.0)
             .await
             .map_err(storage)?
-            .map(|row| RawContent {
-                text: row.raw_payload,
-                content_type: row.content_type,
-            }))
+            .map(|row| {
+                Ok(RawContent {
+                    header: serde_json::from_str(&row.raw_headers).map_err(conversion)?,
+                    text: row.raw_payload,
+                    content_type: row.content_type,
+                })
+            })
+            .transpose()
     }
     async fn update_owned(
         &self,
@@ -353,7 +362,7 @@ impl IngestionStore for Store<'_> {
             event_version: Set(m.metadata.version.clone()),
             deduplication_scope: Set(key.map(|k| k.scope.clone())),
             deduplication_key: Set(key.map(|k| k.value.clone())),
-            platform_data: Set(serde_json::to_string(&m.platform_data).map_err(conversion)?),
+            raw_headers: Set(serde_json::to_string(&m.raw_headers).map_err(conversion)?),
             title: Set(m.common.title.clone()),
             content: Set(m.common.content.clone()),
             source: Set(m.common.source.clone()),

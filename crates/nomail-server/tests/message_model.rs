@@ -341,7 +341,7 @@ async fn one_message_preserves_platform_detail_level_raw_and_independent_user_st
         "UPDATE notify_messages SET level='unknown'",
         "UPDATE notify_messages SET pinned=2",
         "UPDATE notify_messages SET deduplication_scope=NULL",
-        "UPDATE notify_messages SET platform_data='{}'",
+        "UPDATE notify_messages SET raw_headers='{}'",
         "UPDATE notify_messages SET webhook_config_id=999",
     ] {
         assert!(

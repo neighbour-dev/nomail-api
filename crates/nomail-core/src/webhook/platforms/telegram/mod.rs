@@ -36,10 +36,12 @@ pub(in crate::webhook) fn receive(
         )?,
         _ => return Err(invalid_auth()),
     }
-    let payload = object(request.body)?;
-    let id = payload["update_id"]
-        .as_i64()
-        .ok_or(WebhookError::InvalidPayload("missing Telegram update_id"))?;
+    let payload = json_payload(request.body)?;
+    let id = payload
+        .get("update_id")
+        .and_then(|v| v.as_i64().filter(|id| *id >= 0))
+        .map(|id| id.to_string())
+        .unwrap_or_default();
     let fields: Vec<_> = payload
         .as_object()
         .into_iter()
@@ -51,9 +53,6 @@ pub(in crate::webhook) fn receive(
         .iter()
         .filter(|key| models::is_update_field(key))
         .collect();
-    if known.len() > 1 || id < 0 {
-        return Err(WebhookError::InvalidPayload("invalid Telegram Update"));
-    }
     // Prefer a known branch over future metadata. Preserve a single unknown
     // branch, and accept update_id-only envelopes (the contract says at most one).
     let kind = if known.len() == 1 {
@@ -63,12 +62,12 @@ pub(in crate::webhook) fn receive(
     } else {
         "update"
     };
-    Ok(PlatformEvent::from_payload(
+    Ok(PlatformEvent::from_raw(
         config.provider,
-        metadata(kind.to_owned(), None, "telegram:bot-update", id.to_string()),
+        metadata(kind.to_owned(), None, "telegram:bot-update", id),
         EventContent::Json(payload),
         request,
-    )?
+    )
     .into())
 }
 

@@ -287,10 +287,35 @@ async fn sparse_updates_bulk_limits_scope_and_raw_reads_use_the_shared_service()
     expired.expire_at = Set(Some(Utc::now() - Duration::days(1)));
     expired.update(&database).await.unwrap();
     assert_eq!(api!(get, &path, json!({}), Some(token)).0, StatusCode::OK);
-    // Raw inspection does not require decoding a damaged/unknown platform model.
+    // Raw inspection does not require successful platform-model reconstruction.
     let mut damaged: message::ActiveModel = after.into();
-    damaged.platform_data = Set(r#"{"provider":"generic","event":{"Unknown":{}}}"#.into());
+    damaged.provider = Set("telegram".into()); // raw has no required update_id
     damaged.update(&database).await.unwrap();
+    let invalid_before = message::Entity::find_by_id(before.id)
+        .one(&database)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        api!(
+            patch,
+            &path,
+            json!({"pinned":!invalid_before.pinned,"status":"unread"}),
+            Some(token)
+        )
+        .0,
+        StatusCode::OK
+    );
+    let updated = message::Entity::find_by_id(before.id)
+        .one(&database)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(updated.pinned, !invalid_before.pinned);
+    assert_eq!(updated.raw_payload, invalid_before.raw_payload);
+    let detail = api!(get, &path, json!({}), Some(token)).1;
+    assert!(detail["data"]["platformData"].is_null());
+    assert!(detail["data"]["platformDataError"].is_string());
     let response = test::call_service(
         &app,
         test::TestRequest::get()

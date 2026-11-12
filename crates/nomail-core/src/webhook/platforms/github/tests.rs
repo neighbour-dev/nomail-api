@@ -24,11 +24,11 @@ fn form_signature_covers_original_encoded_body() {
         )
         .unwrap(),
     );
-    let PlatformData::Github(github) = &parsed.data else {
+    let Some(PlatformData::Github(github)) = &parsed.data else {
         panic!()
     };
     assert_eq!(
-        github.to_message_content(&parsed.metadata, &parsed.raw),
+        github.to_message_content(&parsed.metadata, &parsed.raw.payload),
         parsed.to_message_content()
     );
     assert_eq!(parsed.raw.as_json(), Some(&payload));
@@ -86,7 +86,10 @@ fn control_unknown_events_and_resource_ids() {
     );
     assert!(parsed.metadata().deduplication_key.is_none());
     assert!(parsed.to_message_content().content.contains("custom"));
-    assert!(receive_with(Provider::Github, Authentication::None, &Vec::new(), b"{}").is_err());
+    let missing_header =
+        event(receive_with(Provider::Github, Authentication::None, &Vec::new(), b"{}").unwrap());
+    assert!(missing_header.metadata.event_type.is_empty());
+    assert_eq!(missing_header.raw.as_json(), Some(&json!({})));
 }
 
 #[test]
@@ -107,7 +110,7 @@ fn issue_comments_are_normal_and_retain_structured_detail() {
     let payload = br#"{"action":"created","issue":{"number":123,"title":"Bug","labels":[{"name":"bug","color":"ff0000"}]},"comment":{"body":"  Reply  ","user":{"login":"alice"}},"workflow_run":{"conclusion":"failure"}}"#;
     let parsed = event(receive_with(Provider::Github, Authentication::None, &h, payload).unwrap());
     assert_eq!(parsed.to_message_content().level, MessageLevel::Normal);
-    let PlatformData::Github(github) = &parsed.data else {
+    let Some(PlatformData::Github(github)) = &parsed.data else {
         panic!()
     };
     let github = &github.payload;
@@ -135,8 +138,15 @@ fn event_serialization_preserves_unknown_fields() {
     );
     let encoded = serde_json::to_value(&parsed).unwrap();
     assert_eq!(encoded["data"]["provider"], "github");
-    assert_eq!(encoded["raw"]["format"], "json");
-    assert_eq!(encoded["raw"]["value"]["unknown"]["preserved"], true);
+    assert_eq!(encoded["raw"]["payload"]["format"], "json");
+    assert_eq!(
+        encoded["raw"]["payload"]["value"]["unknown"]["preserved"],
+        true
+    );
+    assert_eq!(
+        encoded["raw"]["header"][0],
+        serde_json::json!({"name":"X-GitHub-Event","value":"new_event"})
+    );
     let decoded: PlatformEvent = serde_json::from_value(encoded).unwrap();
     assert_eq!(decoded, parsed);
     assert_eq!(decoded.to_message_content(), parsed.to_message_content());
@@ -189,7 +199,7 @@ fn modeled(kind: &str, payload: serde_json::Value) -> super::GithubWebhookPayloa
     let roundtrip: PlatformEvent =
         serde_json::from_value(serde_json::to_value(&parsed).unwrap()).unwrap();
     assert_eq!(roundtrip, parsed);
-    let PlatformData::Github(github) = parsed.data else {
+    let Some(PlatformData::Github(github)) = parsed.data else {
         panic!()
     };
     github.payload

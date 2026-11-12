@@ -8390,7 +8390,22 @@
             "type": "boolean"
           },
           "platformData": {
-            "$ref": "#/components/schemas/PlatformData"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlatformData"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Computed from decoded raw on read; never a database platform snapshot."
+          },
+          "platformDataError": {
+            "description": "Present when platformData is unavailable; raw and message state remain usable.",
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "provider": {
             "$ref": "#/components/schemas/Provider"
@@ -8437,6 +8452,7 @@
           "provider",
           "metadata",
           "platformData",
+          "platformDataError",
           "createdAt",
           "updatedAt",
           "expireAt",
@@ -8457,7 +8473,7 @@
         "type": "string"
       },
       "MessageListItem": {
-        "description": "HTTP list projection only, not another business message. Repositories select\nthese columns without loading platform JSON or raw payloads for each row.",
+        "description": "HTTP list projection only, not another business message. Repositories select\nthese columns without loading raw headers/payloads or parsing platform data.",
         "properties": {
           "createdAt": {
             "format": "date-time",
@@ -24161,6 +24177,11 @@
                   "type": "string"
                 }
               },
+              "application/x-www-form-urlencoded": {
+                "schema": {
+                  "type": "string"
+                }
+              },
               "text/plain": {
                 "schema": {
                   "type": "string"
@@ -25867,7 +25888,7 @@
     },
     "/api/webhook/{key}": {
       "post": {
-        "description": "保留原始字节验签；认证方式由接收配置决定，不要求 Bearer JWT。平台验证/Ping 直接返回协议响应，普通消息入库后返回 NoMail ACK。",
+        "description": "保留原始字节验签；认证方式由接收配置决定，不要求 Bearer JWT。无关非 ASCII 请求头、未知事件/版本或平台建模失败不阻止已鉴权且已解码/解密的消息入库；详情模型不可用时 platformData=null，并提供 platformDataError，完整 raw 仍可查询。鉴权、解密、格式解码和存储失败仍报错。平台验证/Ping 直接返回协议响应，普通消息入库后返回 NoMail ACK。",
         "operationId": "receiveWebhook",
         "parameters": [
           {

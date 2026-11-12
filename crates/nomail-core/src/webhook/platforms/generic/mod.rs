@@ -74,12 +74,12 @@ pub(in crate::webhook) fn receive(
             )
         }
     };
-    Ok(PlatformEvent::from_payload(
+    Ok(PlatformEvent::from_raw(
         config.provider,
         metadata(event_type, None, "generic:event", id),
         raw,
         request,
-    )?
+    )
     .into())
 }
 

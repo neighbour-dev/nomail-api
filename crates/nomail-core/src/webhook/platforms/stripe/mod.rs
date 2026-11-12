@@ -74,24 +74,20 @@ pub(in crate::webhook) fn receive(
         }
         _ => return Err(invalid_auth()),
     }
-    let payload = object(request.body)?;
-    let event_type = required(text(&payload, &["type"]), "missing Stripe event type")?;
-    let id = required(text(&payload, &["id"]), "missing Stripe event id")?;
+    let payload = json_payload(request.body)?;
+    let event_type = text(&payload, &["type"]);
+    let id = payload
+        .get("id")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_owned();
     let version = optional(text(&payload, &["api_version"]));
-    match text(&payload, &["object"]).as_str() {
-        "v2.core.event" | "event" => {}
-        _ => {
-            return Err(WebhookError::Unsupported(
-                "unsupported Stripe event envelope",
-            ));
-        }
-    }
-    Ok(PlatformEvent::from_payload(
+    Ok(PlatformEvent::from_raw(
         config.provider,
         metadata(event_type, version, "stripe:event", id),
         EventContent::Json(payload),
         request,
-    )?
+    )
     .into())
 }
 

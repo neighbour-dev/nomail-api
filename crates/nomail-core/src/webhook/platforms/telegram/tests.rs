@@ -42,7 +42,7 @@ fn update_types_and_non_text_messages() {
             &h,
             br#"{"update_id":1,"message":{},"callback_query":{}}"#
         )
-        .is_err()
+        .is_ok()
     );
     assert!(
         receive_with(
@@ -51,7 +51,7 @@ fn update_types_and_non_text_messages() {
             &h,
             br#"{"ok":true,"result":{}}"#
         )
-        .is_err()
+        .is_ok()
     );
     assert_eq!(
         receive_with(
@@ -88,7 +88,7 @@ fn documented_update_and_nested_field_values_survive_typed_projection() {
         let parsed = parse(&payload);
         kinds.insert(parsed.metadata.event_type.clone());
         assert_eq!(parsed.raw.as_json(), Some(&payload));
-        let PlatformData::Telegram(data) = &parsed.data else {
+        let Some(PlatformData::Telegram(data)) = &parsed.data else {
             panic!("Telegram model")
         };
         assert_eq!(serde_json::to_value(&data.header).unwrap(), json!({}));
@@ -120,7 +120,7 @@ fn text_entities_and_ids_remain_exact_in_native_payload_structure() {
         "caption":" caption \n"
     }});
     let parsed = parse(&payload);
-    let PlatformData::Telegram(data) = &parsed.data else {
+    let Some(PlatformData::Telegram(data)) = &parsed.data else {
         panic!()
     };
     let data = &data.payload;
@@ -151,7 +151,7 @@ fn union_discriminators_select_the_correct_variant() {
             "id":"000123", "chat_instance":"-000456", "data":" approve ",
             "message":{"message_id":0,"date":date,"chat":{"id":-1001234567890_i64,"type":"supergroup"}}
         }}));
-        let PlatformData::Telegram(data) = parsed.data else {
+        let Some(PlatformData::Telegram(data)) = parsed.data else {
             panic!()
         };
         let callback = data.payload.callback_query.into_value().unwrap();
@@ -211,7 +211,7 @@ fn malformed_fields_are_local_and_future_data_has_a_lossless_fallback() {
     let parsed = parse(&payload);
     assert_eq!(parsed.metadata.event_type, "message");
     assert_eq!(parsed.raw.as_json(), Some(&payload));
-    let PlatformData::Telegram(data) = parsed.data else {
+    let Some(PlatformData::Telegram(data)) = parsed.data else {
         panic!()
     };
     let message = data.payload.message.into_value().unwrap();
@@ -262,15 +262,19 @@ fn update_optionality_and_future_branches() {
         json!({"update_id":1,"message":{},"guest_message":{}}),
         json!({"update_id":1,"poll":{},"subscription":{}}),
     ] {
-        assert!(
+        let parsed = event(
             receive_with(
                 Provider::Telegram,
                 Authentication::None,
                 &headers(&[]),
                 &serde_json::to_vec(&payload).unwrap(),
             )
-            .is_err()
+            .unwrap(),
         );
+        assert_eq!(parsed.raw.as_json(), Some(&payload));
+        if !payload["update_id"].is_i64() || payload["update_id"].as_i64().unwrap() < 0 {
+            assert!(parsed.metadata.deduplication_key.is_none());
+        }
     }
 }
 

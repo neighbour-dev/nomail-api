@@ -6,6 +6,7 @@ mod config;
 mod crypto;
 mod error;
 pub mod platforms;
+mod raw;
 mod support;
 mod types;
 
@@ -17,6 +18,9 @@ mod tests;
 pub use config::*;
 pub use error::WebhookError;
 pub use platforms::*;
+pub use raw::{
+    RAW_HEADER_BLACKLIST, RawHeader, RawHeaderEncoding, RawWebhook, is_raw_header_blocked,
+};
 pub use types::*;
 
 /// Authenticate, decrypt/decode, and identify a platform event or control request.

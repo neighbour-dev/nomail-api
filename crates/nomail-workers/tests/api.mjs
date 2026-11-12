@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { createHmac, createHash, createCipheriv } from 'node:crypto';
 import { validateResponse, validateSse, protectedRoutes } from './contract.mjs';
 import { testMessageCursors } from './cursor.mjs';
+import { testRawStorageUpgrade } from './raw-storage.mjs';
 
 test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, async () => {
   const state = await mkdtemp(join(tmpdir(), 'nomail-worker-test-'));
@@ -15,6 +16,7 @@ test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, a
   let logs = '';
   const origin = 'http://127.0.0.1:8791';
   try {
+    await testRawStorageUpgrade(state);
     const migration = spawnSync('wrangler', ['d1', 'migrations', 'apply', 'DB', '--local', '--persist-to', state], { encoding: 'utf8', env: { ...process.env, CI: 'true' } });
     assert.equal(migration.status, 0, migration.stdout + migration.stderr);
     child = spawn('wrangler', ['dev', '--local', '--ip', '127.0.0.1', '--port', '8791', '--persist-to', state,

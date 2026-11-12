@@ -34,7 +34,7 @@ fn cropped_fields_versions_and_distinct_identifiers() {
         Some("demo.myshopify.com")
     );
     assert!(parsed.to_message_content().content.contains("29.99"));
-    let PlatformData::Shopify(event) = parsed.data else {
+    let Some(PlatformData::Shopify(event)) = parsed.data else {
         panic!()
     };
     assert_eq!(event.header.event_id.as_deref(), Some("operation-1"));

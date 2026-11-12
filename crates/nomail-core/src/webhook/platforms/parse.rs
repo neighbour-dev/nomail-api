@@ -1,18 +1,19 @@
-//! Native payload modeling, separate from authentication and content mapping.
+//! Read projections from accepted, decoded/decrypted raw data. Never replay
+//! authentication: signatures are not stored and delivery windows expire.
 use super::{
     PlatformData, app_store_connect, feishu, generic, gitea, github, gitlab, native::NativeValue,
     shopify, slack, stripe, telegram,
 };
-use crate::webhook::{EventContent, Provider, WebhookError, WebhookRequest};
+use crate::webhook::{EventContent, Provider, RawWebhook, WebhookError, WebhookRequest};
 
-pub(super) fn parse_payload(
-    provider: Provider,
-    raw: &EventContent,
-    request: &WebhookRequest<'_>,
-) -> Result<PlatformData, WebhookError> {
+pub fn parse_raw(provider: Provider, raw: &RawWebhook) -> Result<PlatformData, WebhookError> {
+    let request = WebhookRequest {
+        headers: raw,
+        body: &[],
+    };
     let invalid = || WebhookError::InvalidPayload("invalid decoded platform payload");
     let form_json;
-    let json = match raw {
+    let json = match &raw.payload {
         EventContent::Json(value) => Some(value),
         EventContent::Form(fields) => {
             let mut object = serde_json::Map::new();
@@ -34,7 +35,7 @@ pub(super) fn parse_payload(
     macro_rules! restore {
         ($module:ident, $variant:ident, $webhook:ident, $header:ident, $payload:ident) => {
             PlatformData::$variant(Box::new($module::$webhook {
-                header: $module::$header::from_request(request),
+                header: $module::$header::from_request(&request),
                 payload: <$module::$payload as NativeValue>::read(json.ok_or_else(invalid)?)
                     .ok_or_else(invalid)?,
             }))
@@ -42,7 +43,7 @@ pub(super) fn parse_payload(
     }
     Ok(match provider {
         Provider::Generic => {
-            let payload = match raw {
+            let payload = match &raw.payload {
                 EventContent::Text(text) => generic::GenericWebhookPayload::Text(text.clone()),
                 EventContent::Json(value) if value.is_null() => {
                     generic::GenericWebhookPayload::Null
@@ -53,7 +54,7 @@ pub(super) fn parse_payload(
                 )),
             };
             PlatformData::Generic(Box::new(generic::GenericWebhook {
-                header: generic::GenericWebhookHeader::from_request(request),
+                header: generic::GenericWebhookHeader::from_request(&request),
                 payload,
             }))
         }

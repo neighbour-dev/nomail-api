@@ -45,12 +45,9 @@ pub(in crate::webhook) fn receive(
         }
         _ => return Err(invalid_auth()),
     }
-    let payload = object(request.body)?;
-    let event_type = required(
-        request.header("x-gitlab-event").into(),
-        "missing GitLab event type",
-    )?;
-    Ok(PlatformEvent::from_payload(
+    let payload = json_payload(request.body)?;
+    let event_type = request.header("x-gitlab-event").trim().to_owned();
+    Ok(PlatformEvent::from_raw(
         config.provider,
         metadata(
             event_type,
@@ -63,7 +60,7 @@ pub(in crate::webhook) fn receive(
         ),
         EventContent::Json(payload),
         request,
-    )?
+    )
     .into())
 }
 

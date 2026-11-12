@@ -43,7 +43,7 @@ fn receive_json(kind: &str, exact: &str, payload: &Value) -> PlatformEvent {
 }
 
 fn webhook(parsed: &PlatformEvent) -> &super::GiteaWebhook {
-    let PlatformData::Gitea(gitea) = &parsed.data else {
+    let Some(PlatformData::Gitea(gitea)) = &parsed.data else {
         panic!("not a Gitea model")
     };
     gitea
@@ -208,7 +208,6 @@ fn form_signature_uses_original_decoded_json_not_form_or_reserialized_json() {
     for malformed in [
         "other=value",
         "payload=%7B%7D&payload=%7B%7D",
-        "payload=%5B%5D",
         "payload=invalid",
     ] {
         assert!(
@@ -601,7 +600,12 @@ fn sparse_unknown_malformed_fields_and_header_boundaries_remain_safe() {
     assert!(webhook(&sparse).header.event_type.is_none());
     assert!(sparse.metadata.deduplication_key.is_none());
     for body in [b"[]".as_slice(), b"null"] {
-        assert!(receive_with(Provider::Gitea, Authentication::None, &h, body).is_err());
+        let parsed = event(receive_with(Provider::Gitea, Authentication::None, &h, body).unwrap());
+        assert!(parsed.data.is_none());
+        assert_eq!(
+            parsed.raw.as_json().unwrap(),
+            &serde_json::from_slice::<Value>(body).unwrap()
+        );
     }
     assert!(receive_with(Provider::Gitea, Authentication::None, &h, b"invalid").is_err());
     let github_headers = headers(&[("X-GitHub-Event", "issues")]);
@@ -612,6 +616,6 @@ fn sparse_unknown_malformed_fields_and_header_boundaries_remain_safe() {
             &github_headers,
             b"{}"
         )
-        .is_err()
+        .is_ok()
     );
 }

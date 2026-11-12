@@ -59,7 +59,7 @@ pub(in crate::webhook) fn receive(
         }
         _ => return Err(invalid_auth()),
     }
-    let payload = object(request.body)?;
+    let payload = json_payload(request.body)?;
     // Apple redeliveries share the event ID; the related instance can be shared
     // by many distinct state-change events and must never be the dedup key.
     let metadata = metadata(
@@ -77,12 +77,12 @@ pub(in crate::webhook) fn receive(
             .unwrap_or("")
             .to_owned(),
     );
-    Ok(PlatformEvent::from_payload(
+    Ok(PlatformEvent::from_raw(
         config.provider,
         metadata,
         EventContent::Json(payload),
         request,
-    )?
+    )
     .into())
 }
 
