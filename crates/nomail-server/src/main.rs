@@ -1,5 +1,5 @@
 use actix_web::{App, HttpServer, web};
-use nomail_server::{AppState, app, auth, config::Config, db, realtime::Hub};
+use nomail_server::{AppState, app, config::Config, db, realtime::Hub};
 use tracing_actix_web::TracingLogger;
 
 #[actix_web::main]
@@ -17,7 +17,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = Config::from_env()?;
     let port = config.port;
     let database = db::connect(&config).await?;
-    auth::ensure_initial_user(&database, &config).await?;
     // All HTTP workers must share one pool and one Hub.
     let state = web::Data::new(AppState {
         db: database.clone(),

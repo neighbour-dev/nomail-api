@@ -38,6 +38,8 @@ pub struct AccountWrite {
 #[allow(async_fn_in_trait)]
 pub trait AuthStore {
     async fn has_accounts(&self) -> AuthResult<bool>;
+    /// Atomically create the only account; return Conflict if ANY account exists,
+    /// including a soft-deleted account. Never silently succeed without inserting.
     async fn initialize_account_if_empty(&self, command: InitialAccountWrite) -> AuthResult<()>;
     async fn account_by_username(&self, username: &str) -> AuthResult<Option<Account>>;
     async fn account_by_id(&self, id: i64) -> AuthResult<Option<Account>>;

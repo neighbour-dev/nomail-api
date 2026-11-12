@@ -1,6 +1,7 @@
 use actix_web::{App, http::StatusCode, test, web};
 use chrono::{DateTime, Duration, Utc};
-use nomail_server::{AppState, app, auth, config::Config, db, entity::message, realtime::Hub};
+use nomail_server::{AppState, app, config::Config, db, entity::message, realtime::Hub};
+mod common;
 use sea_orm::{ActiveModelTrait, EntityTrait, Set};
 use serde_json::{Value, json};
 use uuid::Uuid;
@@ -14,11 +15,9 @@ async fn cursor_queries_preserve_scope_filters_order_and_deleted_boundaries() {
         jwt_issuer: "test".into(),
         encryption_key: [7; 32],
         port: 3000,
-        initial_username: "admin".into(),
-        initial_password: "password123".into(),
     };
     let database = db::connect(&config).await.unwrap();
-    auth::ensure_initial_user(&database, &config).await.unwrap();
+    common::initialize(&database, &config).await.unwrap();
     let state = web::Data::new(AppState {
         db: database.clone(),
         config,

@@ -242,9 +242,12 @@ fn route_inventory_is_unique_complete_and_resolves_with_shared_trailing_slash_po
 fn authentication_and_non_json_contracts_are_declared_once() {
     for route in ROUTES {
         let expected = match route.operation {
-            Operation::Health | Operation::Login | Operation::Refresh | Operation::Logout => {
-                AuthRequirement::Public
-            }
+            Operation::Health
+            | Operation::SetupStatus
+            | Operation::Setup
+            | Operation::Login
+            | Operation::Refresh
+            | Operation::Logout => AuthRequirement::Public,
             Operation::ReceiveWebhook => AuthRequirement::Webhook,
             _ => AuthRequirement::Bearer,
         };

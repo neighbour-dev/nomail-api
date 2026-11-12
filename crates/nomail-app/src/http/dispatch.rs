@@ -57,6 +57,16 @@ pub async fn execute(
     }
     match matched.route.operation {
         Operation::Health => unreachable!("health is handled before service configuration"),
+        Operation::SetupStatus => json::<e::SetupStatus>(super::SetupStatusResponse {
+            initialized: services.auth.is_initialized().await?,
+        }),
+        Operation::Setup => {
+            services
+                .auth
+                .initialize_account(input!(e::Setup).into())
+                .await?;
+            json::<e::Setup>(())
+        }
         Operation::Login => json::<e::Login>(
             services
                 .auth

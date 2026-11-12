@@ -3,7 +3,7 @@ use base64::{Engine, engine::general_purpose::STANDARD};
 use chrono::Utc;
 use hmac::{Hmac, Mac};
 use nomail_server::{
-    AppState, app, auth,
+    AppState, app,
     config::Config,
     db,
     entity::{user, webhook},
@@ -12,6 +12,7 @@ use nomail_server::{
 use sea_orm::{ActiveModelTrait, EntityTrait, Set};
 use serde_json::{Value, json};
 use sha2::Sha256;
+mod common;
 
 #[actix_web::test]
 async fn config_service_preserves_sparse_concurrent_updates_credentials_and_scope() {
@@ -22,11 +23,9 @@ async fn config_service_preserves_sparse_concurrent_updates_credentials_and_scop
         jwt_issuer: "test".into(),
         encryption_key: [7; 32],
         port: 3000,
-        initial_username: "admin".into(),
-        initial_password: "password123".into(),
     };
     let database = db::connect(&config).await.unwrap();
-    auth::ensure_initial_user(&database, &config).await.unwrap();
+    common::initialize(&database, &config).await.unwrap();
     let state = web::Data::new(AppState {
         db: database.clone(),
         config,

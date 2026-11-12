@@ -84,19 +84,20 @@ impl AuthStore for Store<'_> {
     }
     async fn initialize_account_if_empty(&self, c: InitialAccountWrite) -> AuthResult<()> {
         let tx = db::write_transaction(self.0).await.map_err(storage)?;
-        if user::Entity::find().count(&tx).await.map_err(storage)? == 0 {
-            user::ActiveModel {
-                username: Set(c.username),
-                password_hash: Set(c.password_hash),
-                created_at: Set(c.now),
-                updated_at: Set(c.now),
-                deleted_at: Set(None),
-                ..Default::default()
-            }
-            .insert(&tx)
-            .await
-            .map_err(storage)?;
+        if user::Entity::find().count(&tx).await.map_err(storage)? != 0 {
+            return Err(AuthError::Conflict("account already initialized"));
         }
+        user::ActiveModel {
+            username: Set(c.username),
+            password_hash: Set(c.password_hash),
+            created_at: Set(c.now),
+            updated_at: Set(c.now),
+            deleted_at: Set(None),
+            ..Default::default()
+        }
+        .insert(&tx)
+        .await
+        .map_err(storage)?;
         tx.commit().await.map_err(storage)
     }
     async fn account_by_username(&self, name: &str) -> AuthResult<Option<Account>> {

@@ -6,7 +6,8 @@ use actix_web::{
 use nomail_app::http::{
     self as api, ApiResponse, AuthRequirement, EndpointResponse, PathKind, endpoints as e,
 };
-use nomail_server::{AppState, app, auth, config::Config, db, realtime::Hub};
+use nomail_server::{AppState, app, config::Config, db, realtime::Hub};
+mod common;
 use serde_json::json;
 
 #[actix_web::test]
@@ -23,11 +24,9 @@ async fn core_inventory_controls_routes_authentication_parameters_and_response_d
         jwt_issuer: "test".into(),
         encryption_key: [7; 32],
         port: 3000,
-        initial_username: "admin".into(),
-        initial_password: "password123".into(),
     };
     let database = db::connect(&config).await.unwrap();
-    auth::ensure_initial_user(&database, &config).await.unwrap();
+    common::initialize(&database, &config).await.unwrap();
     let state = web::Data::new(AppState {
         db: database.clone(),
         config,

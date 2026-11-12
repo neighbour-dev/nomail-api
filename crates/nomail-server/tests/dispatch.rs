@@ -5,6 +5,7 @@ use actix_web::{
 };
 use nomail_app::http::{ApiResponse, MAX_BODY_BYTES};
 use nomail_server::{AppState, app, config::Config, db, realtime::Hub};
+mod common;
 
 #[actix_web::test]
 async fn shared_dispatch_preserves_routing_authentication_and_body_order() {
@@ -20,14 +21,13 @@ async fn shared_dispatch_preserves_routing_authentication_and_body_order() {
         jwt_issuer: "test".into(),
         encryption_key: [7; 32],
         port: 3000,
-        initial_username: "admin".into(),
-        initial_password: "password123".into(),
     };
     let state = web::Data::new(AppState {
         db: db::connect(&config).await.unwrap(),
         config,
         realtime: Hub::default(),
     });
+    common::initialize(&state.db, &state.config).await.unwrap();
     let app = test::init_service(App::new().app_data(state).configure(app::configure)).await;
     let oversized = vec![b'x'; MAX_BODY_BYTES + 1];
     for (method, path, token, expected) in [

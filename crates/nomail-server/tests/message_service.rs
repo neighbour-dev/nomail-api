@@ -1,7 +1,7 @@
 use actix_web::{App, http::StatusCode, test, web};
 use chrono::{Duration, Utc};
 use nomail_server::{
-    AppState, app, auth,
+    AppState, app,
     config::Config,
     db,
     entity::{message, user, webhook},
@@ -10,6 +10,7 @@ use nomail_server::{
 use sea_orm::{ActiveModelTrait, EntityTrait, Set};
 use serde_json::{Value, json};
 use uuid::Uuid;
+mod common;
 
 #[actix_web::test]
 async fn sparse_updates_bulk_limits_scope_and_raw_reads_use_the_shared_service() {
@@ -20,11 +21,9 @@ async fn sparse_updates_bulk_limits_scope_and_raw_reads_use_the_shared_service()
         jwt_issuer: "test".into(),
         encryption_key: [7; 32],
         port: 3000,
-        initial_username: "admin".into(),
-        initial_password: "password123".into(),
     };
     let database = db::connect(&config).await.unwrap();
-    auth::ensure_initial_user(&database, &config).await.unwrap();
+    common::initialize(&database, &config).await.unwrap();
     let state = web::Data::new(AppState {
         db: database.clone(),
         config,

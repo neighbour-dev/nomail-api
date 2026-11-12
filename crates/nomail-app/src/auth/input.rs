@@ -8,6 +8,18 @@ pub fn check_length(value: &str, name: &str, max: usize, required: bool) -> Resu
     }
 }
 
+/// First-account credentials. Deliberately not Debug/Serialize.
+pub struct InitializeAccount {
+    pub username: String,
+    pub password: String,
+}
+impl InitializeAccount {
+    pub(super) fn validate(&self) -> Result<(), String> {
+        check_length(&self.username, "username", 64, true)?;
+        crate::security::validate_password(&self.password).map_err(String::from)
+    }
+}
+
 /// Application credentials and device registration, independent of wire fields.
 /// Deliberately not Debug/Serialize: contains a plaintext password.
 pub struct Login {

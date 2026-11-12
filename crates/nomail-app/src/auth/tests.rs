@@ -6,8 +6,6 @@ fn config() -> AuthConfig {
     AuthConfig {
         jwt_secret: "test-shared-auth-secret".into(),
         jwt_issuer: "nomail-test".into(),
-        initial_username: "admin".into(),
-        initial_password: "password123".into(),
     }
 }
 fn request(username: &str, password: &str) -> Login {
@@ -20,6 +18,12 @@ fn request(username: &str, password: &str) -> Login {
             device_type: "phone".into(),
             ..Default::default()
         },
+    }
+}
+fn setup(username: &str, password: &str) -> InitializeAccount {
+    InitializeAccount {
+        username: username.into(),
+        password: password.into(),
     }
 }
 struct Runtime {
@@ -77,14 +81,15 @@ impl AuthStore for Store {
     }
     async fn initialize_account_if_empty(&self, c: InitialAccountWrite) -> AuthResult<()> {
         let mut s = self.state.borrow_mut();
-        if s.account.is_none() {
-            s.account = Some(Account {
-                id: 11,
-                username: c.username,
-                password_hash: c.password_hash,
-                deleted_at: None,
-            });
+        if s.account.is_some() {
+            return Err(AuthError::Conflict("account already initialized"));
         }
+        s.account = Some(Account {
+            id: 11,
+            username: c.username,
+            password_hash: c.password_hash,
+            deleted_at: None,
+        });
         Ok(())
     }
     async fn account_by_username(&self, name: &str) -> AuthResult<Option<Account>> {
@@ -270,6 +275,10 @@ async fn shared_flow_uses_one_clock_token_policy_metadata_and_revocation_policy(
         runtime: Runtime::new(),
         config: config(),
     };
+    service
+        .initialize_account(setup("admin", "password123"))
+        .await
+        .unwrap();
     let result = service
         .login(
             request("admin", "password123"),
@@ -277,7 +286,7 @@ async fn shared_flow_uses_one_clock_token_policy_metadata_and_revocation_policy(
         )
         .await
         .unwrap();
-    assert!(result.user.requires_account_setup);
+    assert!(!result.user.requires_account_setup);
     assert_eq!(service.store.limit.get(), MAX_DEVICES);
     assert_eq!(
         result.access_token_expires_at.timestamp(),
@@ -376,6 +385,10 @@ async fn authenticate_rejects_deleted_accounts_devices_and_ownership_mismatch() 
         runtime: Runtime::new(),
         config: config(),
     };
+    service
+        .initialize_account(setup("admin", "password123"))
+        .await
+        .unwrap();
     let login = service
         .login(request("admin", "password123"), RequestMeta::default())
         .await
@@ -520,13 +533,63 @@ fn bcrypt_policy_is_shared_and_bad_stored_hash_is_not_a_bad_password() {
 }
 
 #[tokio::test]
-async fn initialization_never_overwrites_existing_or_soft_deleted_accounts() {
-    let mut service = AuthService {
+async fn login_never_initializes_and_existing_weak_credentials_still_work() {
+    let service = AuthService {
         store: Store::default(),
         runtime: Runtime::new(),
         config: config(),
     };
-    service.ensure_initial_account().await.unwrap();
+    assert!(matches!(
+        service
+            .login(request("admin", "password123"), RequestMeta::default())
+            .await,
+        Err(AuthError::Unauthorized)
+    ));
+    assert!(!service.is_initialized().await.unwrap());
+    for (username, password) in [
+        ("", "password123"),
+        ("admin", "short1"),
+        ("admin", "password"),
+    ] {
+        assert!(matches!(
+            service.initialize_account(setup(username, password)).await,
+            Err(AuthError::InvalidInput(_))
+        ));
+        assert!(!service.is_initialized().await.unwrap());
+    }
+    // Simulate an account retained from an older deployment, bypassing creation policy.
+    service.store.state.borrow_mut().account = Some(Account {
+        id: 11,
+        username: "legacy".into(),
+        password_hash: "fake:weak".into(),
+        deleted_at: None,
+    });
+    let result = service
+        .login(request("legacy", "weak"), RequestMeta::default())
+        .await
+        .unwrap();
+    assert!(!result.user.requires_account_setup);
+}
+
+#[tokio::test]
+async fn initialization_never_overwrites_existing_or_soft_deleted_accounts() {
+    let service = AuthService {
+        store: Store::default(),
+        runtime: Runtime::new(),
+        config: config(),
+    };
+    assert!(!service.is_initialized().await.unwrap());
+    service
+        .initialize_account(setup("admin", "password123"))
+        .await
+        .unwrap();
+    assert!(service.is_initialized().await.unwrap());
+    assert!(matches!(
+        service
+            .initialize_account(setup("other", "otherpass123"))
+            .await,
+        Err(AuthError::Conflict("account already initialized"))
+    ));
     service
         .store
         .state
@@ -535,9 +598,13 @@ async fn initialization_never_overwrites_existing_or_soft_deleted_accounts() {
         .as_mut()
         .unwrap()
         .deleted_at = Some(service.runtime.now());
-    service.config.initial_username = "must-not-replace".into();
-    service.config.initial_password = String::new();
-    service.ensure_initial_account().await.unwrap();
+    assert!(service.is_initialized().await.unwrap());
+    assert!(matches!(
+        service
+            .initialize_account(setup("must-not-replace", "password456"))
+            .await,
+        Err(AuthError::Conflict("account already initialized"))
+    ));
     let state = service.store.state.borrow();
     let account = state.account.as_ref().unwrap();
     assert_eq!(account.username, "admin");
@@ -556,6 +623,13 @@ async fn invalid_signing_configuration_fails_before_account_or_session_writes() 
     assert!(matches!(
         service
             .login(request("admin", "password123"), RequestMeta::default())
+            .await,
+        Err(AuthError::Internal(_))
+    ));
+    assert!(service.store.state.borrow().account.is_none());
+    assert!(matches!(
+        service
+            .initialize_account(setup("admin", "password123"))
             .await,
         Err(AuthError::Internal(_))
     ));

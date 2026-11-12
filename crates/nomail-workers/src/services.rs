@@ -57,16 +57,6 @@ impl<'a> Environment for WorkersEnvironment<'a> {
             AuthConfig {
                 jwt_secret: config.jwt_secret,
                 jwt_issuer: config.jwt_issuer,
-                initial_username: self
-                    .env
-                    .secret("INITIAL_USERNAME")
-                    .map(|v| v.to_string())
-                    .unwrap_or_default(),
-                initial_password: self
-                    .env
-                    .secret("INITIAL_PASSWORD")
-                    .map(|v| v.to_string())
-                    .unwrap_or_default(),
             },
         ))
     }

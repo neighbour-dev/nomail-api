@@ -106,6 +106,8 @@ macro_rules! endpoints {
 }
 endpoints! {
     Health => ("health",Get,"/api/health",Public,None,Json,false,None,(),(),HealthResponse,"Health","健康检查"),
+    SetupStatus => ("setupStatus",Get,"/api/auth/setup",Public,None,Json,false,None,(),(),SetupStatusResponse,"Auth","查询账号初始化状态"),
+    Setup => ("setup",Post,"/api/auth/setup",Public,Json,Json,false,None,SetupRequest,(),(),"Auth","首次初始化账号；无密钥保护，仅账号表为空时允许"),
     Login => ("login",Post,"/api/auth/login",Public,Json,Json,false,None,LoginRequest,(),TokenResponse,"Auth","登录"),
     Refresh => ("refreshToken",Post,"/api/auth/refresh-token",Public,Json,Json,false,None,RefreshRequest,(),TokenResponse,"Auth","轮换刷新令牌"),
     Logout => ("logout",Post,"/api/auth/logout",Public,Json,Json,false,None,RefreshRequest,(),(),"Auth","退出登录"),

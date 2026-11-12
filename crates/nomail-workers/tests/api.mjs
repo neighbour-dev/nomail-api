@@ -21,8 +21,7 @@ test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, a
     assert.equal(migration.status, 0, migration.stdout + migration.stderr);
     child = spawn('wrangler', ['dev', '--local', '--ip', '127.0.0.1', '--port', '8791', '--persist-to', state,
       '--var', 'JWT_SECRET:local-test-secret-never-use-in-production',
-      '--var', `SECRET_ENCRYPTION_KEY:${Buffer.alloc(32, 7).toString('base64')}`,
-      '--var', 'INITIAL_USERNAME:admin', '--var', 'INITIAL_PASSWORD:password123'], { env: { ...process.env, CI: 'true' }, stdio: ['ignore', 'pipe', 'pipe'] });
+      '--var', `SECRET_ENCRYPTION_KEY:${Buffer.alloc(32, 7).toString('base64')}`], { env: { ...process.env, CI: 'true' }, stdio: ['ignore', 'pipe', 'pipe'] });
     stopped = new Promise(resolve => child.once('exit', resolve));
     await new Promise((resolve, reject) => {
       const timer = setTimeout(() => reject(new Error(`Worker startup timed out\n${logs}`)), 120_000);
@@ -43,6 +42,23 @@ test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, a
       return data.data;
     }
     const loginBody = deviceId => ({ username: 'admin', password: 'password123', deviceId, platform: 'ios', deviceType: 'phone' });
+    assert.deepEqual(await api('GET', '/api/auth/setup'), { initialized: false });
+    await api('POST', '/api/auth/login', loginBody('a'), undefined, 401);
+    assert.deepEqual(await api('GET', '/api/auth/setup'), { initialized: false });
+    for (const body of [{}, { username: '', password: 'password123' },
+      { username: 'admin', password: 'short1' }, { username: 'admin', password: 'password' },
+      { username: 'admin', password: 'a1' + 'x'.repeat(71) }]) {
+      await api('POST', '/api/auth/setup', body, undefined, 400);
+    }
+    assert.deepEqual(await api('GET', '/api/auth/setup'), { initialized: false });
+    const setups = await Promise.all(Array.from({ length: 4 }, () => fetch(origin + '/api/auth/setup', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: 'admin', password: 'password123' }),
+    })));
+    assert.deepEqual(setups.map(r => r.status).sort(), [200, 409, 409, 409]);
+    for (const response of setups) validateResponse('POST', '/api/auth/setup', response.status, await response.json());
+    assert.deepEqual(await api('GET', '/api/auth/setup'), { initialized: true });
+    await api('POST', '/api/auth/setup', { username: 'other', password: 'password456' }, undefined, 409);
     await api('GET', '/api/health');
     for (const name of ['X-NoMail-Title', 'X-Unknown', 'Authorization']) {
       for (const value of ['é', Buffer.from('中文', 'utf8').toString('latin1')]) {
@@ -93,7 +109,7 @@ test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, a
       assert.equal(failure.msg, message);
       assert.equal(failure.data, null);
     }
-    assert.equal(login.user.requiresAccountSetup, true);
+    assert.equal(login.user.requiresAccountSetup, false);
     const signedGeneric = secret => ({ provider: 'generic', credentials: { type: 'hmacSha256', secret } });
     const anonymousGeneric = { provider: 'generic', credentials: { type: 'none' } };
     const config = await api('POST', '/api/webhook/configs/', { name: 'Monitor', platform: signedGeneric('test-webhook-secret') }, token);
@@ -698,6 +714,13 @@ test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, a
     token = again.accessToken;
     await api('DELETE', '/api/auth/devices/a/session', undefined, token);
     await api('GET', '/api/messages', undefined, token, 401);
+    // The scope-isolation fixture also creates an account: hide ALL accounts so
+    // this verifies that soft deletion alone never reopens setup.
+    localSql("UPDATE users SET deleted_at='2026-01-01';");
+    const deletedAccounts = localSql('SELECT * FROM users ORDER BY id;');
+    assert.deepEqual(await api('GET', '/api/auth/setup'), { initialized: true });
+    await api('POST', '/api/auth/setup', { username: 'replacement', password: 'password456' }, undefined, 409);
+    assert.deepEqual(localSql('SELECT * FROM users ORDER BY id;'), deletedAccounts);
   } finally {
     if (child?.exitCode === null) { child.kill('SIGTERM'); await stopped; }
     await rm(state, { recursive: true, force: true });

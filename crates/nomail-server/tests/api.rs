@@ -20,12 +20,8 @@ async fn all_api_contracts() {
         jwt_issuer: "nomail-test".into(),
         encryption_key: [7; 32],
         port: 3000,
-        initial_username: "admin".into(),
-        initial_password: "password123".into(),
     };
     let database = db::connect(&config).await.unwrap();
-    auth::ensure_initial_user(&database, &config).await.unwrap();
-    auth::ensure_initial_user(&database, &config).await.unwrap();
     let state = web::Data::new(AppState {
         db: database.clone(),
         config,
@@ -47,6 +43,45 @@ async fn all_api_contracts() {
             (status, body)
         }};
     }
+    let (status, body) = api!(get, "/api/auth/setup", json!({}), None);
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["data"]["initialized"], false);
+    let (status, _) = api!(
+        post,
+        "/api/auth/login",
+        json!({"username":"admin","password":"password123","deviceId":"a","platform":"ios","deviceType":"phone"}),
+        None
+    );
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    for body in [
+        json!({}),
+        json!({"username":"", "password":"password123"}),
+        json!({"username":"admin", "password":"short1"}),
+        json!({"username":"admin", "password":"password"}),
+        json!({"username":"admin", "password":format!("a1{}", "x".repeat(71))}),
+    ] {
+        let (status, _) = api!(post, "/api/auth/setup", body, None);
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+    }
+    let (_, body) = api!(get, "/api/auth/setup", json!({}), None);
+    assert_eq!(body["data"]["initialized"], false);
+    let (status, body) = api!(
+        post,
+        "/api/auth/setup",
+        json!({"username":"admin", "password":"password123"}),
+        None
+    );
+    assert_eq!(status, StatusCode::OK);
+    assert!(body["data"].is_null());
+    let (_, body) = api!(get, "/api/auth/setup", json!({}), None);
+    assert_eq!(body["data"]["initialized"], true);
+    let (status, _) = api!(
+        post,
+        "/api/auth/setup",
+        json!({"username":"other", "password":"password456"}),
+        None
+    );
+    assert_eq!(status, StatusCode::CONFLICT);
     let (status, body) = api!(get, "/api/messages", json!({}), None);
     assert_eq!(status, StatusCode::UNAUTHORIZED);
     assert_eq!(body["code"], 401);
@@ -78,15 +113,13 @@ async fn all_api_contracts() {
         None
     );
     assert_eq!(status, StatusCode::OK, "{login}");
-    assert_eq!(login["data"]["user"]["requiresAccountSetup"], true);
+    assert_eq!(login["data"]["user"]["requiresAccountSetup"], false);
     let token = login["data"]["accessToken"].as_str().unwrap().to_owned();
     let refresh = login["data"]["refreshToken"].as_str().unwrap().to_owned();
     let claims = nomail_app::auth::token::decode(
         &nomail_app::auth::AuthConfig {
             jwt_secret: state.config.jwt_secret.clone(),
             jwt_issuer: state.config.jwt_issuer.clone(),
-            initial_username: state.config.initial_username.clone(),
-            initial_password: state.config.initial_password.clone(),
         },
         &token,
         Utc::now(),

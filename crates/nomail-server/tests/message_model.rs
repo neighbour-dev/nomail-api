@@ -1,7 +1,8 @@
 use actix_web::{App, http::StatusCode, test, web};
 use chrono::DateTime;
 use hmac::{Hmac, Mac};
-use nomail_server::{AppState, app, auth, config::Config, db, entity::message, realtime::Hub};
+use nomail_server::{AppState, app, config::Config, db, entity::message, realtime::Hub};
+mod common;
 use sea_orm::{ConnectionTrait, EntityTrait};
 use serde_json::{Value, json};
 use sha2::Sha256;
@@ -15,11 +16,9 @@ async fn one_message_preserves_platform_detail_level_raw_and_independent_user_st
         jwt_issuer: "test".into(),
         encryption_key: [7; 32],
         port: 3000,
-        initial_username: "admin".into(),
-        initial_password: "password123".into(),
     };
     let database = db::connect(&config).await.unwrap();
-    auth::ensure_initial_user(&database, &config).await.unwrap();
+    common::initialize(&database, &config).await.unwrap();
     let state = web::Data::new(AppState {
         db: database.clone(),
         config,

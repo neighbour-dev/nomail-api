@@ -12,7 +12,7 @@ mod view;
 
 pub use claims::Claims;
 pub use error::{AuthError, AuthResult};
-pub use input::{Login, UpdateAccount, check_length};
+pub use input::{InitializeAccount, Login, UpdateAccount, check_length};
 pub use model::*;
 pub use repository::*;
 pub use runtime::AuthRuntime;
@@ -31,6 +31,4 @@ mod tests;
 pub struct AuthConfig {
     pub jwt_secret: String,
     pub jwt_issuer: String,
-    pub initial_username: String,
-    pub initial_password: String,
 }

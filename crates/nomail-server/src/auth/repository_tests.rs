@@ -8,8 +8,6 @@ fn config(dir: &tempfile::TempDir) -> Config {
         jwt_issuer: "test".into(),
         encryption_key: [7; 32],
         port: 3000,
-        initial_username: "admin".into(),
-        initial_password: "password123".into(),
     }
 }
 fn login_request(id: &str) -> Login {
@@ -31,7 +29,13 @@ async fn stale_verified_credentials_cannot_create_a_device_or_change_the_account
     let config = config(&dir);
     let db = crate::db::connect(&config).await.unwrap();
     let service = crate::auth::service(&db, &config);
-    service.ensure_initial_account().await.unwrap();
+    service
+        .initialize_account(InitializeAccount {
+            username: "admin".into(),
+            password: "password123".into(),
+        })
+        .await
+        .unwrap();
     let before = service.store.account_by_id(1).await.unwrap().unwrap();
     service
         .reset_account(None, "changedpassword123")
@@ -84,6 +88,13 @@ async fn password_change_revokes_expired_sessions_too_and_device_actions_are_own
     let config = config(&dir);
     let db = crate::db::connect(&config).await.unwrap();
     let service = crate::auth::service(&db, &config);
+    service
+        .initialize_account(InitializeAccount {
+            username: "admin".into(),
+            password: "password123".into(),
+        })
+        .await
+        .unwrap();
     service
         .login(login_request("expired"), RequestMeta::default())
         .await

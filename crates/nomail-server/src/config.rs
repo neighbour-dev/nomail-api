@@ -27,8 +27,6 @@ pub struct Config {
     pub jwt_issuer: String,
     pub encryption_key: [u8; 32],
     pub port: u16,
-    pub initial_username: String,
-    pub initial_password: String,
 }
 
 impl Config {
@@ -49,8 +47,6 @@ impl Config {
             port: get("PORT", "3000")
                 .parse()
                 .map_err(|_| ConfigLoadError::InvalidPort)?,
-            initial_username: get("INITIAL_USERNAME", ""),
-            initial_password: get("INITIAL_PASSWORD", ""),
         })
     }
 }
@@ -82,7 +78,6 @@ mod tests {
         assert_eq!(config.database_path, "./data/nomail.db");
         assert_eq!(config.jwt_issuer, "nomail-api");
         assert_eq!(config.encryption_key, [7; 32]);
-        assert!(config.initial_username.is_empty() && config.initial_password.is_empty());
         for port in ["not-a-port", "-1", "65536"] {
             let error = load(&[
                 ("JWT_SECRET", "private-jwt"),

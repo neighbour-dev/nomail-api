@@ -1,4 +1,5 @@
 use chrono::{Duration, Utc};
+mod common;
 use nomail_server::{
     auth,
     config::Config,
@@ -21,8 +22,6 @@ fn config(directory: &tempfile::TempDir) -> Config {
         jwt_issuer: "nomail-test".into(),
         encryption_key: [7; 32],
         port: 3000,
-        initial_username: "admin".into(),
-        initial_password: "password123".into(),
     }
 }
 
@@ -105,11 +104,14 @@ async fn file_persistence_wal_foreign_keys_and_atomic_initialization() {
     let first = db::connect(&config).await.unwrap();
     let second = db::connect(&config).await.unwrap();
     let (a, b) = tokio::join!(
-        auth::ensure_initial_user(&first, &config),
-        auth::ensure_initial_user(&second, &config)
+        common::initialize(&first, &config),
+        common::initialize(&second, &config)
     );
-    a.unwrap();
-    b.unwrap();
+    assert_eq!(usize::from(a.is_ok()) + usize::from(b.is_ok()), 1);
+    assert_eq!(
+        a.err().or(b.err()),
+        Some(actix_web::http::StatusCode::CONFLICT)
+    );
     assert_eq!(user::Entity::find().count(&first).await.unwrap(), 1);
     // Check each physical pool connection, not just one borrowed connection.
     let pool = first.get_sqlite_connection_pool();
@@ -150,7 +152,7 @@ async fn cancellation_rolls_back_and_reset_revokes_sessions() {
     let directory = tempfile::tempdir().unwrap();
     let config = config(&directory);
     let database = db::connect(&config).await.unwrap();
-    auth::ensure_initial_user(&database, &config).await.unwrap();
+    common::initialize(&database, &config).await.unwrap();
     {
         let tx = db::write_transaction(&database).await.unwrap();
         tx.execute_unprepared("UPDATE users SET username='not-committed'")

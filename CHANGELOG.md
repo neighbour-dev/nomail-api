@@ -6,6 +6,10 @@
 
 ## [Unreleased]
 
+### 变更
+
+- 初始账号改为通过公开的 `POST /api/auth/setup` 接口创建，`GET /api/auth/setup` 查询初始化状态；用户名、密码由接口提交并校验强度。不再读取 `INITIAL_USERNAME` / `INITIAL_PASSWORD`，启动和登录不再自动创建账号。已有账号保持不变，`requiresAccountSetup` 保留并始终返回 false。初始化不使用密钥或时间窗口，公网新实例存在被抢先初始化的风险，请部署后及时完成；重新部署不会清除持久化账号。
+
 ## [0.4.0] - 2026-11-12
 
 ### 新增

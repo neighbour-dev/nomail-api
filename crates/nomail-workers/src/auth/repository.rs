@@ -58,8 +58,11 @@ impl AuthStore for Store<'_> {
             .is_empty())
     }
     async fn initialize_account_if_empty(&self, c: InitialAccountWrite) -> AuthResult<()> {
-        self.0.run("INSERT INTO users (username,password_hash,created_at,updated_at) SELECT ?,?,?,? WHERE NOT EXISTS (SELECT 1 FROM users)",
+        let rows = self.0.rows("INSERT INTO users (username,password_hash,created_at,updated_at) SELECT ?,?,?,? WHERE NOT EXISTS (SELECT 1 FROM users) RETURNING id",
             vec![json!(c.username),json!(c.password_hash),json!(date(c.now)),json!(date(c.now))]).await.map_err(storage)?;
+        if rows.is_empty() {
+            return Err(AuthError::Conflict("account already initialized"));
+        }
         Ok(())
     }
     async fn account_by_username(&self, name: &str) -> AuthResult<Option<Account>> {

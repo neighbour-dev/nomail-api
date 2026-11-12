@@ -32,16 +32,19 @@ impl<S: AuthStore, R: AuthRuntime> AuthService<S, R> {
             .filter(|a| a.deleted_at.is_none())
             .ok_or(AuthError::Unauthorized)
     }
-    pub async fn ensure_initial_account(&self) -> AuthResult<()> {
+    pub async fn is_initialized(&self) -> AuthResult<bool> {
+        self.store.has_accounts().await
+    }
+    pub async fn initialize_account(&self, request: InitializeAccount) -> AuthResult<()> {
+        token::validate_config(&self.config)?;
         if self.store.has_accounts().await? {
-            return Ok(());
+            return Err(AuthError::Conflict("account already initialized"));
         }
-        check_length(&self.config.initial_username, "INITIAL_USERNAME", 64, true)
-            .map_err(AuthError::InvalidInput)?;
-        let hash = self.hash_password(&self.config.initial_password).await?;
+        request.validate().map_err(AuthError::InvalidInput)?;
+        let hash = self.hash_password(&request.password).await?;
         self.store
             .initialize_account_if_empty(InitialAccountWrite {
-                username: self.config.initial_username.clone(),
+                username: request.username,
                 password_hash: hash,
                 now: self.runtime.now(),
             })
@@ -52,7 +55,6 @@ impl<S: AuthStore, R: AuthRuntime> AuthService<S, R> {
         grant: SessionGrant,
         refresh: String,
         now: DateTime<Utc>,
-        setup: bool,
     ) -> AuthResult<SessionTokens> {
         let (access, expiry) = token::issue(&self.config, grant.account.id, grant.session.id, now)?;
         Ok(SessionTokens {
@@ -63,14 +65,13 @@ impl<S: AuthStore, R: AuthRuntime> AuthService<S, R> {
             user: AccountInfo {
                 id: grant.account.id,
                 username: grant.account.username,
-                requires_account_setup: setup,
+                requires_account_setup: false,
             },
         })
     }
     pub async fn login(&self, request: Login, meta: RequestMeta) -> AuthResult<SessionTokens> {
         token::validate_config(&self.config)?;
         request.validate().map_err(AuthError::InvalidInput)?;
-        self.ensure_initial_account().await?;
         let account =
             Self::active_account(self.store.account_by_username(&request.username).await?)?;
         self.verify_password(&request.password, &account.password_hash)
@@ -90,10 +91,7 @@ impl<S: AuthStore, R: AuthRuntime> AuthService<S, R> {
                 max_devices: MAX_DEVICES,
             })
             .await?;
-        let setup = !self.config.initial_password.is_empty()
-            && request.username == self.config.initial_username
-            && request.password == self.config.initial_password;
-        self.tokens(grant, refresh, now, setup)
+        self.tokens(grant, refresh, now)
     }
     pub async fn refresh(
         &self,
@@ -115,7 +113,7 @@ impl<S: AuthStore, R: AuthRuntime> AuthService<S, R> {
                 meta,
             })
             .await?;
-        self.tokens(grant, refresh, now, false)
+        self.tokens(grant, refresh, now)
     }
     pub async fn logout(&self, refresh_token: &str) -> AuthResult<()> {
         check_length(refresh_token, "refreshToken", usize::MAX, true)

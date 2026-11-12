@@ -3,6 +3,28 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize)]
+#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
+pub struct SetupRequest {
+    pub username: String,
+    pub password: String,
+}
+
+#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
+pub struct SetupStatusResponse {
+    pub initialized: bool,
+}
+
+impl From<SetupRequest> for crate::auth::InitializeAccount {
+    fn from(request: SetupRequest) -> Self {
+        Self {
+            username: request.username,
+            password: request.password,
+        }
+    }
+}
+
+#[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
 pub struct LoginRequest {
