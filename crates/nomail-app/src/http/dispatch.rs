@@ -257,16 +257,12 @@ pub async fn execute(
                 .await?;
             json::<e::DeleteMessage>(())
         }
-        Operation::RawMessage => {
-            let raw = services
+        Operation::RawMessage => json::<e::RawMessage>(
+            services
                 .messages
                 .raw(user!(), matched.message_id()?)
-                .await?;
-            Ok(HttpOutcome::response(
-                200,
-                raw.content_type,
-                raw.text.into_bytes(),
-            ))
-        }
+                .await?
+                .into(),
+        ),
     }
 }

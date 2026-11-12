@@ -337,8 +337,17 @@ async fn config_service_preserves_sparse_concurrent_updates_credentials_and_scop
             .uri(receive_path)
             .insert_header(("Content-Type", "application/json"));
         for (name, value) in &headers {
-            request = request.insert_header((name.as_str(), value.as_str()));
+            request = request.append_header((name.as_str(), value.as_str()));
         }
+        request = request
+            .append_header((
+                "X-NoMail-Title",
+                actix_web::http::header::HeaderValue::from_bytes("中文".as_bytes()).unwrap(),
+            ))
+            .append_header((
+                "X-Raw-Binary",
+                actix_web::http::header::HeaderValue::from_bytes(&[0xff]).unwrap(),
+            ));
         let response =
             test::call_service(&app, request.set_payload(raw.clone()).to_request()).await;
         assert_eq!(response.status(), StatusCode::OK, "{provider}");
@@ -351,8 +360,148 @@ async fn config_service_preserves_sparse_concurrent_updates_credentials_and_scop
             "/api/messages/{}",
             received["data"]["messageId"].as_str().unwrap()
         );
-        assert_eq!(api!(get, &message_path, json!({})).1["provider"], provider);
+        let detail = api!(get, &message_path, json!({})).1;
+        assert_eq!(detail["provider"], provider);
+        let envelope = &detail["platformData"]["event"];
+        assert_eq!(envelope.as_object().unwrap().len(), 2);
+        assert!(envelope["header"].is_object());
+        assert!(envelope.get("payload").is_some());
+        assert!(!envelope.to_string().contains("platform-secret"));
+        let mut expected_payload: Value = serde_json::from_str(&raw).unwrap();
+        if provider == "appstoreconnect" {
+            expected_payload.as_object_mut().unwrap().remove("future");
+        }
+        if provider == "feishu" {
+            expected_payload["header"]
+                .as_object_mut()
+                .unwrap()
+                .remove("token");
+        }
+        assert_eq!(
+            envelope["payload"], expected_payload,
+            "{provider}: persistence changed presence/value or added defaults"
+        );
+        let response = test::call_service(
+            &app,
+            test::TestRequest::get()
+                .uri(&format!("{message_path}/raw"))
+                .insert_header(("Authorization", format!("Bearer {token}")))
+                .to_request(),
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            response.headers().get("Content-Type").unwrap(),
+            "application/json"
+        );
+        let original: Value = test::read_body_json(response).await;
+        assert_eq!(original["code"], 0);
+        assert_eq!(original["msg"], "success");
+        let original = &original["data"];
+        assert_eq!(original.as_object().unwrap().len(), 3);
+        assert_eq!(original["contentType"], "application/json");
+        assert_eq!(
+            serde_json::from_str::<Value>(original["payload"].as_str().unwrap()).unwrap(),
+            serde_json::from_str::<Value>(&raw).unwrap()
+        );
+        let stored = nomail_server::entity::message::Entity::find_by_id(
+            uuid::Uuid::parse_str(received["data"]["messageId"].as_str().unwrap()).unwrap(),
+        )
+        .one(&database)
+        .await
+        .unwrap()
+        .unwrap();
+        assert_eq!(original["payload"], stored.raw_payload);
+        assert_eq!(original["contentType"], stored.content_type);
+        assert_eq!(
+            original["header"],
+            serde_json::from_str::<Value>(&stored.raw_headers).unwrap()
+        );
+        let raw_headers = original["header"].as_array().unwrap();
+        assert!(raw_headers.iter().any(|h| h["name"] == "x-raw-binary"
+            && h["value"] == "/w=="
+            && h["encoding"] == "base64"));
+        assert!(
+            raw_headers
+                .iter()
+                .any(|h| h["name"] == "x-nomail-title" && h["value"] == "中文")
+        );
+        assert!(envelope["header"].get("title").is_none());
+        assert!(
+            raw_headers
+                .iter()
+                .all(|h| !nomail_app::webhook::is_raw_header_blocked(h["name"].as_str().unwrap()))
+        );
+        assert!(
+            !original["header"]
+                .to_string()
+                .contains("raw-private-credential")
+        );
+        assert!(
+            raw_headers
+                .iter()
+                .any(|h| h["name"] == "x-raw-unknown" && h["value"] == "retained")
+        );
+        assert!(
+            raw_headers
+                .iter()
+                .any(|h| h["name"] == "x-raw-empty" && h["value"] == "")
+        );
+        assert_eq!(
+            raw_headers
+                .iter()
+                .filter(|h| h["name"] == "x-raw-repeated")
+                .map(|h| h["value"].as_str().unwrap())
+                .collect::<Vec<_>>(),
+            ["one", "two"]
+        );
         if provider == "telegram" {
+            let unmodeled = json!({"future_envelope":{"keep":true},"update_id":null});
+            let response = test::call_service(
+                &app,
+                test::TestRequest::post()
+                    .uri(receive_path)
+                    .insert_header(("X-Telegram-Bot-Api-Secret-Token", "platform-secret"))
+                    .set_json(&unmodeled)
+                    .to_request(),
+            )
+            .await;
+            assert_eq!(response.status(), StatusCode::OK);
+            let accepted: Value = test::read_body_json(response).await;
+            let unmodeled_path = format!(
+                "/api/messages/{}",
+                accepted["data"]["messageId"].as_str().unwrap()
+            );
+            let detail = api!(get, &unmodeled_path, json!({})).1;
+            assert!(detail["platformData"].is_null());
+            assert!(detail["platformDataError"].is_string());
+            assert_eq!(
+                api!(
+                    patch,
+                    &unmodeled_path,
+                    json!({"pinned":true,"status":"read"})
+                )
+                .0,
+                StatusCode::OK
+            );
+            let response = test::call_service(
+                &app,
+                test::TestRequest::get()
+                    .uri(&format!("{unmodeled_path}/raw"))
+                    .insert_header(("Authorization", format!("Bearer {token}")))
+                    .to_request(),
+            )
+            .await;
+            assert_eq!(
+                serde_json::from_str::<Value>(
+                    test::read_body_json::<Value, _>(response).await["data"]["payload"]
+                        .as_str()
+                        .unwrap()
+                )
+                .unwrap(),
+                unmodeled
+            );
+            assert_eq!(api!(delete, &unmodeled_path, json!({})).0, StatusCode::OK);
             let fixtures: Vec<Value> = serde_json::from_str(include_str!(
                 "../../nomail-core/src/webhook/platforms/telegram/fixtures/updates.json"
             ))
@@ -390,7 +539,21 @@ async fn config_service_preserves_sparse_concurrent_updates_credentials_and_scop
                         .to_request(),
                 )
                 .await;
-                assert_eq!(test::read_body_json::<Value, _>(original).await, payload);
+                let original: Value = test::read_body_json(original).await;
+                assert_eq!(
+                    serde_json::from_str::<Value>(original["data"]["payload"].as_str().unwrap())
+                        .unwrap(),
+                    payload
+                );
+                assert!(
+                    original["data"]["header"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .all(|h| {
+                            !nomail_app::webhook::is_raw_header_blocked(h["name"].as_str().unwrap())
+                        })
+                );
                 // Deduplication remains scoped to update_id, not message_id or
                 // the presence of a typed branch / future metadata.
                 let replay = test::call_service(
@@ -460,7 +623,11 @@ async fn config_service_preserves_sparse_concurrent_updates_credentials_and_scop
             )
             .await;
             let original: Value = test::read_body_json(response).await;
-            assert_eq!(original, serde_json::from_str::<Value>(&raw).unwrap());
+            assert_eq!(
+                serde_json::from_str::<Value>(original["data"]["payload"].as_str().unwrap())
+                    .unwrap(),
+                serde_json::from_str::<Value>(&raw).unwrap()
+            );
         }
         if provider == "appstoreconnect" {
             let detail = api!(get, &message_path, json!({})).1;
@@ -515,7 +682,12 @@ async fn config_service_preserves_sparse_concurrent_updates_credentials_and_scop
             )
             .await;
             assert_eq!(
-                test::read_body_json::<Value, _>(response).await,
+                serde_json::from_str::<Value>(
+                    test::read_body_json::<Value, _>(response).await["data"]["payload"]
+                        .as_str()
+                        .unwrap()
+                )
+                .unwrap(),
                 serde_json::from_str::<Value>(&raw).unwrap()
             );
         }
@@ -562,16 +734,16 @@ async fn config_service_preserves_sparse_concurrent_updates_credentials_and_scop
 fn platform_delivery(provider: &str, platform: &Value) -> (String, Vec<(String, String)>) {
     let time = Utc::now().timestamp().to_string();
     let body = match provider {
-        "generic" => json!({"id":"matrix","title":"Test"}),
-        "github" => json!({"action":"opened","issue":{"title":"Test"}}),
-        "gitea" => json!({"action":"assigned","issue":{"number":1,"title":"Test","is_locked":true},"sender":{"id":-2,"login":"actions"}}),
-        "appstoreconnect" => json!({"data":{"type":"appStoreVersionAppVersionStateUpdated","id":"matrix","version":1,"attributes":{"oldValue":"PREPARE_FOR_SUBMISSION","newValue":"READY_FOR_REVIEW"},"relationships":{"instance":{"data":{"type":"appStoreVersions","id":"example-version"}}}},"future":{"keep":true}}),
-        "gitlab" => json!({"object_kind":"issue","object_attributes":{"title":"Test"}}),
-        "stripe" => json!({"id":"evt_matrix","object":"event","type":"payment_intent.succeeded","data":{"object":{"id":"pi_test"}}}),
-        "slack" => json!({"type":"event_callback","event_id":"EvMatrix","event":{"type":"message","text":"Test"}}),
-        "feishu" => json!({"schema":"2.0","header":{"token":"platform-secret","event_id":"matrix","event_type":"im.message.receive_v1"},"event":{"message":{"message_type":"text","content":"{\"text\":\"Test\"}"}}}),
-        "telegram" => json!({"update_id":123,"message":{"message_id":1,"chat":{"id":1,"type":"private"},"text":"Test"}}),
-        "shopify" => json!({"id":123,"title":"Test"}),
+        "generic" => json!({"id":"matrix","title":"Test","source":null,"content":""}),
+        "github" => json!({"action":"opened","issue":{"title":"Test","assignee":null,"labels":[],"locked":false}}),
+        "gitea" => json!({"action":"assigned","issue":{"number":1,"title":"Test","is_locked":true,"milestone":null,"labels":[]},"sender":{"id":-2,"login":"actions"}}),
+        "appstoreconnect" => json!({"data":{"type":"appStoreVersionAppVersionStateUpdated","id":"matrix","version":1,"attributes":{"oldValue":"PREPARE_FOR_SUBMISSION","newValue":"READY_FOR_REVIEW","timestamp":null},"relationships":{"instance":{"data":{"type":"appStoreVersions","id":"example-version"}}}},"future":{"keep":true}}),
+        "gitlab" => json!({"object_kind":"issue","project":null,"commits":[],"object_attributes":{"title":"Test","milestone_id":null}}),
+        "stripe" => json!({"id":"evt_matrix","object":"event","type":"payment_intent.succeeded","request":null,"livemode":false,"pending_webhooks":0,"data":{"object":{"id":"pi_test"}}}),
+        "slack" => json!({"type":"event_callback","event_id":"EvMatrix","team_id":null,"event":{"type":"message","text":"Test","user":null}}),
+        "feishu" => json!({"schema":"2.0","header":{"token":"platform-secret","event_id":"matrix","event_type":"im.message.receive_v1","tenant_key":null},"event":{"message":{"message_type":"text","content":"{\"text\":\"Test\"}","parent_id":null},"sender":null}}),
+        "telegram" => json!({"update_id":123,"message":{"message_id":1,"chat":{"id":1,"type":"private"},"text":"Test","from":null,"entities":[]}}),
+        "shopify" => json!({"id":123,"title":"Test","name":null}),
         _ => unreachable!(),
     }.to_string();
     let sign = |key: &[u8], input: &str| {
@@ -579,7 +751,7 @@ fn platform_delivery(provider: &str, platform: &Value) -> (String, Vec<(String, 
         mac.update(input.as_bytes());
         mac.finalize().into_bytes()
     };
-    let headers = match provider {
+    let mut headers = match provider {
         "generic" => vec![(
             "X-NoMail-Signature",
             format!("sha256={}", hex::encode(sign(b"platform-secret", &body))),
@@ -654,6 +826,15 @@ fn platform_delivery(provider: &str, platform: &Value) -> (String, Vec<(String, 
         ],
         _ => unreachable!(),
     };
+    headers.extend([
+        ("Authorization", "Bearer raw-private-credential".into()),
+        ("Cookie", "session=raw-private-credential".into()),
+        ("X-Api-Key", "raw-private-credential".into()),
+        ("X-Raw-Unknown", "retained".into()),
+        ("X-Raw-Empty", "".into()),
+        ("X-Raw-Repeated", "one".into()),
+        ("X-Raw-Repeated", "two".into()),
+    ]);
     (
         body,
         headers.into_iter().map(|(k, v)| (k.into(), v)).collect(),

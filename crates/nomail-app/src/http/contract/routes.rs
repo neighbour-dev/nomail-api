@@ -38,7 +38,6 @@ pub enum BodyKind {
 pub enum ResponseKind {
     Json,
     Sse,
-    Raw,
     Webhook,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -130,7 +129,7 @@ endpoints! {
     GetMessage => ("getMessage",Get,"/api/messages/{id}",Bearer,None,Json,false,MessageId,(),(),MessageDetail,"Messages","消息详情"),
     UpdateMessage => ("updateMessage",Patch,"/api/messages/{id}",Bearer,Json,Json,false,MessageId,UpdateMessageRequest,(),MessageDetail,"Messages","修改消息状态"),
     DeleteMessage => ("deleteMessage",Delete,"/api/messages/{id}",Bearer,None,Json,false,MessageId,(),(),(),"Messages","删除消息"),
-    RawMessage => ("rawMessage",Get,"/api/messages/{id}/raw",Bearer,None,Raw,false,MessageId,(),(),(),"Messages","读取可读原始内容"),
+    RawMessage => ("rawMessage",Get,"/api/messages/{id}/raw",Bearer,None,Json,false,MessageId,(),(),MessageRawResponse,"Messages","读取存储的请求头、原始 payload 字符串及 contentType"),
 }
 
 pub struct RouteMatch {

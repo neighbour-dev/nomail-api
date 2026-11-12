@@ -36,4 +36,4 @@ npm test
 
 `wrangler.toml` 中的 D1 migrations 包含基线、游标索引及 0003_raw_storage.sql，不提供旧 PostgreSQL 或单 Secret 配置数据库迁移。升级前按需备份，暂停旧 Worker 和请求写入，由部署者物理清空 notify_messages，应用第 3 个表结构迁移后再启用新版；非空表会使迁移失败并回滚，账号、设备和配置无需清空，不提供消息 JSON 转换或旧格式兼容。
 
-raw 查询不依赖平台模型，沿用直接返回 raw_payload 的原文响应方式。表单保存为 URL 编码字符串，文本原样保存，JSON 保存为 JSON 文本。入箱时 HTTP 头只按 Core 黑名单排除；未知敏感头也会保留，body 不自动脱敏。保存的请求头供详情的平台模型重建使用。
+raw 查询接口使用普通 `{ code, msg, data }` JSON 响应，data 为 `{ header, payload, contentType }`，直接对应数据库的 raw_headers/raw_payload/content_type。header 只从 JSON 存储文本解码成条目数组，不重新过滤；payload 始终是原字符串，不按 MIME 解析，不增加 format/value；contentType 原样返回且不用于设置 HTTP 响应头。未知 MIME、空字符串和无法解析的 payload 仍可取回排查。表单保存为 URL 编码字符串，文本原样保存，JSON 保存为 JSON 文本。入箱时 HTTP 头只按 Core 黑名单排除；未知敏感头也会保留，body 不自动脱敏。

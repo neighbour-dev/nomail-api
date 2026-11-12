@@ -185,7 +185,13 @@ async fn all_api_contracts() {
         "application/json"
     );
     let raw_body: Value = test::read_body_json(raw).await;
-    assert_eq!(raw_body["id"], "e1");
+    assert_eq!(raw_body["code"], 0);
+    assert_eq!(raw_body["msg"], "success");
+    assert_eq!(raw_body["data"]["contentType"], "application/json");
+    assert_eq!(
+        serde_json::from_str::<Value>(raw_body["data"]["payload"].as_str().unwrap()).unwrap()["id"],
+        "e1"
+    );
     let (_, body) = api!(
         patch,
         &message_path,

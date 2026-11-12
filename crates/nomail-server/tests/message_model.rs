@@ -151,7 +151,22 @@ async fn one_message_preserves_platform_detail_level_raw_and_independent_user_st
         "application/json"
     );
     let raw: Value = test::read_body_json(response).await;
-    assert_eq!(raw, payload);
+    assert_eq!(raw["code"], 0);
+    assert_eq!(raw["msg"], "success");
+    let raw = &raw["data"];
+    assert_eq!(raw["contentType"], "application/json");
+    assert_eq!(
+        serde_json::from_str::<Value>(raw["payload"].as_str().unwrap()).unwrap(),
+        payload
+    );
+    assert!(
+        raw["header"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|h| h["name"] == "x-github-event" && h["value"] == "issue_comment")
+    );
+    assert!(!raw["header"].to_string().contains("x-hub-signature"));
 
     let workflow = json!({"action":"completed","workflow_run":{"id":10,"name":"CI","status":"completed","conclusion":"failure","head_branch":"main","run_number":11,"display_title":"Build PR","run_attempt":2,"actor":{"id":4,"login":"bob"}}});
     let mut mac = Hmac::<Sha256>::new_from_slice(b"secret").unwrap();

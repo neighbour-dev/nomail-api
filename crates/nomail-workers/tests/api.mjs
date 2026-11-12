@@ -44,6 +44,13 @@ test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, a
     }
     const loginBody = deviceId => ({ username: 'admin', password: 'password123', deviceId, platform: 'ios', deviceType: 'phone' });
     await api('GET', '/api/health');
+    for (const name of ['X-NoMail-Title', 'X-Unknown', 'Authorization']) {
+      for (const value of ['é', Buffer.from('中文', 'utf8').toString('latin1')]) {
+        const response = await fetch(origin + '/api/health', { headers: { [name]: value } });
+        assert.equal(response.status, 200);
+        validateResponse('GET', '/api/health', 200, await response.json());
+      }
+    }
     await api('GET', '/api/unknown', undefined, undefined, 404);
     await api('POST', '/api/health', {}, undefined, 404);
     await api('GET', '/api/messages/batch', undefined, undefined, 404);
@@ -55,6 +62,24 @@ test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, a
     await api('POST', '/api/auth/login', { ...loginBody('a'), password: 'wrong' }, undefined, 401);
     const login = await api('POST', '/api/auth/login', loginBody('a'));
     let token = login.accessToken;
+    const blockedRawHeaders = new Set(['authorization', 'proxy-authorization', 'cookie', 'set-cookie', 'x-api-key', 'api-key', 'x-auth-token', 'x-csrf-token', 'x-xsrf-token', 'cf-access-jwt-assertion', 'x-forwarded-access-token', 'x-nomail-signature', 'x-hub-signature', 'x-hub-signature-256', 'x-gitea-signature', 'x-gitlab-token', 'webhook-signature', 'stripe-signature', 'x-slack-signature', 'x-lark-signature', 'x-feishu-signature', 'x-telegram-bot-api-secret-token', 'x-shopify-hmac-sha256', 'x-apple-signature']);
+    async function inspectRaw(path) {
+      const response = await fetch(origin + path + '/raw', { headers: { Authorization: `Bearer ${token}` } });
+      assert.equal(response.status, 200);
+      assert.match(response.headers.get('Content-Type'), /application\/json/);
+      const envelope = await response.json();
+      validateResponse('GET', path + '/raw', 200, envelope);
+      assert.equal(envelope.code, 0);
+      assert.equal(envelope.msg, 'success');
+      const original = envelope.data;
+      assert.deepEqual(Object.keys(original).sort(), ['contentType', 'header', 'payload']);
+      assert.equal(typeof original.payload, 'string');
+      assert.equal(typeof original.contentType, 'string');
+      assert.ok(Array.isArray(original.header));
+      assert.ok(original.header.every(h => !blockedRawHeaders.has(h.name.toLowerCase())));
+      assert.ok(!JSON.stringify(original.header).includes('raw-private-credential'));
+      return original;
+    }
     for (const [path, body, contentType, status, message] of [
       ['/api/webhook/configs/bad', '{', 'application/json', 400, 'invalid webhook config id'],
       ['/api/webhook/configs/0/enabled', '{}', 'text/plain', 400, 'invalid webhook config id'],
@@ -81,6 +106,9 @@ test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, a
       assert.equal(result.status, 0, result.stdout + result.stderr);
       return JSON.parse(result.stdout)[0].results;
     }
+    const messageColumns = localSql('PRAGMA table_info(notify_messages);').map(c => c.name);
+    assert.ok(messageColumns.includes('raw_headers'));
+    assert.ok(!messageColumns.includes('platform_data'));
     assert.equal(config.enabled, true);
     assert.match(config.key, /^[0-9a-f]{32}$/);
     assert.equal(config.secret, undefined);
@@ -191,8 +219,9 @@ test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, a
     assert.equal((await api('GET', '/api/messages/unread-count', undefined, token)).count, 0);
     assert.equal((await api('POST', '/api/messages/batch', { ids: [created.messageId, created.messageId], action: 'mark_unread' }, token)).affected, 1);
     assert.equal((await api('GET', path, undefined, token)).readAt, null);
-    const raw = await fetch(origin + path + '/raw', { headers: { Authorization: `Bearer ${token}` } });
-    assert.equal((await raw.json()).id, 'event-1');
+    const raw = await inspectRaw(path);
+    assert.equal(raw.contentType, 'application/json');
+    assert.equal(JSON.parse(raw.payload).id, 'event-1');
     await api('GET', '/api/messages?from=bad', undefined, token, 400);
     await api('DELETE', path, undefined, token);
     assert.equal((await receive({ id: 'event-1', title: 'deleted' })).messageId, created.messageId);
@@ -220,6 +249,27 @@ test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, a
     }
     const boundaryIds = [stateMessage.messageId, ...Array.from({ length: 99 }, (_, i) => `00000000-0000-0000-0000-${(i + 1).toString(16).padStart(12, '0')}`)];
     assert.equal((await api('POST', '/api/messages/batch', { ids: boundaryIds, action: 'pin' }, token)).affected, 1);
+    const invalidBefore = localSql(`SELECT * FROM notify_messages WHERE id='${stateMessage.messageId}';`)[0];
+    localSql(`UPDATE notify_messages SET provider='telegram' WHERE id='${stateMessage.messageId}';`);
+    const invalidProjection = await api('GET', statePath, undefined, token);
+    assert.equal(invalidProjection.platformData, null);
+    assert.equal(typeof invalidProjection.platformDataError, 'string');
+    const updatedWithoutModel = await api('PATCH', statePath, { pinned: !invalidBefore.pinned, status: 'unread' }, token);
+    assert.equal(updatedWithoutModel.platformData, null);
+    assert.equal(updatedWithoutModel.pinned, !Boolean(invalidBefore.pinned));
+    assert.equal(updatedWithoutModel.status, 'unread');
+    assert.equal(localSql(`SELECT raw_payload FROM notify_messages WHERE id='${stateMessage.messageId}';`)[0].raw_payload, invalidBefore.raw_payload);
+    assert.equal(JSON.parse((await inspectRaw(statePath)).payload).extra.keep, true);
+    localSql(`UPDATE notify_messages SET provider='generic' WHERE id='${stateMessage.messageId}';`);
+    localSql(`UPDATE notify_messages SET raw_payload=' {not JSON',content_type='application/custom; version=1' WHERE id='${stateMessage.messageId}';`);
+    const opaqueStored = await inspectRaw(statePath);
+    assert.equal(opaqueStored.payload, ' {not JSON');
+    assert.equal(opaqueStored.contentType, 'application/custom; version=1');
+    const storedHeaderExtras = [{ name: 'x-stored', value: ' value ', encoding: null, future: { keep: [] } }];
+    localSql(`UPDATE notify_messages SET raw_headers='${JSON.stringify(storedHeaderExtras)}' WHERE id='${stateMessage.messageId}';`);
+    assert.deepEqual((await inspectRaw(statePath)).header, storedHeaderExtras);
+    localSql(`UPDATE notify_messages SET raw_headers='${invalidBefore.raw_headers.replaceAll("'", "''")}' WHERE id='${stateMessage.messageId}';`);
+    localSql(`UPDATE notify_messages SET raw_payload='${invalidBefore.raw_payload.replaceAll("'", "''")}',content_type='${invalidBefore.content_type.replaceAll("'", "''")}' WHERE id='${stateMessage.messageId}';`);
     const beforeBadBatch = await api('GET', statePath, undefined, token);
     for (const body of [{ ids: [stateMessage.messageId, 'invalid'], action: 'unpin' }, { ids: Array(101).fill(stateMessage.messageId), action: 'unpin' }, { ids: [], action: 'pin' }, { ids: [stateMessage.messageId], action: 'invalid' }, { ids: null, action: 'pin' }, { ids: [stateMessage.messageId], action: null }]) await api('POST', '/api/messages/batch', body, token, 400);
     assert.deepEqual(await api('GET', statePath, undefined, token), beforeBadBatch);
@@ -257,13 +307,39 @@ test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, a
       validateResponse('PATCH', configPath, response.status, await response.json());
     }
     const plain = ' plain text\n 世界 \n';
-    const plainResponse = await fetch(origin + config.url, { method: 'POST', body: plain, headers: { 'Content-Type': 'text/plain', 'X-NoMail-Title': 'Plain', 'X-NoMail-Level': 'high', 'X-NoMail-Signature': 'sha256=' + createHmac('sha256', 'test-webhook-secret').update(plain).digest('hex') } });
+    const beforeOpaqueHeaders = localSql('SELECT COUNT(*) AS count FROM notify_messages;')[0].count;
+    for (const name of ['X-NoMail-Title', 'X-Unknown', 'Authorization']) {
+      const response = await fetch(origin + config.url, { method: 'POST', body: plain, headers: {
+        'Content-Type': 'text/plain',
+        'X-NoMail-Signature': 'sha256=' + createHmac('sha256', 'test-webhook-secret').update(plain).digest('hex'),
+        [name]: 'é',
+      } });
+      assert.equal(response.status, 200);
+      const accepted = await response.json();
+      validateResponse('POST', config.url, 200, accepted);
+      const original = await inspectRaw(`/api/messages/${accepted.data.messageId}`);
+      // The runtime can expose UTF-8 wire bytes through a Latin-1 string. Raw
+      // preserves that runtime-visible value, not a guessed character decoding.
+      if (!blockedRawHeaders.has(name.toLowerCase())) assert.ok(original.header.some(h => h.name.toLowerCase() === name.toLowerCase() && /[^\x00-\x7f]/.test(h.value)), JSON.stringify(original.header));
+      assert.deepEqual(JSON.parse(localSql(`SELECT raw_headers FROM notify_messages WHERE id='${accepted.data.messageId}';`)[0].raw_headers), original.header);
+      const detail = await api('GET', `/api/messages/${accepted.data.messageId}`, undefined, token);
+      assert.equal(detail.platformData.event.header.title, undefined);
+    }
+    assert.equal(localSql('SELECT COUNT(*) AS count FROM notify_messages;')[0].count, beforeOpaqueHeaders + 3);
+    const plainResponse = await fetch(origin + config.url, { method: 'POST', body: plain, headers: { 'Content-Type': 'text/plain', 'X-NoMail-Title': 'Plain', 'X-NoMail-Level': 'high', 'X-NoMail-Signature': 'sha256=' + createHmac('sha256', 'test-webhook-secret').update(plain).digest('hex'), 'Authorization': 'Bearer raw-private-credential', 'Cookie': 'session=raw-private-credential', 'X-Raw-Unknown': 'retained', 'X-Raw-Empty': '' } });
     const plainAck = await plainResponse.json();
     assert.equal(plainResponse.status, 200);
     validateResponse('POST', config.url, 200, plainAck);
-    const plainRaw = await fetch(origin + `/api/messages/${plainAck.data.messageId}/raw`, { headers: { Authorization: `Bearer ${token}` } });
-    assert.match(plainRaw.headers.get('Content-Type'), /text\/plain/);
-    assert.equal(await plainRaw.text(), plain);
+    const plainRaw = await inspectRaw(`/api/messages/${plainAck.data.messageId}`);
+    assert.equal(plainRaw.contentType, 'text/plain');
+    assert.equal(plainRaw.payload, plain);
+    const storedPlain = localSql(`SELECT raw_payload,content_type FROM notify_messages WHERE id='${plainAck.data.messageId}';`)[0];
+    assert.equal(storedPlain.raw_payload, plain);
+    assert.equal(storedPlain.content_type, 'text/plain');
+    assert.equal(plainRaw.payload, storedPlain.raw_payload);
+    assert.equal(plainRaw.contentType, storedPlain.content_type);
+    assert.ok(plainRaw.header.some(h => h.name.toLowerCase() === 'x-raw-unknown' && h.value === 'retained'));
+    assert.ok(plainRaw.header.some(h => h.name.toLowerCase() === 'x-raw-empty' && h.value === ''));
     for (const level of ['low', 'normal', 'high', 'urgent']) {
       const received = await receive({ id: `priority-${level}`, title: `Priority ${level}`, level });
       const detail = await api('GET', `/api/messages/${received.messageId}`, undefined, token);
@@ -320,8 +396,8 @@ test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, a
     assert.deepEqual(after.metadata, before.metadata);
     assert.equal(after.createdAt, before.createdAt);
     assert.equal(after.pinned, true);
-    const original = await fetch(origin + replyPath + '/raw', { headers: { Authorization: `Bearer ${token}` } });
-    assert.deepEqual(await original.json(), comment);
+    const original = await inspectRaw(replyPath);
+    assert.deepEqual(JSON.parse(original.payload), comment);
     const build = await githubReceive({ action: 'completed', workflow_run: { id: 10, name: 'CI', status: 'completed', conclusion: 'failure', head_branch: 'main', run_number: 11, display_title: 'Build PR', run_attempt: 2, actor: { id: 4, login: 'bob' } } }, 'workflow_run', 'ci-failure');
     const buildDetail = await api('GET', `/api/messages/${build.messageId}`, undefined, token);
     assert.equal(buildDetail.level, 'normal');
@@ -356,6 +432,28 @@ test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, a
     assert.equal(challenge.status, 200);
     assert.deepEqual(await challenge.json(), { challenge: 'test-challenge' });
     assert.equal(encryptedFeishu.platform.authentication, 'feishuEncrypted');
+    const decodedMessage = { schema: '2.0', header: { event_id: 'encrypted-message-1', event_type: 'im.message.receive_v1', app_id: 'app-1' }, event: { message: { message_id: 'encrypted-m1', message_type: 'text', content: JSON.stringify({ text: 'decoded original' }), parent_id: null } }, opaque: { retained: true } };
+    const messageCipher = createCipheriv('aes-256-cbc', createHash('sha256').update('different-encryption-key').digest(), iv);
+    const encryptedBody = JSON.stringify({ encrypt: Buffer.concat([iv, messageCipher.update(JSON.stringify(decodedMessage)), messageCipher.final()]).toString('base64') });
+    const encryptedTime = Math.floor(Date.now() / 1000).toString();
+    const nonce = 'stored-plaintext-test';
+    const messageSignature = createHash('sha256').update(encryptedTime).update(nonce).update('different-encryption-key').update(encryptedBody).digest('hex');
+    const acceptedEncrypted = await fetch(origin + encryptedFeishu.url, { method: 'POST', body: encryptedBody, headers: { 'Content-Type': 'application/json', 'X-Lark-Request-Timestamp': encryptedTime, 'X-Lark-Request-Nonce': nonce, 'X-Lark-Signature': messageSignature } });
+    const encryptedAck = await acceptedEncrypted.json();
+    assert.equal(acceptedEncrypted.status, 200, JSON.stringify(encryptedAck));
+    const encryptedPath = `/api/messages/${encryptedAck.data.messageId}`;
+    const encryptedDetail = await api('GET', encryptedPath, undefined, token);
+    const storedEncrypted = localSql(`SELECT raw_headers,raw_payload,content_type FROM notify_messages WHERE id='${encryptedAck.data.messageId}';`)[0];
+    assert.equal(storedEncrypted.content_type, 'application/json');
+    assert.deepEqual(JSON.parse(storedEncrypted.raw_payload), decodedMessage);
+    assert.ok(Array.isArray(JSON.parse(storedEncrypted.raw_headers)));
+    const encryptedRaw = await inspectRaw(encryptedPath);
+    assert.deepEqual(JSON.parse(encryptedRaw.payload), decodedMessage);
+    assert.equal(encryptedRaw.payload, storedEncrypted.raw_payload);
+    assert.equal(encryptedRaw.contentType, storedEncrypted.content_type);
+    await api('PATCH', `/api/webhook/configs/${encryptedFeishu.id}`, { platform: { provider: 'feishu', credentials: { verificationToken: 'rotated-token', encryptKey: 'rotated-key' } } }, token);
+    assert.deepEqual((await api('GET', encryptedPath, undefined, token)).platformData, encryptedDetail.platformData);
+    assert.equal((await api('PATCH', encryptedPath, { pinned: true }, token)).pinned, true);
     for (const platform of [
       { provider: 'gitlab', credentials: { type: 'signingToken', signingToken: 'whsec_cGxhdGZvcm0tc2VjcmV0' } },
       { provider: 'gitea', credentials: { secret: 'platform-secret' } },
@@ -373,13 +471,13 @@ test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, a
       assert.ok(!JSON.stringify(item).includes('platform-secret'));
       assert.deepEqual(await api('GET', path, undefined, token), item);
       const payloads = {
-        gitea: { action: 'assigned', issue: { number: 1, title: 'Test', is_locked: true }, sender: { id: -2, login: 'actions' } },
-        appstoreconnect: { data: { type: 'appStoreVersionAppVersionStateUpdated', id: 'matrix', version: 1, attributes: { oldValue: 'PREPARE_FOR_SUBMISSION', newValue: 'READY_FOR_REVIEW' }, relationships: { instance: { data: { type: 'appStoreVersions', id: 'example-version' } } } }, future: { keep: true } },
-        gitlab: { object_kind: 'issue', object_attributes: { title: 'Test' } },
-        stripe: { id: 'evt_matrix', object: 'event', type: 'payment_intent.succeeded', data: { object: { id: 'pi_test' } } },
-        slack: { type: 'event_callback', event_id: 'EvMatrix', event: { type: 'message', text: 'Test' } },
-        telegram: { update_id: 123, message: { message_id: 1, chat: { id: 1, type: 'private' }, text: 'Test' } },
-        shopify: { id: 123, title: 'Test' },
+        gitea: { action: 'assigned', issue: { number: 1, title: 'Test', is_locked: true, milestone: null, labels: [] }, sender: { id: -2, login: 'actions' } },
+        appstoreconnect: { data: { type: 'appStoreVersionAppVersionStateUpdated', id: 'matrix', version: 1, attributes: { oldValue: 'PREPARE_FOR_SUBMISSION', newValue: 'READY_FOR_REVIEW', timestamp: null }, relationships: { instance: { data: { type: 'appStoreVersions', id: 'example-version' } } } }, future: { keep: true } },
+        gitlab: { object_kind: 'issue', project: null, commits: [], object_attributes: { title: 'Test', milestone_id: null } },
+        stripe: { id: 'evt_matrix', object: 'event', type: 'payment_intent.succeeded', request: null, livemode: false, pending_webhooks: 0, data: { object: { id: 'pi_test' } } },
+        slack: { type: 'event_callback', event_id: 'EvMatrix', team_id: null, event: { type: 'message', text: 'Test', user: null } },
+        telegram: { update_id: 123, message: { message_id: 1, chat: { id: 1, type: 'private' }, text: 'Test', from: null, entities: [] } },
+        shopify: { id: 123, title: 'Test', name: null },
       };
       const raw = JSON.stringify(payloads[platform.provider]);
       const time = Math.floor(Date.now() / 1000).toString();
@@ -398,11 +496,85 @@ test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, a
         case 'telegram': headers = { 'X-Telegram-Bot-Api-Secret-Token': 'platform-secret' }; break;
         case 'shopify': headers = { 'X-Shopify-Topic': 'products/create', 'X-Shopify-Shop-Domain': 'test.myshopify.com', 'X-Shopify-API-Version': '2026-10', 'X-Shopify-Hmac-Sha256': sign('platform-secret', raw, 'base64') }; break;
       }
+      headers = { ...headers, Authorization: 'Bearer raw-private-credential', Cookie: 'session=raw-private-credential', 'X-Api-Key': 'raw-private-credential', 'X-Raw-Unknown': 'retained', 'X-Raw-Empty': '', 'X-Raw-Repeated': 'one, two' };
       const response = await fetch(origin + item.url, { method: 'POST', body: raw, headers: { 'Content-Type': 'application/json', ...headers } });
       const ack = await response.json();
       assert.equal(response.status, 200, JSON.stringify(ack));
       validateResponse('POST', item.url, 200, ack);
-      assert.equal((await api('GET', `/api/messages/${ack.data.messageId}`, undefined, token)).provider, platform.provider);
+      const detail = await api('GET', `/api/messages/${ack.data.messageId}`, undefined, token);
+      assert.equal(detail.provider, platform.provider);
+      assert.deepEqual(Object.keys(detail.platformData.event).sort(), ['header', 'payload']);
+      assert.equal(typeof detail.platformData.event.header, 'object');
+      assert.ok(!JSON.stringify(detail.platformData.event).includes('platform-secret'));
+      const expectedPayload = structuredClone(payloads[platform.provider]);
+      if (platform.provider === 'appstoreconnect') delete expectedPayload.future;
+      assert.deepEqual(detail.platformData.event.payload, expectedPayload);
+      const captured = await inspectRaw(`/api/messages/${ack.data.messageId}`);
+      assert.equal(captured.contentType, 'application/json');
+      assert.deepEqual(JSON.parse(captured.payload), payloads[platform.provider]);
+      for (const [name, value] of Object.entries(headers)) {
+        if (!blockedRawHeaders.has(name.toLowerCase())) {
+          assert.ok(captured.header.some(h => h.name.toLowerCase() === name.toLowerCase() && h.value === value), `missing raw header ${name}`);
+        }
+      }
+      if (['telegram', 'appstoreconnect'].includes(platform.provider)) {
+        const unmodeled = { future_envelope: { keep: true }, update_id: null };
+        const body = JSON.stringify(unmodeled);
+        const intakeHeaders = platform.provider === 'telegram'
+          ? { 'X-Telegram-Bot-Api-Secret-Token': 'platform-secret' }
+          : { 'X-Apple-Signature': 'hmacsha256=' + sign('platform-secret', body) };
+        let previousId;
+        for (let i = 0; i < 2; i++) {
+          const response = await fetch(origin + item.url, { method: 'POST', body, headers: { 'Content-Type': 'application/json', ...intakeHeaders } });
+          const ack = await response.json();
+          assert.equal(response.status, 200, JSON.stringify(ack));
+          validateResponse('POST', item.url, 200, ack);
+          assert.equal(ack.data.duplicate, false);
+          assert.notEqual(ack.data.messageId, previousId);
+          previousId = ack.data.messageId;
+          const path = `/api/messages/${ack.data.messageId}`;
+          const detail = await api('GET', path, undefined, token);
+          assert.equal(detail.platformData, null);
+          assert.equal(typeof detail.platformDataError, 'string');
+          assert.equal(detail.metadata.deduplicationKey, null);
+          assert.deepEqual(JSON.parse((await inspectRaw(path)).payload), unmodeled);
+          const updated = await api('PATCH', path, { pinned: true, status: 'read' }, token);
+          assert.equal(updated.pinned, true);
+          assert.equal(updated.status, 'read');
+          assert.equal(updated.platformData, null);
+          await api('DELETE', path, undefined, token);
+        }
+      }
+      if (platform.provider === 'slack') {
+        for (const fields of [
+          {},
+          { command: '/example', team_id: 'T1', user_id: 'U1', text: ' text\n 中文 ' },
+          { payload: JSON.stringify({ type: 'block_actions', team: { id: 'T1' }, actions: [{ action_id: 'approve', value: null }] }) },
+        ]) {
+          const body = new URLSearchParams(fields).toString();
+          const response = await fetch(origin + item.url, { method: 'POST', body, headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Slack-Request-Timestamp': time, 'X-Slack-Signature': 'v0=' + sign('platform-secret', `v0:${time}:${body}`), 'X-Raw-Unknown': 'form-transport' } });
+          const received = await response.json();
+          assert.equal(response.status, 200, JSON.stringify(received));
+          const original = await inspectRaw(`/api/messages/${received.data.messageId}`);
+          assert.equal((await api('GET', `/api/messages/${received.data.messageId}`, undefined, token)).hasRawPayload, true);
+          const storedForm = localSql(`SELECT raw_payload,content_type FROM notify_messages WHERE id='${received.data.messageId}';`)[0];
+          assert.equal(original.payload, storedForm.raw_payload);
+          assert.equal(original.contentType, storedForm.content_type);
+          assert.ok(original.header.some(h => h.name.toLowerCase() === 'x-raw-unknown' && h.value === 'form-transport'));
+          assert.ok(original.header.some(h => h.name.toLowerCase() === 'content-type' && h.value === 'application/x-www-form-urlencoded'));
+          if (fields.payload) {
+            assert.equal(storedForm.content_type, 'application/json');
+            assert.deepEqual(JSON.parse(storedForm.raw_payload), JSON.parse(fields.payload));
+            assert.equal(original.contentType, 'application/json');
+            assert.deepEqual(JSON.parse(original.payload), JSON.parse(fields.payload));
+          } else {
+            assert.equal(storedForm.content_type, 'application/x-www-form-urlencoded');
+            assert.deepEqual(Object.fromEntries(new URLSearchParams(storedForm.raw_payload)), fields);
+            assert.equal(original.contentType, 'application/x-www-form-urlencoded');
+            assert.deepEqual(Object.fromEntries(new URLSearchParams(original.payload)), fields);
+          }
+        }
+      }
       if (platform.provider === 'telegram') {
         const fixtures = JSON.parse(await readFile(new URL('../../nomail-core/src/webhook/platforms/telegram/fixtures/updates.json', import.meta.url), 'utf8'));
         for (const fixture of fixtures) {
@@ -416,9 +588,8 @@ test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, a
           const detail = await api('GET', path, undefined, token);
           assert.deepEqual(detail.platformData.event.payload, fixture);
           assert.equal(detail.metadata.deduplicationKey.scope, 'telegram:bot-update');
-          const original = await fetch(origin + path + '/raw', { headers: { Authorization: `Bearer ${token}` } });
-          assert.equal(original.status, 200);
-          assert.deepEqual(await original.json(), payload);
+          const original = await inspectRaw(path);
+          assert.deepEqual(JSON.parse(original.payload), payload);
           const replay = await fetch(origin + item.url, { method: 'POST', body: JSON.stringify(fixture), headers: { 'Content-Type': 'application/json', ...headers } });
           const duplicate = await replay.json();
           assert.equal(replay.status, 200, JSON.stringify(duplicate));
@@ -442,8 +613,8 @@ test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, a
           assert.equal(replay.data.duplicate, duplicate);
           assert.equal(replay.data.messageId === ack.data.messageId, duplicate);
         }
-        const original = await fetch(origin + `/api/messages/${ack.data.messageId}/raw`, { headers: { Authorization: `Bearer ${token}` } });
-        assert.deepEqual(await original.json(), payloads.gitea);
+        const original = await inspectRaw(`/api/messages/${ack.data.messageId}`);
+        assert.deepEqual(JSON.parse(original.payload), payloads.gitea);
       }
       await api('POST', item.url, { title: 'unauthenticated' }, undefined, 401);
       if (platform.provider === 'appstoreconnect') {
@@ -465,8 +636,8 @@ test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, a
           assert.equal(replay.data.duplicate, duplicate);
           assert.equal(replay.data.messageId === ack.data.messageId, duplicate);
         }
-        const original = await fetch(origin + `/api/messages/${ack.data.messageId}/raw`, { headers: { Authorization: `Bearer ${token}` } });
-        assert.deepEqual(await original.json(), payloads.appstoreconnect);
+        const original = await inspectRaw(`/api/messages/${ack.data.messageId}`);
+        assert.deepEqual(JSON.parse(original.payload), payloads.appstoreconnect);
       }
       await api('PATCH', path, { platform: { provider: 'github' } }, token, 400);
       assert.deepEqual(await api('GET', path, undefined, token), item);

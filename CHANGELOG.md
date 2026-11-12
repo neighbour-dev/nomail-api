@@ -22,7 +22,7 @@
 
 - **平台建模不再作为接收门槛：**鉴权并完成必要解码/解密后，未知事件/版本、缺少展示元数据或无法生成平台模型不再阻止消息入库；模型不可用时使用通用展示回退，完整数据仍保存在 raw。缺少可靠事件 ID 时不猜测去重键。协议控制请求仍按原协议处理，鉴权、解密、格式解码、大小限制和存储失败不返回成功 ACK。
 
-- **raw 存储不兼容变更：**数据库分列保存过滤后的 `raw_headers`、完整解析/解密后的 `raw_payload` 及描述 payload 格式的 `content_type`；raw_payload 不含 header/format/value 包装，也不保存密文。JSON、文本、已解码表单分别按 JSON、原字符串、规范化 URL 编码保存。Core 内存中的 `PlatformEvent.raw` 使用 `{ header, payload: { format, value } }`。
+- **raw 接口与存储内容不兼容变更：**`GET /api/messages/{id}/raw` 使用统一 `{ code, msg, data }` JSON 响应，data 为 `{ header, payload, contentType }`：header 仅从存储 JSON 解码为条目数组，payload 始终是数据库中的原字符串，contentType 原样对应数据库 content_type；不解析 payload、不套 format/value、不按 contentType 设置 HTTP 响应头，空值、未知类型及无法解析的 payload 仍可查询。数据库分列保存过滤后的 `raw_headers`、完整解析/解密后的 `raw_payload` 及描述 payload 格式的 `content_type`；raw_payload 不含 header/format/value 包装，也不保存密文。JSON、文本、已解码表单分别按 JSON、原字符串、规范化 URL 编码保存。Core 内存中的 `PlatformEvent.raw` 仍使用 `{ header, payload: { format, value } }`。
 
 - **平台数据改为读取投影：**删除数据库 `platform_data` 列，详情接口的 `platformData` 从消息自身的 provider 和 raw 即时生成，不重新验签、解密或读取当前配置凭据；飞书 Encrypt Key 轮换不影响已接收消息。模型失败时返回 `platformData: null` 和可排查的 `platformDataError`，正常时后者为 null，不影响详情、raw 查询、已读/置顶和删除。通用展示字段、元数据和用户状态仍以保存的记录为准。
 

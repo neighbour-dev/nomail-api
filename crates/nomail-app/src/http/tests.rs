@@ -10,6 +10,37 @@ fn decode<E: Endpoint>(value: serde_json::Value) -> Result<E::Request, ApiFailur
 }
 
 #[test]
+fn raw_response_wraps_exact_stored_strings_without_payload_decoding() {
+    for (payload, content_type) in [
+        (" {\n  \"title\": \"中文\"\n}\n", "application/json"),
+        ("{not valid JSON", "application/json"),
+        (" text\n 世界 \n", "text/plain"),
+        (
+            "text=%20one%20&text=two&empty=",
+            "application/x-www-form-urlencoded",
+        ),
+        ("", ""),
+        ("opaque stored data", "application/custom"),
+    ] {
+        let header = vec![
+            json!({"name":"X-Unknown","value":" value ","encoding":null,"future":{"keep":[]}}),
+        ];
+        let response = MessageRawResponse::from(crate::message::RawContent {
+            header: header.clone(),
+            text: payload.into(),
+            content_type: content_type.into(),
+        });
+        let value = serde_json::to_value(ApiResponse::success(response)).unwrap();
+        assert_eq!(
+            value,
+            json!({"code":0,"msg":"success","data":{
+                "header":header,"payload":payload,"contentType":content_type
+            }})
+        );
+    }
+}
+
+#[test]
 fn auth_conversion_groups_registration_and_keeps_wire_defaults_at_the_boundary() {
     let login: crate::auth::Login = decode::<endpoints::Login>(json!({
         "username":"admin", "password":"password123", "deviceId":"phone", "platform":"ios", "deviceType":"phone",
@@ -228,7 +259,7 @@ fn authentication_and_non_json_contracts_are_declared_once() {
         Operation::StreamMessages.route().response,
         ResponseKind::Sse
     );
-    assert_eq!(Operation::RawMessage.route().response, ResponseKind::Raw);
+    assert_eq!(Operation::RawMessage.route().response, ResponseKind::Json);
 }
 
 #[test]

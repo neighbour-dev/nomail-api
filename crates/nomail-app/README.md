@@ -15,7 +15,7 @@ Server / Workers → nomail-app → nomail-core
 - `webhook/service.rs`：收件箱规范化规则；平台配置与认证构造在 Core，产品当前开放 Generic 及九种原生平台接入，共 10 种 provider。
 - `ingestion/`：唯一完整接收用例：查配置、解密凭据、调用协议、区分控制请求、构造消息并幂等入箱。只依赖 `IngestionStore` 的有效配置查询和幂等插入两个操作，不持有 `MessageService` 或继承 `MessageStore`。时间、ID 和密钥由运行时提供；控制请求不创建消息 ID，不入库。只在首次持久化成功且返回 ID 一致时产生业务事件。
 
-消息持久化只保存 raw_headers、完整解码/解密后的 raw_payload 及其 content_type，不保存类型化 platform_data。平台模型是尽力生成的投影，不作为接收入库前提；模型失败时保留 raw 和通用回退展示。MessageService 在详情读取时调用 Core 的无鉴权 parse_raw，生成临时 MessageView；它不重放接收、不检查投递时间窗口、不读取当前凭据，也不重算已有通用展示内容或状态。模型不可用时 platform_data 为 None，platform_data_error 提供安全诊断，不导致详情或已读/置顶操作失败。存储层仍原子检查所有权和可见性；状态操作不再先加载整条消息做平台解析。原文单独查询直接返回 RawContent 存储视图，不调用 Core 恢复或解析 payload，也不校验 MIME；HTTP 层沿用直接返回已存储 payload 的原文响应方式。
+消息持久化只保存 raw_headers、完整解码/解密后的 raw_payload 及其 content_type，不保存类型化 platform_data。平台模型是尽力生成的投影，不作为接收入库前提；模型失败时保留 raw 和通用回退展示。MessageService 在详情读取时调用 Core 的无鉴权 parse_raw，生成临时 MessageView；它不重放接收、不检查投递时间窗口、不读取当前凭据，也不重算已有通用展示内容或状态。模型不可用时 platform_data 为 None，platform_data_error 提供安全诊断，不导致详情或已读/置顶操作失败。存储层仍原子检查所有权和可见性；状态操作不再先加载整条消息做平台解析。原文单独查询直接返回 RawContent 存储视图，不调用 Core 恢复或解析 payload，也不校验 MIME；HTTP DTO 转换为 `{ header, payload, contentType }` 并使用普通 code/msg/data 包装，其中 payload 始终为数据库原字符串。
 - `http/contract/`：集中定义唯一路由清单、所有 HTTP 请求/响应 DTO、响应包装和 SSE 事件，按认证、消息、配置、公共类型分文件。`http::*` 保留契约重导出。
 - `http/`：完整接口执行、输入解析、业务结果转换、HTTP 错误映射、配置 URL、SSE 编码和 OpenAPI。两端一次接入 `http::execute`，不分别维护路径、方法、DTO 或逐接口 Handler。
 

@@ -108,6 +108,28 @@ impl From<MessageView> for MessageDetail {
     }
 }
 
+/// Stored raw data, without payload parsing or platform-model projection.
+#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct MessageRawResponse {
+    /// Stored header entries, decoded only from their JSON storage representation.
+    pub header: Vec<serde_json::Value>,
+    /// Exact raw_payload string, including JSON whitespace or form encoding.
+    pub payload: String,
+    /// Stored payload serialization type, not the HTTP response Content-Type.
+    pub content_type: String,
+}
+impl From<crate::message::RawContent> for MessageRawResponse {
+    fn from(raw: crate::message::RawContent) -> Self {
+        Self {
+            header: raw.header,
+            payload: raw.text,
+            content_type: raw.content_type,
+        }
+    }
+}
+
 #[derive(Deserialize, Serialize)]
 #[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "openapi", schemars(rename = "UpdateRequest"))]

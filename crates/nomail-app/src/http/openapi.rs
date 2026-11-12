@@ -73,12 +73,9 @@ pub fn document() -> Value {
             ResponseKind::Webhook => {
                 json!({"application/json":{"schema":{"oneOf":[response,{"type":"object","required":["challenge"],"properties":{"challenge":{"type":"string"}}}]}},"text/plain":{"schema":{"type":"string"},"example":"pong"}})
             }
-            ResponseKind::Raw => {
-                json!({"application/json":{"schema":true},"text/plain":{"schema":{"type":"string"}},"application/x-www-form-urlencoded":{"schema":{"type":"string"}},"application/octet-stream":{"schema":{"type":"string","format":"binary"}}})
-            }
         };
         let mut responses = Map::new();
-        responses.insert("200".into(),json!({"description":"成功；SSE、原文、Webhook 控制响应不使用 NoMail JSON 包装","content":content}));
+        responses.insert("200".into(),json!({"description":"成功；SSE 和 Webhook 控制响应不使用 NoMail JSON 包装","content":content}));
         for status in [400, 401, 404, 409, 413, 500] {
             responses.insert(status.to_string(),json!({"description":format!("HTTP {status}"),"content":{"application/json":{"schema":error_schema}}}));
         }
@@ -215,6 +212,22 @@ mod tests {
         references(&document, &document);
         let schemas = document["components"]["schemas"].as_object().unwrap();
         assert!(schemas.contains_key("MessageDetail"));
+        let raw_content =
+            &document["paths"]["/api/messages/{id}/raw"]["get"]["responses"]["200"]["content"];
+        assert_eq!(raw_content.as_object().unwrap().len(), 1);
+        let raw = &raw_content["application/json"]["schema"];
+        assert_eq!(raw["required"], json!(["code", "msg", "data"]));
+        assert_eq!(
+            raw["properties"]["data"]["$ref"],
+            "#/components/schemas/MessageRawResponse"
+        );
+        let raw = &schemas["MessageRawResponse"];
+        assert_eq!(raw["required"], json!(["header", "payload", "contentType"]));
+        assert_eq!(raw["properties"].as_object().unwrap().len(), 3);
+        assert_eq!(raw["properties"]["header"]["type"], "array");
+        assert!(raw["properties"]["header"]["items"].get("$ref").is_none());
+        assert_eq!(raw["properties"]["payload"]["type"], "string");
+        assert_eq!(raw["properties"]["contentType"]["type"], "string");
         for platform in [
             "Generic",
             "Github",

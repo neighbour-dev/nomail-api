@@ -8556,6 +8556,30 @@
         ],
         "type": "object"
       },
+      "MessageRawResponse": {
+        "description": "Stored raw data, without payload parsing or platform-model projection.",
+        "properties": {
+          "contentType": {
+            "description": "Stored payload serialization type, not the HTTP response Content-Type.",
+            "type": "string"
+          },
+          "header": {
+            "description": "Stored header entries, decoded only from their JSON storage representation.",
+            "items": true,
+            "type": "array"
+          },
+          "payload": {
+            "description": "Exact raw_payload string, including JSON whitespace or form encoding.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "header",
+          "payload",
+          "contentType"
+        ],
+        "type": "object"
+      },
       "Page_ConfigResponse": {
         "description": "Wire pagination envelope, separate from the application page.",
         "properties": {
@@ -19797,7 +19821,7 @@
                 }
               }
             },
-            "description": "成功；SSE、原文、Webhook 控制响应不使用 NoMail JSON 包装"
+            "description": "成功；SSE 和 Webhook 控制响应不使用 NoMail JSON 包装"
           },
           "400": {
             "content": {
@@ -20049,7 +20073,7 @@
                 }
               }
             },
-            "description": "成功；SSE、原文、Webhook 控制响应不使用 NoMail JSON 包装"
+            "description": "成功；SSE 和 Webhook 控制响应不使用 NoMail JSON 包装"
           },
           "400": {
             "content": {
@@ -20279,7 +20303,7 @@
                 }
               }
             },
-            "description": "成功；SSE、原文、Webhook 控制响应不使用 NoMail JSON 包装"
+            "description": "成功；SSE 和 Webhook 控制响应不使用 NoMail JSON 包装"
           },
           "400": {
             "content": {
@@ -20517,7 +20541,7 @@
                 }
               }
             },
-            "description": "成功；SSE、原文、Webhook 控制响应不使用 NoMail JSON 包装"
+            "description": "成功；SSE 和 Webhook 控制响应不使用 NoMail JSON 包装"
           },
           "400": {
             "content": {
@@ -20755,7 +20779,7 @@
                 }
               }
             },
-            "description": "成功；SSE、原文、Webhook 控制响应不使用 NoMail JSON 包装"
+            "description": "成功；SSE 和 Webhook 控制响应不使用 NoMail JSON 包装"
           },
           "400": {
             "content": {
@@ -21049,7 +21073,7 @@
                 }
               }
             },
-            "description": "成功；SSE、原文、Webhook 控制响应不使用 NoMail JSON 包装"
+            "description": "成功；SSE 和 Webhook 控制响应不使用 NoMail JSON 包装"
           },
           "400": {
             "content": {
@@ -21291,7 +21315,7 @@
                 }
               }
             },
-            "description": "成功；SSE、原文、Webhook 控制响应不使用 NoMail JSON 包装"
+            "description": "成功；SSE 和 Webhook 控制响应不使用 NoMail JSON 包装"
           },
           "400": {
             "content": {
@@ -21533,7 +21557,7 @@
                 }
               }
             },
-            "description": "成功；SSE、原文、Webhook 控制响应不使用 NoMail JSON 包装"
+            "description": "成功；SSE 和 Webhook 控制响应不使用 NoMail JSON 包装"
           },
           "400": {
             "content": {
@@ -21756,7 +21780,7 @@
                 }
               }
             },
-            "description": "成功；SSE、原文、Webhook 控制响应不使用 NoMail JSON 包装"
+            "description": "成功；SSE 和 Webhook 控制响应不使用 NoMail JSON 包装"
           },
           "400": {
             "content": {
@@ -22091,7 +22115,7 @@
                 }
               }
             },
-            "description": "成功；SSE、原文、Webhook 控制响应不使用 NoMail JSON 包装"
+            "description": "成功；SSE 和 Webhook 控制响应不使用 NoMail JSON 包装"
           },
           "400": {
             "content": {
@@ -22344,7 +22368,7 @@
                 }
               }
             },
-            "description": "成功；SSE、原文、Webhook 控制响应不使用 NoMail JSON 包装"
+            "description": "成功；SSE 和 Webhook 控制响应不使用 NoMail JSON 包装"
           },
           "400": {
             "content": {
@@ -22696,7 +22720,7 @@
                 }
               }
             },
-            "description": "成功；SSE、原文、Webhook 控制响应不使用 NoMail JSON 包装"
+            "description": "成功；SSE 和 Webhook 控制响应不使用 NoMail JSON 包装"
           },
           "400": {
             "content": {
@@ -22904,7 +22928,7 @@
                 }
               }
             },
-            "description": "成功；SSE、原文、Webhook 控制响应不使用 NoMail JSON 包装"
+            "description": "成功；SSE 和 Webhook 控制响应不使用 NoMail JSON 包装"
           },
           "400": {
             "content": {
@@ -23221,7 +23245,7 @@
                 }
               }
             },
-            "description": "成功；SSE、原文、Webhook 控制响应不使用 NoMail JSON 包装"
+            "description": "成功；SSE 和 Webhook 控制响应不使用 NoMail JSON 包装"
           },
           "400": {
             "content": {
@@ -23459,7 +23483,7 @@
                 }
               }
             },
-            "description": "成功；SSE、原文、Webhook 控制响应不使用 NoMail JSON 包装"
+            "description": "成功；SSE 和 Webhook 控制响应不使用 NoMail JSON 包装"
           },
           "400": {
             "content": {
@@ -23695,7 +23719,7 @@
                 }
               }
             },
-            "description": "成功；SSE、原文、Webhook 控制响应不使用 NoMail JSON 包装"
+            "description": "成功；SSE 和 Webhook 控制响应不使用 NoMail JSON 包装"
           },
           "400": {
             "content": {
@@ -23956,7 +23980,7 @@
                 }
               }
             },
-            "description": "成功；SSE、原文、Webhook 控制响应不使用 NoMail JSON 包装"
+            "description": "成功；SSE 和 Webhook 控制响应不使用 NoMail JSON 包装"
           },
           "400": {
             "content": {
@@ -24169,26 +24193,32 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": true
-              },
-              "application/octet-stream": {
                 "schema": {
-                  "format": "binary",
-                  "type": "string"
-                }
-              },
-              "application/x-www-form-urlencoded": {
-                "schema": {
-                  "type": "string"
-                }
-              },
-              "text/plain": {
-                "schema": {
-                  "type": "string"
+                  "properties": {
+                    "code": {
+                      "format": "uint16",
+                      "maximum": 65535,
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/MessageRawResponse"
+                    },
+                    "msg": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "msg",
+                    "data"
+                  ],
+                  "title": "ApiResponse_MessageRawResponse",
+                  "type": "object"
                 }
               }
             },
-            "description": "成功；SSE、原文、Webhook 控制响应不使用 NoMail JSON 包装"
+            "description": "成功；SSE 和 Webhook 控制响应不使用 NoMail JSON 包装"
           },
           "400": {
             "content": {
@@ -24376,7 +24406,7 @@
             "BearerAuth": []
           }
         ],
-        "summary": "读取可读原始内容",
+        "summary": "读取存储的请求头、原始 payload 字符串及 contentType",
         "tags": [
           "Messages"
         ],
@@ -24443,7 +24473,7 @@
                 }
               }
             },
-            "description": "成功；SSE、原文、Webhook 控制响应不使用 NoMail JSON 包装"
+            "description": "成功；SSE 和 Webhook 控制响应不使用 NoMail JSON 包装"
           },
           "400": {
             "content": {
@@ -24696,7 +24726,7 @@
                 }
               }
             },
-            "description": "成功；SSE、原文、Webhook 控制响应不使用 NoMail JSON 包装"
+            "description": "成功；SSE 和 Webhook 控制响应不使用 NoMail JSON 包装"
           },
           "400": {
             "content": {
@@ -24935,7 +24965,7 @@
                 }
               }
             },
-            "description": "成功；SSE、原文、Webhook 控制响应不使用 NoMail JSON 包装"
+            "description": "成功；SSE 和 Webhook 控制响应不使用 NoMail JSON 包装"
           },
           "400": {
             "content": {
@@ -25172,7 +25202,7 @@
                 }
               }
             },
-            "description": "成功；SSE、原文、Webhook 控制响应不使用 NoMail JSON 包装"
+            "description": "成功；SSE 和 Webhook 控制响应不使用 NoMail JSON 包装"
           },
           "400": {
             "content": {
@@ -25432,7 +25462,7 @@
                 }
               }
             },
-            "description": "成功；SSE、原文、Webhook 控制响应不使用 NoMail JSON 包装"
+            "description": "成功；SSE 和 Webhook 控制响应不使用 NoMail JSON 包装"
           },
           "400": {
             "content": {
@@ -25691,7 +25721,7 @@
                 }
               }
             },
-            "description": "成功；SSE、原文、Webhook 控制响应不使用 NoMail JSON 包装"
+            "description": "成功；SSE 和 Webhook 控制响应不使用 NoMail JSON 包装"
           },
           "400": {
             "content": {
@@ -25974,7 +26004,7 @@
                 }
               }
             },
-            "description": "成功；SSE、原文、Webhook 控制响应不使用 NoMail JSON 包装"
+            "description": "成功；SSE 和 Webhook 控制响应不使用 NoMail JSON 包装"
           },
           "400": {
             "content": {

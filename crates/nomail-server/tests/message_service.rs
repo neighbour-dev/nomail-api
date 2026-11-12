@@ -326,7 +326,26 @@ async fn sparse_updates_bulk_limits_scope_and_raw_reads_use_the_shared_service()
     .await;
     assert_eq!(response.status(), StatusCode::OK);
     let raw: Value = test::read_body_json(response).await;
-    assert_eq!(raw["extra"]["keep"], true);
+    assert_eq!(raw["code"], 0);
+    assert_eq!(raw["msg"], "success");
+    assert_eq!(raw["data"]["payload"], invalid_before.raw_payload);
+    assert_eq!(raw["data"]["contentType"], invalid_before.content_type);
+    // Even malformed JSON / an unknown serialization type must be inspectable.
+    let mut opaque: message::ActiveModel = updated.into();
+    opaque.raw_payload = Set(" {not JSON\n".into());
+    opaque.content_type = Set("application/custom; version=1".into());
+    let headers =
+        json!([{"name":"x-stored","value":" value ","encoding":null,"future":{"keep":[]}}]);
+    opaque.raw_headers = Set(headers.to_string());
+    opaque.update(&database).await.unwrap();
+    let (status, opaque) = api!(get, &format!("{path}/raw"), json!({}), Some(token));
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(opaque["data"]["payload"], " {not JSON\n");
+    assert_eq!(opaque["data"]["header"], headers);
+    assert_eq!(
+        opaque["data"]["contentType"],
+        "application/custom; version=1"
+    );
     assert_eq!(
         api!(
             delete,

@@ -72,7 +72,7 @@ WebhookRequest（签名用的原始字节）+ 可信配置
 
 `raw.to_readable_string()` / Display 序列化 Core 内存中的 `{ header, payload: { format, value } }`，`raw.media_type()` 描述该内存封装的 JSON 序列化格式；它不是 raw HTTP 查询接口的响应 DTO。原始 HTTP Content-Type 若存在则在 raw.header 中，内存中的解码类型由 payload.format 标识。
 
-`GET /api/messages/{id}/raw` 沿用直接返回 raw_payload 的原文响应方式；该查询不调用 Core 的 from_stored/parse_raw，不要求平台模型解析成功。已存储请求头供平台数据重建使用，原文 HTTP 响应仍只包含 payload。
+`GET /api/messages/{id}/raw` 走 App 的普通 JSON 响应流程，返回 `{ code: 0, msg: "success", data: { header, payload, contentType } }`。header 只把 raw_headers 的 JSON 存储文本解码为数组，不重新过滤或建模；payload 始终是 raw_payload 原字符串（JSON 也不解析成对象），contentType 原样对应 content_type。该查询不调用 Core 的 from_stored/parse_raw，不校验或归一化 payload 与 contentType，因此空字符串、未知 MIME 和不可解析的历史/异常内容都能用于排查。contentType 不用于设置接口响应头。
 
 数据库只分别保存 `raw_headers`（过滤后的头条目 JSON）、`raw_payload`（完整解码/解密后的数据）和 `content_type`（raw_payload 的格式），不再保存 platform_data 列，也不在 raw_payload 内增加 header/format/value 包装。JSON 数据保存为 JSON 文本，文本数据保存原字符串；已解码的表单/参数按 application/x-www-form-urlencoded 规范序列化以便无损恢复字符串参数。content_type 分别为 application/json、text/plain 或 application/x-www-form-urlencoded，绝不因为 raw 查询接口返回 JSON 就全部写成 application/json。参数和 body 均按协议处理后的结果保存；当前产品接收路由仍只有 POST，没有自行增加 GET 投递支持。
 
