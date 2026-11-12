@@ -15,7 +15,7 @@ npm test
 
 `npm test` 使用独立临时 D1 存储，启动本地 Wrangler/DO 并检查 API、SSE、签名、软删除、无 ID 消息、并发去重、refresh token 单次消费和密码修改撤销会话。只使用测试凭据，不需要 Cloudflare 账号；本地占用 `127.0.0.1:8791`。需安装 `worker-build`，它必须在 PATH 中。
 
-路由和接口执行统一由 `nomail-app::http::execute` 完成，Workers 不再绑定 Operation、解析 DTO 或编写逐接口 Handler。`src/app.rs` 只实现请求/响应适配、广播与订阅，`src/services.rs` 组装 D1 存储、配置和运行时。测试还用生成的 OpenAPI 3.1 对实际 JSON 响应做 Schema 校验，并从文档枚举全部受保护接口检查鉴权。修改契约后先在仓库根目录运行 `cargo run -p nomail-app --features openapi --example export-openapi -- docs/swagger.json`；AJV 仅为测试开发依赖，不进入 Worker 运行包。
+路由和接口执行统一由 `nomail-app::http::execute` 完成，Workers 不再绑定 Operation、解析 DTO 或编写逐接口 Handler。`src/app.rs` 只实现请求/响应适配、广播与订阅，`src/services.rs` 组装 D1 存储、配置和运行时。测试还用本地生成的 OpenAPI 3.1 对实际 JSON 响应做 Schema 校验，并从文档枚举全部受保护接口检查鉴权。运行 npm test 前先在仓库根目录执行 `cargo run --locked -p nomail-app --features openapi --example export-openapi -- docs/swagger.json`，修改契约或切换分支后也要重新生成；文件允许本地存在，但不随 Git 提交。测试模块加载时就会读取它，不能到测试回调里才生成。CI 直接下载统一 OpenAPI 任务已生成并校验的同一份文件；AJV 仅为测试开发依赖，不进入 Worker 运行包。
 
 ## 与 Server 的边界
 

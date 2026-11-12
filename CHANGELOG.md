@@ -20,6 +20,8 @@
 
 ### 变更
 
+- OpenAPI JSON 不再随 Git 提交，开发和测试前按需生成本地 docs/swagger.json。CI 每次生成并校验后复用同一份产物，失败会阻止发布构建、镜像推送及 GitHub Release；发布版单独附带 swagger.json 并纳入 SHA256SUMS，不放入 Docker 或二进制压缩包。文档 info.version 自动使用项目版本，替代固定的 1.0.0。
+
 - **平台建模不再作为接收门槛：**鉴权并完成必要解码/解密后，未知事件/版本、缺少展示元数据或无法生成平台模型不再阻止消息入库；模型不可用时使用通用展示回退，完整数据仍保存在 raw。缺少可靠事件 ID 时不猜测去重键。协议控制请求仍按原协议处理，鉴权、解密、格式解码、大小限制和存储失败不返回成功 ACK。
 
 - **raw 接口与存储内容不兼容变更：**`GET /api/messages/{id}/raw` 使用统一 `{ code, msg, data }` JSON 响应，data 为 `{ header, payload, contentType }`：header 仅从存储 JSON 解码为条目数组，payload 始终是数据库中的原字符串，contentType 原样对应数据库 content_type；不解析 payload、不套 format/value、不按 contentType 设置 HTTP 响应头，空值、未知类型及无法解析的 payload 仍可查询。数据库分列保存过滤后的 `raw_headers`、完整解析/解密后的 `raw_payload` 及描述 payload 格式的 `content_type`；raw_payload 不含 header/format/value 包装，也不保存密文。JSON、文本、已解码表单分别按 JSON、原字符串、规范化 URL 编码保存。Core 内存中的 `PlatformEvent.raw` 仍使用 `{ header, payload: { format, value } }`。

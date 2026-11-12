@@ -244,7 +244,7 @@ jobs:
 
   release:
     name: Create GitHub Release
-    needs: [publish, build-binaries, release-info]
+    needs: [check, publish, build-binaries, release-info]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
@@ -265,9 +265,16 @@ jobs:
           path: ${{ runner.temp }}/release-assets
           merge-multiple: true
 
+      # Reuse the exact file generated and verified by the reusable CI workflow.
+      - name: Download verified OpenAPI
+        uses: actions/download-artifact@v8
+        with:
+          name: swagger
+          path: ${{ runner.temp }}/release-assets
+
       - name: Generate checksums
         working-directory: ${{ runner.temp }}/release-assets
-        run: sha256sum *.tar.gz > SHA256SUMS
+        run: sha256sum *.tar.gz swagger.json > SHA256SUMS
 
       - name: Create release with changelog notes
         env:

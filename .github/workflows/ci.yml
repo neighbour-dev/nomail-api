@@ -10,8 +10,42 @@ permissions:
   contents: read
 
 jobs:
+  openapi:
+    name: Generate and verify OpenAPI
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.99.0
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: check-openapi
+
+      # Always regenerate from this checkout, never reuse a local or cached JSON.
+      - name: Generate OpenAPI
+        run: cargo run --locked -p nomail-app --features openapi --example export-openapi -- docs/swagger.json
+
+      - name: Verify OpenAPI contract
+        run: cargo test --locked -p nomail-app --features openapi --lib
+
+      - name: Upload verified OpenAPI
+        uses: actions/upload-artifact@v7
+        with:
+          name: swagger
+          path: docs/swagger.json
+          if-no-files-found: error
+          retention-days: 1
+
   check:
     name: Check (${{ matrix.arch }})
+    needs: [openapi]
     strategy:
       fail-fast: false
       matrix:
@@ -40,8 +74,15 @@ jobs:
       - name: Check formatting
         run: cargo fmt --all -- --check
 
-      - name: Test release notes extraction
+      - name: Test workflow and release scripts
         run: python3 -m unittest discover -s .github/scripts -p 'test_*.py'
+
+      # Server tests include this file at compile time.
+      - name: Download verified OpenAPI
+        uses: actions/download-artifact@v8
+        with:
+          name: swagger
+          path: docs
 
       # Use the workspace's default members; the Workers job tests its own runtime.
       - name: Run tests
@@ -49,6 +90,7 @@ jobs:
 
   workers:
     name: Workers (local D1/DO)
+    needs: [openapi]
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     defaults:
@@ -88,8 +130,11 @@ jobs:
       - name: Check Workers WASM
         run: cargo check --locked -p nomail-workers --target wasm32-unknown-unknown
 
-      - name: Verify OpenAPI contract
-        run: cargo test --locked -p nomail-app --features openapi --lib
+      - name: Download verified OpenAPI
+        uses: actions/download-artifact@v8
+        with:
+          name: swagger
+          path: docs
 
       # Keep the cold Rust/WASM build outside the integration test's startup
       # timeout. Wrangler can reuse these artifacts when it runs the build again.

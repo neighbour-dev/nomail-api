@@ -57,10 +57,10 @@ Workers 的配置和随机数同样不依赖 HTTP 错误：配置失败仅在 `s
 路径参数在共享 HTTP 分发边界按需转为 `ConfigId`（正数业务 ID）或 `Uuid`，用例不再接收配置 ID 字符串，也不重复解析消息 UUID。保留先鉴权、再读取 Body、再按调用参数顺序验证 ID 和 JSON 的行为；路由解析阶段仍仅进行原有的一次 URL 解码。
 
 ```sh
+cargo run --locked -p nomail-app --features openapi --example export-openapi -- docs/swagger.json
 cargo test --locked -p nomail-app --all-targets
 cargo test --locked -p nomail-app --features openapi --lib
 cargo check --locked -p nomail-app --target wasm32-unknown-unknown
-cargo run --locked -p nomail-app --features openapi --example export-openapi -- docs/swagger.json
 ```
 
-OpenAPI 是生成文件，不手工维护。`openapi` feature 只用于文档/测试，普通构建不链接 Schema 生成器。
+OpenAPI 是本地生成文件，由 Git 忽略，不手工维护或提交；接口修改、切换分支以及相关测试前应重新生成，不能只检查文件是否存在。测试仍读取本地文件并核对当前契约，不依赖 Git 中有一份 JSON。info.version 来自工作区版本；CI 生成校验后的同一份文件会成为对应 GitHub Release 的 swagger.json 附件并加入校验和，不进入 Docker 或二进制压缩包。`openapi` feature 只用于文档/测试，普通构建不链接 Schema 生成器。

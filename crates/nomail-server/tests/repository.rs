@@ -81,6 +81,7 @@ fn repository_has_no_go_sources_or_build_manifests() {
 fn openapi_covers_the_core_contract_and_valid_local_references() {
     let document: serde_json::Value =
         serde_json::from_str(include_str!("../../../docs/swagger.json")).unwrap();
+    assert_eq!(document["info"]["version"], env!("CARGO_PKG_VERSION"));
     let operations = document["paths"]
         .as_object()
         .unwrap()

@@ -135,7 +135,7 @@ pub fn document() -> Value {
         let path = paths.entry(route.path).or_insert_with(|| json!({}));
         path[route.method.as_str().to_ascii_lowercase()] = operation;
     }
-    json!({"openapi":"3.1.0","info":{"title":"NoMail API","version":"1.0.0","description":"由 nomail-app HTTP 契约与 Rust DTO 自动生成，请勿手动修改。成功 code=0，错误 code=HTTP 状态，错误 data=null；未知路径和不支持的方法均返回 404。"},
+    json!({"openapi":"3.1.0","info":{"title":"NoMail API","version":env!("CARGO_PKG_VERSION"),"description":"由 nomail-app HTTP 契约与 Rust DTO 自动生成，请勿手动修改。成功 code=0，错误 code=HTTP 状态，错误 data=null；未知路径和不支持的方法均返回 404。"},
         "servers":[{"url":"/"}],"paths":paths,"components":{"securitySchemes":{"BearerAuth":{"type":"http","scheme":"bearer","bearerFormat":"JWT"}},"schemas":schemas}})
 }
 
@@ -143,14 +143,18 @@ pub fn document() -> Value {
 mod tests {
     use super::*;
     #[test]
-    fn generated_openapi_matches_routes_models_and_checked_in_document() {
+    fn generated_openapi_matches_routes_models_and_local_document() {
         let document = document();
         let file = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/swagger.json");
-        let checked: Value = serde_json::from_str(&std::fs::read_to_string(file).unwrap()).unwrap();
+        let generated: Value = serde_json::from_str(&std::fs::read_to_string(file).expect(
+            "generate docs/swagger.json before running OpenAPI tests; see CONTRIBUTING.md",
+        ))
+        .unwrap();
         assert_eq!(
-            document, checked,
-            "regenerate with cargo run -p nomail-app --features openapi --example export-openapi -- docs/swagger.json"
+            document, generated,
+            "local OpenAPI is stale; regenerate with cargo run --locked -p nomail-app --features openapi --example export-openapi -- docs/swagger.json"
         );
+        assert_eq!(document["info"]["version"], env!("CARGO_PKG_VERSION"));
         for route in ROUTES {
             let operation =
                 &document["paths"][route.path][route.method.as_str().to_ascii_lowercase()];
