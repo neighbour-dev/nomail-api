@@ -35,7 +35,7 @@ NoMail API 是单用户、自托管的通知收件箱后端，提供 Server 和 
 - 修复问题时尽量补充回归测试；共享业务或 HTTP 行为变化需考虑 Server 和 Workers 两端。
 - 仅修改文档时检查格式和链接，无需无关的完整构建；完成前运行 `git diff --check`。
 - `docs/swagger.json` 是被 Git 忽略的本地生成文件，不手工编辑、不提交；相关测试及编译测试代码的检查前，按贡献指南重新生成，不能只因文件存在就复用。发布使用通过 CI 校验的同一份 Swagger 作为 GitHub Release 附件，不放入 Docker；接口变更同时检查相关契约测试。
-- 部署和用户操作变化更新文档仓库的 `nomail-docs/guide/install.md`，接口使用说明维护在 `nomail-docs/reference/`；贡献流程变化更新 `CONTRIBUTING.md`；面向用户的变更按贡献指南记录到 `CHANGELOG.md`。
+- 贡献流程变化更新 `CONTRIBUTING.md`；面向用户的变更按贡献指南记录到 `CHANGELOG.md`。
 - 不擅自安装或升级缺失的工具链、修改锁文件来绕过检查失败；说明缺失项并与用户确认。
 - 最终回复说明主要变更、实际运行的检查，以及未运行或失败的检查，不声称未经验证的结果。
 
