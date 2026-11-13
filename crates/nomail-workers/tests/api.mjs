@@ -534,6 +534,34 @@ test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, a
           assert.ok(captured.header.some(h => h.name.toLowerCase() === name.toLowerCase() && h.value === value), `missing raw header ${name}`);
         }
       }
+      if (platform.provider === 'stripe') {
+        const fixtures = JSON.parse(await readFile(new URL('../../nomail-core/src/webhook/platforms/stripe/fixtures/deliveries.json', import.meta.url), 'utf8'));
+        for (const fixture of fixtures) {
+          const body = JSON.stringify(fixture.body);
+          const timestamp = Math.floor(Date.now() / 1000).toString();
+          const signature = `t=${timestamp},v1=${sign('whsec_platform-secret', `${timestamp}.${body}`)}`;
+          let messageId;
+          for (const duplicate of [false, true]) {
+            const response = await fetch(origin + item.url, { method: 'POST', body, headers: { 'Content-Type': 'application/json', 'Stripe-Signature': signature } });
+            const ack = await response.json();
+            assert.equal(response.status, 200, JSON.stringify(ack));
+            validateResponse('POST', item.url, 200, ack);
+            assert.equal(ack.data.duplicate, duplicate);
+            if (duplicate) assert.equal(ack.data.messageId, messageId);
+            messageId = ack.data.messageId;
+          }
+          const messagePath = `/api/messages/${messageId}`;
+          const detail = await api('GET', messagePath, undefined, token);
+          assert.deepEqual(detail.platformData?.event.payload ?? null, fixture.projection, fixture.name);
+          assert.equal(detail.platformDataError === null, fixture.projection !== null);
+          assert.equal(detail.metadata.deduplicationKey.scope, 'stripe:event');
+          const updated = await api('PATCH', messagePath, { pinned: true, status: 'read' }, token);
+          assert.deepEqual(updated.platformData, detail.platformData);
+          const raw = await inspectRaw(messagePath);
+          assert.deepEqual(JSON.parse(raw.payload), fixture.body);
+          assert.ok(raw.header.every(h => h.name.toLowerCase() !== 'stripe-signature'));
+        }
+      }
       if (['telegram', 'appstoreconnect'].includes(platform.provider)) {
         const unmodeled = { future_envelope: { keep: true }, update_id: null };
         const body = JSON.stringify(unmodeled);

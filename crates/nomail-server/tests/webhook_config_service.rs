@@ -454,6 +454,76 @@ async fn config_service_preserves_sparse_concurrent_updates_credentials_and_scop
                 .collect::<Vec<_>>(),
             ["one", "two"]
         );
+        if provider == "stripe" {
+            let fixtures: Value = serde_json::from_str(include_str!(
+                "../../nomail-core/src/webhook/platforms/stripe/fixtures/deliveries.json"
+            ))
+            .unwrap();
+            for fixture in fixtures.as_array().unwrap() {
+                let body = fixture["body"].to_string();
+                let time = Utc::now().timestamp().to_string();
+                let mut mac = Hmac::<Sha256>::new_from_slice(b"whsec_platform-secret").unwrap();
+                mac.update(format!("{time}.{body}").as_bytes());
+                let signature = format!("t={time},v1={}", hex::encode(mac.finalize().into_bytes()));
+                let mut message_id = Value::Null;
+                for duplicate in [false, true] {
+                    let response = test::call_service(
+                        &app,
+                        test::TestRequest::post()
+                            .uri(receive_path)
+                            .insert_header(("Content-Type", "application/json"))
+                            .insert_header(("Stripe-Signature", signature.as_str()))
+                            .set_payload(body.clone())
+                            .to_request(),
+                    )
+                    .await;
+                    assert_eq!(response.status(), StatusCode::OK);
+                    let ack: Value = test::read_body_json(response).await;
+                    assert_eq!(ack["data"]["duplicate"], duplicate);
+                    if duplicate {
+                        assert_eq!(ack["data"]["messageId"], message_id);
+                    }
+                    message_id = ack["data"]["messageId"].clone();
+                }
+                let path = format!("/api/messages/{}", message_id.as_str().unwrap());
+                let detail = api!(get, &path, json!({})).1;
+                assert_eq!(
+                    detail["platformData"]["event"]["payload"],
+                    fixture["projection"]
+                );
+                assert_eq!(
+                    detail["platformDataError"].is_null(),
+                    !fixture["projection"].is_null()
+                );
+                assert_eq!(
+                    detail["metadata"]["deduplicationKey"]["scope"],
+                    "stripe:event"
+                );
+                let updated = api!(patch, &path, json!({"pinned":true,"status":"read"})).1;
+                assert_eq!(updated["platformData"], detail["platformData"]);
+                let response = test::call_service(
+                    &app,
+                    test::TestRequest::get()
+                        .uri(&format!("{path}/raw"))
+                        .insert_header(("Authorization", format!("Bearer {token}")))
+                        .to_request(),
+                )
+                .await;
+                let raw: Value = test::read_body_json(response).await;
+                assert_eq!(
+                    serde_json::from_str::<Value>(raw["data"]["payload"].as_str().unwrap())
+                        .unwrap(),
+                    fixture["body"]
+                );
+                assert!(
+                    raw["data"]["header"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .all(|h| h["name"] != "stripe-signature")
+                );
+            }
+        }
         if provider == "telegram" {
             let unmodeled = json!({"future_envelope":{"keep":true},"update_id":null});
             let response = test::call_service(

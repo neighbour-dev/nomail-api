@@ -1,58 +1,23 @@
 //! Stripe signatures, Snapshot/Thin event models and built-in inbox mapping.
 pub mod config;
+#[macro_use]
+mod support;
+mod generated;
+mod models;
+pub use generated::*;
+pub use models::*;
+pub use support::StripeNumber;
 pub(in crate::webhook) const RAW_HEADER_BLACKLIST: &[&str] = &["stripe-signature"];
 #[cfg(test)]
 mod tests;
-use super::native::NativeValue;
 use crate::webhook::{
     Authentication, EventContent, EventMetadata, MessageContent, PlatformEvent, ReceiveOutcome,
     WebhookConfig, WebhookError, WebhookRequest, crypto, support::*,
 };
-use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 webhook_header!(StripeWebhookHeader {});
 webhook!(StripeWebhook, StripeWebhookHeader, StripeWebhookPayload);
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(untagged)]
-#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
-pub enum StripeCreated {
-    Unix(i64),
-    Text(String),
-}
-impl NativeValue for StripeCreated {
-    fn read(value: &Value) -> Option<Self> {
-        value
-            .as_i64()
-            .map(Self::Unix)
-            .or_else(|| value.as_str().map(|s| Self::Text(s.to_owned())))
-    }
-}
-native_model!(StripeWebhookPayload {
-    id: String = "id",
-    object: String = "object",
-    event_type: String = "type",
-    api_version: String = "api_version",
-    created: StripeCreated = "created",
-    livemode: bool = "livemode",
-    data: StripeEventData = "data",
-    related_object: StripeRelatedObject = "related_object",
-    account: String = "account",
-    context: String = "context",
-    pending_webhooks: i64 = "pending_webhooks",
-    request: Value = "request",
-});
-native_model!(StripeEventData {
-    // Resource shape depends on the event type and Stripe API version.
-    object: Value = "object",
-    previous_attributes: Value = "previous_attributes",
-});
-native_model!(StripeRelatedObject {
-    id: String = "id",
-    object_type: String = "type",
-    url: String = "url",
-});
 
 pub(in crate::webhook) fn receive(
     config: &WebhookConfig<'_>,

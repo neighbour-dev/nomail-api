@@ -257,6 +257,79 @@ mod tests {
                 format!("#/components/schemas/{platform}WebhookPayload")
             );
         }
+        assert_eq!(
+            schemas["StripeWebhookPayload"]["anyOf"],
+            json!([
+                {"$ref":"#/components/schemas/StripeSnapshotEvent"},
+                {"$ref":"#/components/schemas/StripeThinNotification"}
+            ])
+        );
+        assert_eq!(
+            schemas["StripeResource"]["anyOf"].as_array().unwrap().len(),
+            201
+        );
+        for name in [
+            "StripePaymentIntent",
+            "StripeCharge",
+            "StripeCheckoutSession",
+            "StripeInvoice",
+            "StripeSubscription",
+            "StripeCustomer",
+            "StripeDeletedCustomer",
+            "StripePaymentMethod",
+            "StripePrice",
+            "StripeRefund",
+            "StripeDispute",
+            "StripeAccount",
+            "StripeIssuingAuthorization",
+            "StripeTreasuryFinancialAccount",
+            "StripeV2CoreAccount",
+        ] {
+            assert!(
+                schemas.contains_key(name),
+                "missing Stripe resource schema: {name}"
+            );
+        }
+        assert_eq!(
+            schemas["StripeSnapshotEvent"]["properties"]["created"]["type"],
+            json!(["integer", "null"])
+        );
+        assert_eq!(
+            schemas["StripeThinNotification"]["properties"]["created"]["type"],
+            json!(["string", "null"])
+        );
+        assert_eq!(
+            schemas["StripePaymentIntentObjectTag"]["enum"],
+            json!(["payment_intent"])
+        );
+        assert_eq!(schemas["StripeEventObjectTag"]["enum"], json!(["event"]));
+        assert_eq!(
+            schemas["StripeV2CoreEventObjectTag"]["enum"],
+            json!(["v2.core.event"])
+        );
+        assert_eq!(
+            schemas["StripeEventData"]["properties"]["object"]["anyOf"][0]["$ref"],
+            "#/components/schemas/StripeResource"
+        );
+        assert_eq!(
+            schemas["StripeSnapshotEvent"]["properties"]["request"]["anyOf"][0]["$ref"],
+            "#/components/schemas/StripeEventRequest"
+        );
+        assert_eq!(
+            schemas["StripePaymentIntent"]["properties"]["amount"]["format"],
+            "int64"
+        );
+        assert_eq!(
+            schemas["StripePrice"]["properties"]["unit_amount_decimal"]["type"],
+            json!(["string", "null"])
+        );
+        for field in ["reason", "related_object", "snapshot_event"] {
+            assert!(
+                schemas["StripeThinNotification"]["properties"]
+                    .get(field)
+                    .is_some()
+            );
+        }
         for name in [
             "TelegramWebhookPayload",
             "TelegramMessage",

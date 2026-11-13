@@ -1,0 +1,91 @@
+[
+  {
+    "name": "snapshot-expanded-deleted-customer",
+    "body": {
+      "id": "evt_native_snapshot",
+      "object": "event",
+      "type": "payment_intent.succeeded",
+      "api_version": "2026-10-28.endive",
+      "created": 1790000000,
+      "request": { "id": null, "idempotency_key": "" },
+      "data": {
+        "object": {
+          "object": "payment_intent",
+          "id": "pi_example",
+          "amount": 2000,
+          "currency": "usd",
+          "customer": { "object": "customer", "id": "cus_example", "deleted": true },
+          "payment_method": null,
+          "metadata": {},
+          "future_field": { "retain_in_raw": true }
+        },
+        "previous_attributes": { "metadata": { "removed": null } }
+      }
+    },
+    "projection": {
+      "id": "evt_native_snapshot",
+      "object": "event",
+      "type": "payment_intent.succeeded",
+      "api_version": "2026-10-28.endive",
+      "created": 1790000000,
+      "request": { "id": null, "idempotency_key": "" },
+      "data": {
+        "object": {
+          "object": "payment_intent",
+          "id": "pi_example",
+          "amount": 2000,
+          "currency": "usd",
+          "customer": { "object": "customer", "id": "cus_example", "deleted": true },
+          "payment_method": null,
+          "metadata": {}
+        },
+        "previous_attributes": { "metadata": { "removed": null } }
+      }
+    }
+  },
+  {
+    "name": "thin-v1-resource",
+    "body": {
+      "id": "evt_native_thin",
+      "object": "v2.core.event",
+      "type": "v1.invoice.paid",
+      "created": "2026-11-13T01:02:03.456Z",
+      "livemode": false,
+      "context": null,
+      "reason": { "type": "request", "request": { "id": "req_example", "idempotency_key": "example" } },
+      "related_object": { "id": "in_example", "type": "invoice", "url": "/v1/invoices/in_example" },
+      "snapshot_event": "evt_native_snapshot"
+    },
+    "projection": {
+      "id": "evt_native_thin",
+      "object": "v2.core.event",
+      "type": "v1.invoice.paid",
+      "created": "2026-11-13T01:02:03.456Z",
+      "livemode": false,
+      "context": null,
+      "reason": { "type": "request", "request": { "id": "req_example", "idempotency_key": "example" } },
+      "related_object": { "id": "in_example", "type": "invoice", "url": "/v1/invoices/in_example" },
+      "snapshot_event": "evt_native_snapshot"
+    }
+  },
+  {
+    "name": "future-resource",
+    "body": {
+      "id": "evt_native_future_resource",
+      "object": "event",
+      "type": "future_resource.created",
+      "data": { "object": { "object": "future_resource", "id": "future_example", "values": [null, false, 0, "", {}] } }
+    },
+    "projection": {
+      "id": "evt_native_future_resource",
+      "object": "event",
+      "type": "future_resource.created",
+      "data": { "object": { "object": "future_resource", "id": "future_example", "values": [null, false, 0, "", {}] } }
+    }
+  },
+  {
+    "name": "future-envelope",
+    "body": { "id": "evt_native_future_envelope", "object": "future_event", "type": "future.created", "future": [null, false] },
+    "projection": null
+  }
+]

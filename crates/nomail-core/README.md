@@ -119,6 +119,16 @@ Gitea 使用独立模型（依据上游 v28.3.0），不复用 GitHub 类型。`
 
 测试将官方 `webhook-events` 的 14 个示例（12 类事件）固化为脱敏 JSON fixture，并逐字段检查类型和值；CI 不依赖外部样本、Apple 账号或联网下载。
 
+### Stripe
+
+Snapshot 与 Thin 使用独立信封类型，序列化保持原生 JSON 层级，不增加分支包装；这不表示响应字段集合与旧模型完全相同。Snapshot 的 `created` 是 Unix 秒整数，Thin 是时间字符串；Thin 模型包含 `reason.request`、`related_object` 和 `snapshot_event` 等可选字段，只投影实际收到的内容，不调用 Stripe API 补全详情。
+
+资源模型依据官方公开 GA OpenAPI `2026-10-28.endive`（固定 commit），生成 200 个 live/deleted 资源分支及其嵌套类型。`data.object` 根据原生 `object` 分派，可展开字段区分 ID、展开资源及已删除资源。整数金额、十进制字符串、普通数值字段与原生列表/字典分别保留类型；状态枚举仍以字符串保留未来值。`previous_attributes` 保持稀疏旧值映射，未知资源使用原生对象回退；未知顶层信封无法生成平台模型，但仍保留 raw 并采用通用展示回退。已鉴权解码的投递不因建模失败而丢失。
+
+这些资源分支不是事件类型清单，也不意味着一条消息会包含所有资源或字段。实际投递取决于事件订阅、业务活动和所用 Stripe 产品；一些模型用于描述关联资源或 API 展开结构，Webhook 不一定直接携带。Thin 通常只有轻量通知，可展开字段也可能只有 ID；UI 应按实际收到的类型和字段适配，不能把缺失字段当作零值或已补全的详情。
+
+这不是所有 Stripe 历史版本的严格 Schema：已知资源的未建模/类型异常字段及历史版本特有字段保留在 raw，也不表示实现了 Issuing 同步授权决策。来源、生成检查命令、字段语义和兼容边界见 [Stripe 模型说明](src/webhook/platforms/stripe/README.md)。测试固化 16 个官方脱敏资源示例，覆盖 200 个资源分支的判别与往返序列化，以及典型嵌套字段、三态、可展开对象和验签后的 raw 重建；不代表穷举验证了所有嵌套字段或上游事件组合。
+
 ### 通用接收示例
 
 ```rust
@@ -167,13 +177,13 @@ match receive(&config, &WebhookRequest { headers: &headers, body })? {
 | Gitea | JSON 原文或表单解码后 JSON HMAC；原生事件/精确类型头；POST | Issue/PR/审核、Push、引用、Fork、Wiki、Release、Package、Commit Status、Workflow/Job 摘要与独立资源模型 |
 | App Store Connect | POST JSON 原文 HMAC-SHA256；`x-apple-signature` | App/Build/Beta/后台资源状态、反馈资源创建、替代分发可用性和资源关系；不隐式查询 API |
 | GitLab | 固定 Token 或 Standard Webhooks 签名；轮换签名；时间窗口 | MR/评论摘要；自定义模板保留并使用 JSON 回退 |
-| Stripe | 原始 Body + 时间戳签名；多个 v1 签名；Snapshot/Thin | 事件摘要；Thin 明确标记未获取详情 |
+| Stripe | 原始 Body + 时间戳签名；多个 v1 签名；独立 Snapshot/Thin 信封及 200 个生成资源分支 | 现有事件标题与原文正文；Thin 明确标记未获取详情，不联网补全；详细模型不等于已实现专属展示卡片 |
 | Slack | 原始 Body + 时间戳签名；Events API、Interaction、Slash Command、URL 验证 | 文本/命令摘要；交互保留 JSON；限流通知忽略 |
 | 飞书 | Verification Token；拼接 SHA256 签名；AES-256-CBC；URL 验证；v2/旧版信封 | 消息文本二次 JSON 解码与通用摘要 |
 | Telegram | 固定 Secret Token；Update 类型分流 | 文本、caption、按钮 data，非文本使用 JSON 回退 |
 | Shopify | Base64 HMAC；主题、API 版本、店铺、投递与事件 ID | title/name 摘要，裁剪字段使用 JSON 回退 |
 
-事件结构采用平台专属的 `XxxWebhook { header, payload }`。Stripe 根据 payload.object 区分 Snapshot/Thin，保留 `data.object` 和 `related_object.type` 原有位置；Slack 保留 Events API 的 `event` 层、交互的 `team/user` 对象及 Slash Command 原有参数；飞书保留 payload 内原生 `header/event/sender_id`，不再生成 `content_json`。**当前只建模已支持的关键字段，不是所有上游事件的完整强类型 Schema。** 未知字段保留在 raw；未知普通事件一般使用 raw 摘要。版本保留在元数据中，并不表示已验证所有 API 版本的字段兼容性。
+事件结构采用平台专属的 `XxxWebhook { header, payload }`。Stripe 根据 payload.object 区分 Snapshot/Thin，保留 `data.object` 和 `related_object.type` 原有位置；Slack 保留 Events API 的 `event` 层、交互的 `team/user` 对象及 Slash Command 原有参数；飞书保留 payload 内原生 `header/event/sender_id`，不再生成 `content_json`。**各平台的模型覆盖范围不同：Stripe 按固定版本官方资源规范生成详细类型，其他平台的具体字段以各自模型定义为准；这些都是读取投影，不是覆盖所有上游事件及 API 版本的严格校验 Schema。** 未建模内容由 raw 完整保留，部分未知对象还提供原生对象回退；未知普通事件一般使用 raw 摘要。版本保留在元数据中，并不表示已验证所有 API 版本的字段兼容性。
 
 Telegram 模型依据 [Bot API Update](https://core.telegram.org/bots/api#update)（2026-11-10），不包括 Telegram Gateway：
 
