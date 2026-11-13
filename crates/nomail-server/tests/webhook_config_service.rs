@@ -306,6 +306,7 @@ async fn config_service_preserves_sparse_concurrent_updates_credentials_and_scop
     // Every exposed provider survives encrypted persistence and feeds the actual
     // receiving path. These are synthetic payloads and credentials only.
     for platform in [
+        json!({"provider":"mailflare","credentials":{"secret":"platform-secret"}}),
         json!({"provider":"generic","credentials":{"type":"hmacSha256","secret":"platform-secret"}}),
         json!({"provider":"github","credentials":{"secret":"platform-secret"}}),
         json!({"provider":"gitea","credentials":{"secret":"platform-secret"}}),
@@ -454,6 +455,92 @@ async fn config_service_preserves_sparse_concurrent_updates_credentials_and_scop
                 .collect::<Vec<_>>(),
             ["one", "two"]
         );
+        if provider == "mailflare" {
+            assert_eq!(
+                detail["metadata"]["deduplicationKey"]["scope"],
+                "mailflare:delivery"
+            );
+            let mut request = test::TestRequest::post()
+                .uri(receive_path)
+                .insert_header(("Content-Type", "application/json"));
+            for (name, value) in &headers {
+                if name != "X-Email-Platform-Attempt" {
+                    request = request.append_header((name.as_str(), value.as_str()));
+                }
+            }
+            let response = test::call_service(
+                &app,
+                request
+                    .insert_header(("X-Email-Platform-Attempt", "2"))
+                    .set_payload(raw.clone())
+                    .to_request(),
+            )
+            .await;
+            assert_eq!(response.status(), StatusCode::OK);
+            let retry: Value = test::read_body_json(response).await;
+            assert_eq!(retry["data"]["duplicate"], true);
+            assert_eq!(retry["data"]["messageId"], received["data"]["messageId"]);
+            let fixtures: Vec<Value> = serde_json::from_str(include_str!(
+                "../../nomail-core/src/webhook/platforms/mailflare/fixtures/database_samples.json"
+            ))
+            .unwrap();
+            for fixture in fixtures {
+                let body = fixture["payload"].to_string();
+                let mut mac = Hmac::<Sha256>::new_from_slice(b"platform-secret").unwrap();
+                mac.update(body.as_bytes());
+                let signature = hex::encode(mac.finalize().into_bytes());
+                let mut message_id = Value::Null;
+                for duplicate in [false, true] {
+                    let mut request = test::TestRequest::post()
+                        .uri(receive_path)
+                        .insert_header(("Content-Type", "application/json"))
+                        .insert_header(("X-Email-Platform-Signature", signature.as_str()));
+                    for (name, value) in fixture["headers"].as_object().unwrap() {
+                        if name != "x-email-platform-attempt" {
+                            request =
+                                request.insert_header((name.as_str(), value.as_str().unwrap()));
+                        }
+                    }
+                    let response = test::call_service(
+                        &app,
+                        request
+                            .insert_header((
+                                "X-Email-Platform-Attempt",
+                                if duplicate { "2" } else { "1" },
+                            ))
+                            .set_payload(body.clone())
+                            .to_request(),
+                    )
+                    .await;
+                    assert_eq!(response.status(), StatusCode::OK);
+                    let ack: Value = test::read_body_json(response).await;
+                    assert_eq!(ack["data"]["duplicate"], duplicate);
+                    if duplicate {
+                        assert_eq!(ack["data"]["messageId"], message_id);
+                    }
+                    message_id = ack["data"]["messageId"].clone();
+                }
+                let sample_path = format!("/api/messages/{}", message_id.as_str().unwrap());
+                let sample = api!(get, &sample_path, json!({})).1;
+                assert_eq!(
+                    sample["platformData"]["event"]["payload"],
+                    fixture["payload"]
+                );
+                assert_eq!(sample["title"], fixture["payload"]["data"]["subject"]);
+                assert_eq!(sample["platformDataError"], Value::Null);
+                let original = api!(get, &format!("{sample_path}/raw"), json!({})).1;
+                assert_eq!(
+                    serde_json::from_str::<Value>(original["payload"].as_str().unwrap()).unwrap(),
+                    fixture["payload"]
+                );
+                assert!(original["header"].as_array().unwrap().iter().all(|header| {
+                    !header["name"]
+                        .as_str()
+                        .unwrap()
+                        .eq_ignore_ascii_case("x-email-platform-signature")
+                }));
+            }
+        }
         if provider == "github" {
             let fixtures: Value = serde_json::from_str(include_str!(
                 "../../nomail-core/src/webhook/platforms/github/fixtures/deliveries.json"
@@ -944,6 +1031,7 @@ async fn config_service_preserves_sparse_concurrent_updates_credentials_and_scop
 fn platform_delivery(provider: &str, platform: &Value) -> (String, Vec<(String, String)>) {
     let time = Utc::now().timestamp().to_string();
     let body = match provider {
+        "mailflare" => json!({"type":"message.inbound","data":{"messageId":"msg_matrix","from":"sender@example.com","to":"inbox@example.com","subject":"Mailflare test","cc":null}}),
         "generic" => json!({"id":"matrix","title":"Test","source":null,"content":""}),
         "github" => json!({"action":"opened","issue":{"title":"Test","assignee":null,"labels":[],"locked":false}}),
         "gitea" => json!({"action":"assigned","issue":{"number":1,"title":"Test","is_locked":true,"milestone":null,"labels":[]},"sender":{"id":-2,"login":"actions"}}),
@@ -962,6 +1050,15 @@ fn platform_delivery(provider: &str, platform: &Value) -> (String, Vec<(String, 
         mac.finalize().into_bytes()
     };
     let mut headers = match provider {
+        "mailflare" => vec![
+            ("X-Email-Platform-Event", "message.inbound".into()),
+            ("X-Email-Platform-Delivery", "whd_matrix".into()),
+            ("X-Email-Platform-Attempt", "1".into()),
+            (
+                "X-Email-Platform-Signature",
+                hex::encode(sign(b"platform-secret", &body)),
+            ),
+        ],
         "generic" => vec![(
             "X-NoMail-Signature",
             format!("sha256={}", hex::encode(sign(b"platform-secret", &body))),

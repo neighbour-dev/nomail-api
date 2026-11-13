@@ -1,8 +1,8 @@
 //! Read projections from accepted, decoded/decrypted raw data. Never replay
 //! authentication: signatures are not stored and delivery windows expire.
 use super::{
-    PlatformData, app_store_connect, feishu, generic, gitea, github, gitlab, native::NativeValue,
-    shopify, slack, stripe, telegram,
+    PlatformData, app_store_connect, feishu, generic, gitea, github, gitlab, mailflare,
+    native::NativeValue, shopify, slack, stripe, telegram,
 };
 use crate::webhook::{EventContent, Provider, RawWebhook, WebhookError, WebhookRequest};
 
@@ -42,6 +42,13 @@ pub fn parse_raw(provider: Provider, raw: &RawWebhook) -> Result<PlatformData, W
         };
     }
     Ok(match provider {
+        Provider::Mailflare => restore!(
+            mailflare,
+            Mailflare,
+            MailflareWebhook,
+            MailflareWebhookHeader,
+            MailflareWebhookPayload
+        ),
         Provider::Generic => {
             let payload = match &raw.payload {
                 EventContent::Text(text) => generic::GenericWebhookPayload::Text(text.clone()),

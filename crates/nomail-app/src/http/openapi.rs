@@ -188,7 +188,7 @@ mod tests {
         assert_eq!(update_schema["additionalProperties"], false);
         assert!(create_schema["properties"].get("source").is_none());
         let platform = &document["components"]["schemas"]["PlatformConfig"];
-        assert_eq!(platform["oneOf"].as_array().unwrap().len(), 10);
+        assert_eq!(platform["oneOf"].as_array().unwrap().len(), 11);
         fn references(value: &Value, root: &Value) {
             match value {
                 Value::Object(object) => {
@@ -233,6 +233,7 @@ mod tests {
         assert_eq!(raw["properties"]["payload"]["type"], "string");
         assert_eq!(raw["properties"]["contentType"]["type"], "string");
         for platform in [
+            "Mailflare",
             "Generic",
             "Github",
             "Gitea",

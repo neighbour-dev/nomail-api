@@ -78,7 +78,7 @@ test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, a
     await api('POST', '/api/auth/login', { ...loginBody('a'), password: 'wrong' }, undefined, 401);
     const login = await api('POST', '/api/auth/login', loginBody('a'));
     let token = login.accessToken;
-    const blockedRawHeaders = new Set(['authorization', 'proxy-authorization', 'cookie', 'set-cookie', 'x-api-key', 'api-key', 'x-auth-token', 'x-csrf-token', 'x-xsrf-token', 'cf-access-jwt-assertion', 'x-forwarded-access-token', 'x-nomail-signature', 'x-hub-signature', 'x-hub-signature-256', 'x-gitea-signature', 'x-gitlab-token', 'webhook-signature', 'stripe-signature', 'x-slack-signature', 'x-lark-signature', 'x-feishu-signature', 'x-telegram-bot-api-secret-token', 'x-shopify-hmac-sha256', 'x-apple-signature']);
+    const blockedRawHeaders = new Set(['authorization', 'proxy-authorization', 'cookie', 'set-cookie', 'x-api-key', 'api-key', 'x-auth-token', 'x-csrf-token', 'x-xsrf-token', 'cf-access-jwt-assertion', 'x-forwarded-access-token', 'x-nomail-signature', 'x-hub-signature', 'x-hub-signature-256', 'x-gitea-signature', 'x-gitlab-token', 'webhook-signature', 'stripe-signature', 'x-slack-signature', 'x-lark-signature', 'x-feishu-signature', 'x-telegram-bot-api-secret-token', 'x-shopify-hmac-sha256', 'x-apple-signature', 'x-email-platform-signature']);
     async function inspectRaw(path) {
       const response = await fetch(origin + path + '/raw', { headers: { Authorization: `Bearer ${token}` } });
       assert.equal(response.status, 200);
@@ -151,6 +151,7 @@ test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, a
     }
     assert.equal(localSql('SELECT COUNT(*) AS count FROM webhook_configs;')[0].count, 1);
     for (const platform of [
+      { provider: 'mailflare', credentials: { secret: 'valid', unknown: true } },
       { provider: 'gitea', credentials: { secret: 'valid', unknown: true } },
       { provider: 'appstoreconnect', credentials: { secret: 'valid', privateKey: 'wrong-credential' } },
       { provider: 'github', credentials: { secret: 'valid', unknown: true } },
@@ -504,6 +505,7 @@ test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, a
     }
     for (const platform of [
       { provider: 'gitlab', credentials: { type: 'signingToken', signingToken: 'whsec_cGxhdGZvcm0tc2VjcmV0' } },
+      { provider: 'mailflare', credentials: { secret: 'platform-secret' } },
       { provider: 'gitea', credentials: { secret: 'platform-secret' } },
       { provider: 'appstoreconnect', credentials: { secret: 'platform-secret' } },
       { provider: 'gitlab', credentials: { type: 'secretToken', secretToken: 'platform-secret' } },
@@ -519,6 +521,7 @@ test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, a
       assert.ok(!JSON.stringify(item).includes('platform-secret'));
       assert.deepEqual(await api('GET', path, undefined, token), item);
       const payloads = {
+        mailflare: { type: 'message.inbound', data: { messageId: 'msg_matrix', from: 'sender@example.com', to: 'inbox@example.com', subject: 'Mailflare test', cc: null } },
         gitea: { action: 'assigned', issue: { number: 1, title: 'Test', is_locked: true, milestone: null, labels: [] }, sender: { id: -2, login: 'actions' } },
         appstoreconnect: { data: { type: 'appStoreVersionAppVersionStateUpdated', id: 'matrix', version: 1, attributes: { oldValue: 'PREPARE_FOR_SUBMISSION', newValue: 'READY_FOR_REVIEW', timestamp: null }, relationships: { instance: { data: { type: 'appStoreVersions', id: 'example-version' } } } }, future: { keep: true } },
         gitlab: { object_kind: 'issue', project: null, commits: [], object_attributes: { title: 'Test', milestone_id: null } },
@@ -532,6 +535,7 @@ test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, a
       const sign = (key, input, encoding = 'hex') => createHmac('sha256', key).update(input).digest(encoding);
       let headers;
       switch (platform.provider) {
+        case 'mailflare': headers = { 'X-Email-Platform-Event': 'message.inbound', 'X-Email-Platform-Delivery': 'whd_matrix', 'X-Email-Platform-Attempt': '1', 'X-Email-Platform-Signature': sign('platform-secret', raw) }; break;
         case 'gitea': headers = { 'X-Gitea-Event': 'issues', 'X-Gitea-Event-Type': 'issue_assign', 'X-Gitea-Delivery': 'matrix', 'X-Gitea-Signature': sign('platform-secret', raw) }; break;
         case 'appstoreconnect': headers = { 'X-Apple-Signature': 'hmacsha256=' + sign('platform-secret', raw) }; break;
         case 'gitlab':
@@ -558,6 +562,38 @@ test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, a
       if (platform.provider === 'appstoreconnect') delete expectedPayload.future;
       assert.deepEqual(detail.platformData.event.payload, expectedPayload);
       const captured = await inspectRaw(`/api/messages/${ack.data.messageId}`);
+      if (platform.provider === 'mailflare') {
+        assert.ok(captured.header.every(h => h.name.toLowerCase() !== 'x-email-platform-signature'));
+        assert.equal(detail.metadata.deduplicationKey.scope, 'mailflare:delivery');
+        const retry = await fetch(origin + item.url, { method: 'POST', body: raw, headers: { 'Content-Type': 'application/json', ...headers, 'X-Email-Platform-Attempt': '2' } });
+        const retried = await retry.json();
+        assert.equal(retry.status, 200);
+        assert.equal(retried.data.duplicate, true);
+        assert.equal(retried.data.messageId, ack.data.messageId);
+        const fixtures = JSON.parse(await readFile(new URL('../../nomail-core/src/webhook/platforms/mailflare/fixtures/database_samples.json', import.meta.url), 'utf8'));
+        for (const fixture of fixtures) {
+          const body = JSON.stringify(fixture.payload);
+          const signature = sign('platform-secret', body);
+          let messageId;
+          for (const duplicate of [false, true]) {
+            const response = await fetch(origin + item.url, { method: 'POST', body, headers: { 'Content-Type': 'application/json', ...fixture.headers, 'x-email-platform-attempt': duplicate ? '2' : '1', 'X-Email-Platform-Signature': signature } });
+            const acknowledgement = await response.json();
+            assert.equal(response.status, 200, fixture.name);
+            validateResponse('POST', item.url, 200, acknowledgement);
+            assert.equal(acknowledgement.data.duplicate, duplicate);
+            if (duplicate) assert.equal(acknowledgement.data.messageId, messageId);
+            messageId = acknowledgement.data.messageId;
+          }
+          const samplePath = `/api/messages/${messageId}`;
+          const sample = await api('GET', samplePath, undefined, token);
+          assert.deepEqual(sample.platformData.event.payload, fixture.payload, fixture.name);
+          assert.equal(sample.title, fixture.payload.data.subject);
+          assert.equal(sample.platformDataError, null);
+          const original = await inspectRaw(samplePath);
+          assert.deepEqual(JSON.parse(original.payload), fixture.payload);
+          assert.ok(original.header.every(header => header.name.toLowerCase() !== 'x-email-platform-signature'));
+        }
+      }
       assert.equal(captured.contentType, 'application/json');
       assert.deepEqual(JSON.parse(captured.payload), payloads[platform.provider]);
       for (const [name, value] of Object.entries(headers)) {

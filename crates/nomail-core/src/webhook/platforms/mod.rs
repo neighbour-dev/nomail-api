@@ -42,6 +42,7 @@ pub mod generic;
 pub mod gitea;
 pub mod github;
 pub mod gitlab;
+pub mod mailflare;
 pub mod shopify;
 pub mod slack;
 pub mod stripe;
@@ -53,6 +54,7 @@ pub use generic::GenericWebhook;
 pub use gitea::GiteaWebhook;
 pub use github::GithubWebhook;
 pub use gitlab::GitlabWebhook;
+pub use mailflare::MailflareWebhook;
 pub use shopify::ShopifyWebhook;
 pub use slack::SlackWebhook;
 pub use stripe::StripeWebhook;
@@ -65,6 +67,7 @@ use serde::{Deserialize, Serialize};
 #[serde(tag = "provider", content = "event", rename_all = "lowercase")]
 #[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
 pub enum PlatformData {
+    Mailflare(Box<MailflareWebhook>),
     Generic(Box<GenericWebhook>),
     Github(Box<GithubWebhook>),
     Gitea(Box<GiteaWebhook>),
@@ -132,6 +135,9 @@ impl PlatformEvent {
             );
         };
         let mut common = match data {
+            PlatformData::Mailflare(event) => {
+                event.to_message_content(&self.metadata, &self.raw.payload)
+            }
             PlatformData::Generic(event) => {
                 event.to_message_content(&self.metadata, &self.raw.payload)
             }

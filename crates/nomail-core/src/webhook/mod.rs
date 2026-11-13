@@ -33,6 +33,7 @@ pub fn receive(
         return Err(support::invalid_auth());
     }
     match config.provider {
+        Provider::Mailflare => platforms::mailflare::receive(config, request),
         Provider::Generic => platforms::generic::receive(config, request),
         Provider::Github => platforms::github::receive(config, request),
         Provider::Gitea => platforms::gitea::receive(config, request),

@@ -24,6 +24,7 @@ pub const RAW_HEADER_BLACKLIST: &[&str] = &[
 ];
 
 const PLATFORM_RAW_HEADER_BLACKLISTS: &[&[&str]] = &[
+    platforms::mailflare::RAW_HEADER_BLACKLIST,
     platforms::generic::RAW_HEADER_BLACKLIST,
     platforms::github::RAW_HEADER_BLACKLIST,
     platforms::gitea::RAW_HEADER_BLACKLIST,

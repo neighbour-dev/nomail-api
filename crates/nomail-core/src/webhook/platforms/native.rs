@@ -82,6 +82,11 @@ impl NativeValue for i64 {
         value.as_i64()
     }
 }
+impl NativeValue for serde_json::Number {
+    fn read(value: &Value) -> Option<Self> {
+        value.as_number().cloned()
+    }
+}
 impl NativeValue for u64 {
     fn read(value: &Value) -> Option<Self> {
         value.as_u64()

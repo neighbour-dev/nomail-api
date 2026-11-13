@@ -1,0 +1,82 @@
+[
+  {
+    "name": "sanitized_database_notification_1",
+    "headers": {
+      "x-email-platform-attempt": "1",
+      "x-email-platform-event": "message.inbound",
+      "x-email-platform-delivery": "whd_1"
+    },
+    "payload": {
+      "data": {
+        "from": "sender@example.com",
+        "messageId": "messageId_2",
+        "spamScore": 0,
+        "spamVerdict": "sanitized",
+        "subject": "Sanitized Mailflare notification 1",
+        "threadId": "threadId_3",
+        "to": "inbox@example.com"
+      },
+      "type": "message.inbound"
+    }
+  },
+  {
+    "name": "sanitized_database_notification_2",
+    "headers": {
+      "x-email-platform-attempt": "1",
+      "x-email-platform-event": "message.inbound",
+      "x-email-platform-delivery": "whd_4"
+    },
+    "payload": {
+      "data": {
+        "from": "sender@example.com",
+        "messageId": "messageId_5",
+        "spamScore": 0,
+        "spamVerdict": "sanitized",
+        "subject": "Sanitized Mailflare notification 2",
+        "threadId": "threadId_6",
+        "to": "inbox@example.com"
+      },
+      "type": "message.inbound"
+    }
+  },
+  {
+    "name": "sanitized_database_notification_3",
+    "headers": {
+      "x-email-platform-attempt": "1",
+      "x-email-platform-event": "message.inbound",
+      "x-email-platform-delivery": "whd_7"
+    },
+    "payload": {
+      "data": {
+        "from": "sender@example.com",
+        "messageId": "messageId_8",
+        "spamScore": 0,
+        "spamVerdict": "sanitized",
+        "subject": "Sanitized Mailflare notification 3",
+        "threadId": "threadId_9",
+        "to": "inbox@example.com"
+      },
+      "type": "message.inbound"
+    }
+  },
+  {
+    "name": "sanitized_database_notification_4",
+    "headers": {
+      "x-email-platform-attempt": "1",
+      "x-email-platform-delivery": "whd_10",
+      "x-email-platform-event": "message.inbound"
+    },
+    "payload": {
+      "data": {
+        "from": "sender@example.com",
+        "messageId": "messageId_11",
+        "spamScore": 0,
+        "spamVerdict": "sanitized",
+        "subject": "Sanitized Mailflare notification 4",
+        "threadId": "threadId_12",
+        "to": "inbox@example.com"
+      },
+      "type": "message.inbound"
+    }
+  }
+]

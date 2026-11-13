@@ -31,6 +31,7 @@ src/webhook/
     │   └── tests.rs       # GitHub 样例、签名构造与测试
     ├── gitlab/
     ├── gitea/             # 原生验签、独立资源模型、Gitea 事件映射与测试
+    ├── mailflare/         # 原生通知验签、邮件元数据、Delivery 去重标识提取及测试
     ├── stripe/
     ├── slack/
     ├── feishu/
