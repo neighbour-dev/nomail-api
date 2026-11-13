@@ -471,6 +471,37 @@ test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, a
     await api('PATCH', `/api/webhook/configs/${encryptedFeishu.id}`, { platform: { provider: 'feishu', credentials: { verificationToken: 'rotated-token', encryptKey: 'rotated-key' } } }, token);
     assert.deepEqual((await api('GET', encryptedPath, undefined, token)).platformData, encryptedDetail.platformData);
     assert.equal((await api('PATCH', encryptedPath, { pinned: true }, token)).pinned, true);
+    const githubFixtures = JSON.parse(await readFile(new URL('../../nomail-core/src/webhook/platforms/github/fixtures/deliveries.json', import.meta.url), 'utf8'));
+    const detailedGithub = await api('POST', '/api/webhook/configs', { name: 'Detailed GitHub', platform: { provider: 'github', credentials: { secret: 'github-example-secret' } } }, token);
+    for (const fixture of githubFixtures) {
+      const body = JSON.stringify(fixture.payload);
+      const form = new URLSearchParams({ payload: body }).toString();
+      let messageId;
+      for (const [wire, contentType, duplicate] of [[body, 'application/json', false], [form, 'application/x-www-form-urlencoded', true]]) {
+        const signature = createHmac('sha256', 'github-example-secret').update(wire).digest('hex');
+        const response = await fetch(origin + detailedGithub.url, { method: 'POST', body: wire, headers: {
+          'Content-Type': contentType, 'X-GitHub-Event': fixture.event, 'X-GitHub-Delivery': fixture.name, 'X-Hub-Signature-256': `sha256=${signature}`,
+        } });
+        const ack = await response.json();
+        assert.equal(response.status, 200, JSON.stringify(ack));
+        validateResponse('POST', detailedGithub.url, 200, ack);
+        assert.equal(ack.data.duplicate, duplicate);
+        if (duplicate) assert.equal(ack.data.messageId, messageId);
+        messageId = ack.data.messageId;
+      }
+      const path = `/api/messages/${messageId}`;
+      const detail = await api('GET', path, undefined, token);
+      const expected = structuredClone(fixture.payload);
+      delete expected.future_metadata;
+      assert.deepEqual(detail.platformData.event.payload, expected, fixture.name);
+      assert.equal(detail.platformDataError, null);
+      assert.equal(detail.metadata.deduplicationKey.scope, 'github:delivery');
+      const updated = await api('PATCH', path, { pinned: true, status: 'read' }, token);
+      assert.deepEqual(updated.platformData, detail.platformData);
+      const raw = await inspectRaw(path);
+      assert.deepEqual(JSON.parse(raw.payload), fixture.payload);
+      assert.ok(raw.header.every(h => h.name.toLowerCase() !== 'x-hub-signature-256'));
+    }
     for (const platform of [
       { provider: 'gitlab', credentials: { type: 'signingToken', signingToken: 'whsec_cGxhdGZvcm0tc2VjcmV0' } },
       { provider: 'gitea', credentials: { secret: 'platform-secret' } },

@@ -1,35 +1,8 @@
 //! Native GitHub payload fields. Extraction is field-local and deliberately tolerant;
 //! these are not strict upstream DTOs. Unknown/malformed fields remain in raw.
+use super::support::GithubValue;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-
-trait GithubValue: Sized {
-    fn read(value: &Value) -> Option<Self>;
-}
-
-impl GithubValue for String {
-    fn read(value: &Value) -> Option<Self> {
-        value.as_str().map(str::to_owned)
-    }
-}
-
-impl GithubValue for u64 {
-    fn read(value: &Value) -> Option<Self> {
-        value.as_u64()
-    }
-}
-
-impl GithubValue for bool {
-    fn read(value: &Value) -> Option<Self> {
-        value.as_bool()
-    }
-}
-
-impl GithubValue for Value {
-    fn read(value: &Value) -> Option<Self> {
-        (!value.is_null()).then(|| value.clone())
-    }
-}
 
 trait Field {
     type Output;
@@ -46,7 +19,7 @@ impl<T: GithubValue> Field for Option<T> {
 impl<T: GithubValue> Field for Vec<T> {
     type Output = Vec<T>;
     fn extract(value: &Value) -> Option<Vec<T>> {
-        Some(value.as_array()?.iter().filter_map(T::read).collect())
+        <Vec<T> as GithubValue>::read(value)
     }
 }
 
@@ -64,12 +37,13 @@ macro_rules! field {
 }
 
 macro_rules! model {
-    ($name:ident $( [$flat:ident: $flat_ty:ty] )? { $($(#[serde(rename = $key:literal)])? $field:ident: $container:ident<$($ty:ty),+> $(= $extract:expr)?),* $(,)? }) => {
+    ($name:ident $( [$flat:ident: $flat_ty:ty] )? + $details:ident { $($(#[serde(rename = $key:literal)])? $field:ident: $container:ident<$($ty:ty),+> $(= $extract:expr)?),* $(,)? }) => {
         #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
         #[serde(default)]
         #[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
         pub struct $name {
             $(#[serde(flatten)] pub $flat: $flat_ty,)?
+            #[serde(flatten)] pub details: Box<super::generated::$details>,
             $($(#[serde(rename = $key)])?
             #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "crate::webhook::platforms::native::deserialize_present")]
             pub $field: payload_field_type!($container<$($ty),+>),)*
@@ -80,6 +54,7 @@ macro_rules! model {
                 value.as_object()?;
                 Some(Self {
                     $($flat: <$flat_ty>::read(value).unwrap_or_default(),)?
+                    details: Box::new(super::generated::$details::read(value).unwrap_or_default()),
                     $($field: field!(value, payload_field_key!($field $(, $key)?), $container<$($ty),+> $(, $extract)?),)*
                 })
             }
@@ -106,17 +81,17 @@ impl GithubValue for GithubTimestamp {
     }
 }
 
-model!(GithubWebhookPayload {
+model!(GithubWebhookPayload + GithubWebhookPayloadDetails {
     action: Option<String>,
     repository: Option<GithubRepository>,
     sender: Option<GithubUser>,
     issue: Option<GithubIssue>,
-    comment: Option<GithubComment>,
+    comment: Option<GithubCommentValue>,
     pull_request: Option<GithubPullRequest>,
     workflow_run: Option<GithubWorkflowRun>,
     review: Option<GithubReview>,
     thread: Option<GithubReviewThread>,
-    workflow: Option<GithubWorkflow>,
+    workflow: Option<GithubWorkflowValue>,
     workflow_job: Option<GithubWorkflowJob>,
     check_run: Option<GithubCheckRun>,
     check_suite: Option<GithubCheckSuite>,
@@ -151,7 +126,19 @@ impl crate::webhook::platforms::native::NativeValue for GithubWebhookPayload {
     }
 }
 
-model!(GithubUser {
+// Deployment-review comments and workflow_dispatch workflow names are strings,
+// while comment/workflow event families carry objects at those same root paths.
+// Keep both actual wire kinds; never manufacture a body/name wrapper around text.
+github_union!(GithubCommentValue {
+    Text(String) if |value: &Value| value.is_string(),
+    Comment(Box<GithubComment>) if |value: &Value| value.is_object(),
+});
+github_union!(GithubWorkflowValue {
+    Name(String) if |value: &Value| value.is_string(),
+    Workflow(Box<GithubWorkflow>) if |value: &Value| value.is_object(),
+});
+
+model!(GithubUser + GithubUserDetails {
     id: Option<u64>, node_id: Option<String>, login: Option<String>,
     avatar_url: Option<String>, html_url: Option<String>,
     #[serde(rename = "type")]
@@ -159,7 +146,7 @@ model!(GithubUser {
     site_admin: Option<bool>, user_view_type: Option<String>,
 });
 
-model!(GithubLabel {
+model!(GithubLabel + GithubLabelDetails {
     id: Option<u64>, node_id: Option<String>, name: Option<String>,
     color: Option<String>, description: Option<String>, url: Option<String>,
     default: Option<bool>, archived_at: Option<String>, archived_by: Option<GithubUser>,
@@ -183,7 +170,7 @@ impl GithubValue for GithubLabelValue {
     }
 }
 
-model!(GithubReactions {
+model!(GithubReactions + GithubReactionsDetails {
     url: Option<String>, total_count: Option<u64>,
     #[serde(rename = "+1")]
     plus_one: Option<u64> = |v: &Value| v["+1"].as_u64(),
@@ -193,7 +180,7 @@ model!(GithubReactions {
     heart: Option<u64>, rocket: Option<u64>, eyes: Option<u64>,
 });
 
-model!(GithubIssue {
+model!(GithubIssue + GithubIssueDetails {
     id: Option<u64>, node_id: Option<String>, number: Option<u64>,
     title: Option<String>, body: Option<String> = |v: &Value| body(&v["body"]),
     state: Option<String>, state_reason: Option<String>, html_url: Option<String>,
@@ -206,20 +193,20 @@ model!(GithubIssue {
     issue_dependencies_summary: Option<GithubIssueDependenciesSummary>,
 });
 
-model!(GithubIssuePullRequest {
+model!(GithubIssuePullRequest + GithubIssuePullRequestDetails {
     url: Option<String>, html_url: Option<String>, diff_url: Option<String>,
     patch_url: Option<String>, merged_at: Option<String>,
 });
 
-model!(GithubSubIssuesSummary {
+model!(GithubSubIssuesSummary + GithubSubIssuesSummaryDetails {
     total: Option<u64>, completed: Option<u64>, percent_completed: Option<u64>,
 });
 
-model!(GithubIssueDependenciesSummary {
+model!(GithubIssueDependenciesSummary + GithubIssueDependenciesSummaryDetails {
     blocked_by: Option<u64>, blocking: Option<u64>, total_blocked_by: Option<u64>, total_blocking: Option<u64>,
 });
 
-model!(GithubMilestone {
+model!(GithubMilestone + GithubMilestoneDetails {
     id: Option<u64>, node_id: Option<String>, number: Option<u64>, title: Option<String>,
     description: Option<String> = |v: &Value| body(&v["description"]),
     state: Option<String>, html_url: Option<String>, creator: Option<GithubUser>,
@@ -227,7 +214,7 @@ model!(GithubMilestone {
     created_at: Option<String>, updated_at: Option<String>, closed_at: Option<String>,
 });
 
-model!(GithubComment {
+model!(GithubComment + GithubCommentDetails {
     id: Option<u64>, node_id: Option<String>,
     body: Option<String> = |v: &Value| body(&v["body"]),
     html_url: Option<String>, user: Option<GithubUser>, created_at: Option<String>,
@@ -242,7 +229,7 @@ model!(GithubComment {
     url: Option<String>, issue_url: Option<String>, pull_request_url: Option<String>,
 });
 
-model!(GithubPullRequest [issue: GithubIssue] {
+model!(GithubPullRequest [issue: GithubIssue] + GithubPullRequestDetails {
     merged: Option<bool>,
     head: Option<GithubBranch>, base: Option<GithubBranch>,
     merged_at: Option<String>, merged_by: Option<GithubUser>, merge_commit_sha: Option<String>,
@@ -252,19 +239,19 @@ model!(GithubPullRequest [issue: GithubIssue] {
     maintainer_can_modify: Option<bool>, diff_url: Option<String>, patch_url: Option<String>,
 });
 
-model!(GithubBranch {
+model!(GithubBranch + GithubBranchDetails {
     label: Option<String>,
     #[serde(rename = "ref")]
     ref_name: Option<String> = |v: &Value| String::read(&v["ref"]),
     sha: Option<String>, user: Option<GithubUser>, repo: Option<GithubRepository>,
 });
 
-model!(GithubTeam {
+model!(GithubTeam + GithubTeamDetails {
     id: Option<u64>, node_id: Option<String>, name: Option<String>, slug: Option<String>,
     description: Option<String>, html_url: Option<String>, privacy: Option<String>,
 });
 
-model!(GithubReview {
+model!(GithubReview + GithubReviewDetails {
     id: Option<u64>, node_id: Option<String>, state: Option<String>,
     body: Option<String> = |v: &Value| body(&v["body"]),
     user: Option<GithubUser>, commit_id: Option<String>, html_url: Option<String>,
@@ -272,11 +259,11 @@ model!(GithubReview {
     pull_request_url: Option<String>,
 });
 
-model!(GithubReviewThread {
+model!(GithubReviewThread + GithubReviewThreadDetails {
     node_id: Option<String>, comments: Vec<GithubComment>,
 });
 
-model!(GithubRepository {
+model!(GithubRepository + GithubRepositoryDetails {
     id: Option<u64>, node_id: Option<String>, name: Option<String>, full_name: Option<String>,
     html_url: Option<String>, owner: Option<GithubUser>,
     description: Option<String> = |v: &Value| body(&v["description"]),
@@ -292,15 +279,15 @@ model!(GithubRepository {
     clone_url: Option<String>, ssh_url: Option<String>, license: Option<GithubLicense>,
 });
 
-model!(GithubLicense {
+model!(GithubLicense + GithubLicenseDetails {
     key: Option<String>, name: Option<String>, spdx_id: Option<String>, url: Option<String>, node_id: Option<String>,
 });
 
-model!(GithubCommitAuthor {
+model!(GithubCommitAuthor + GithubCommitAuthorDetails {
     name: Option<String>, email: Option<String>, username: Option<String>, date: Option<String>,
 });
 
-model!(GithubCommit {
+model!(GithubCommit + GithubCommitDetails {
     id: Option<String>, tree_id: Option<String>,
     message: Option<String> = |v: &Value| body(&v["message"]),
     timestamp: Option<String>, url: Option<String>, distinct: Option<bool>,
@@ -308,33 +295,33 @@ model!(GithubCommit {
     added: Vec<String>, removed: Vec<String>, modified: Vec<String>,
 });
 
-model!(GithubStatusBranch {
+model!(GithubStatusBranch + GithubStatusBranchDetails {
     name: Option<String>, protected: Option<bool>, commit: Option<GithubCommitReference>,
 });
 
-model!(GithubCommitReference {
+model!(GithubCommitReference + GithubCommitReferenceDetails {
     sha: Option<String>, url: Option<String>, html_url: Option<String>,
 });
 
-model!(GithubStatusCommit {
+model!(GithubStatusCommit + GithubStatusCommitDetails {
     sha: Option<String>, node_id: Option<String>, url: Option<String>, html_url: Option<String>,
     author: Option<GithubUser>, committer: Option<GithubUser>, commit: Option<GithubGitCommit>,
     parents: Vec<GithubCommitReference>,
 });
 
-model!(GithubGitCommit {
+model!(GithubGitCommit + GithubGitCommitDetails {
     message: Option<String> = |v: &Value| body(&v["message"]),
     author: Option<GithubCommitAuthor>, committer: Option<GithubCommitAuthor>,
     tree: Option<GithubCommitReference>, url: Option<String>, comment_count: Option<u64>,
 });
 
-model!(GithubWorkflow {
+model!(GithubWorkflow + GithubWorkflowDetails {
     id: Option<u64>, node_id: Option<String>, name: Option<String>, path: Option<String>,
     state: Option<String>, html_url: Option<String>, badge_url: Option<String>,
     created_at: Option<String>, updated_at: Option<String>,
 });
 
-model!(GithubWorkflowRun {
+model!(GithubWorkflowRun + GithubWorkflowRunDetails {
     id: Option<u64>, name: Option<String>, status: Option<String>, conclusion: Option<String>,
     html_url: Option<String>, head_branch: Option<String>, head_sha: Option<String>, run_number: Option<u64>,
     node_id: Option<String>, display_title: Option<String>, event: Option<String>, path: Option<String>,
@@ -346,17 +333,17 @@ model!(GithubWorkflowRun {
     artifacts_url: Option<String>, rerun_url: Option<String>, previous_attempt_url: Option<String>,
 });
 
-model!(GithubPullRequestReference {
+model!(GithubPullRequestReference + GithubPullRequestReferenceDetails {
     id: Option<u64>, number: Option<u64>, url: Option<String>, head: Option<GithubBranch>, base: Option<GithubBranch>,
 });
 
-model!(GithubReferencedWorkflow {
+model!(GithubReferencedWorkflow + GithubReferencedWorkflowDetails {
     path: Option<String>, sha: Option<String>,
     #[serde(rename = "ref")]
     ref_name: Option<String> = |v: &Value| String::read(&v["ref"]),
 });
 
-model!(GithubWorkflowJob {
+model!(GithubWorkflowJob + GithubWorkflowJobDetails {
     id: Option<u64>, node_id: Option<String>, run_id: Option<u64>, run_attempt: Option<u64>,
     name: Option<String>, workflow_name: Option<String>, head_branch: Option<String>, head_sha: Option<String>,
     status: Option<String>, conclusion: Option<String>, html_url: Option<String>,
@@ -365,12 +352,12 @@ model!(GithubWorkflowJob {
     labels: Vec<String>, steps: Vec<GithubWorkflowStep>, run_url: Option<String>, check_run_url: Option<String>,
 });
 
-model!(GithubWorkflowStep {
+model!(GithubWorkflowStep + GithubWorkflowStepDetails {
     name: Option<String>, number: Option<u64>, status: Option<String>, conclusion: Option<String>,
     started_at: Option<String>, completed_at: Option<String>,
 });
 
-model!(GithubCheckRun {
+model!(GithubCheckRun + GithubCheckRunDetails {
     id: Option<u64>, node_id: Option<String>, name: Option<String>, head_sha: Option<String>,
     status: Option<String>, conclusion: Option<String>, external_id: Option<String>,
     html_url: Option<String>, details_url: Option<String>, started_at: Option<String>, completed_at: Option<String>,
@@ -378,21 +365,21 @@ model!(GithubCheckRun {
     pull_requests: Vec<GithubPullRequestReference>,
 });
 
-model!(GithubCheckOutput {
+model!(GithubCheckOutput + GithubCheckOutputDetails {
     title: Option<String> = |v: &Value| body(&v["title"]),
     summary: Option<String> = |v: &Value| body(&v["summary"]),
     text: Option<String> = |v: &Value| body(&v["text"]),
     annotations_count: Option<u64>, annotations_url: Option<String>,
 });
 
-model!(GithubApp {
+model!(GithubApp + GithubAppDetails {
     id: Option<u64>, node_id: Option<String>, slug: Option<String>, name: Option<String>,
     description: Option<String> = |v: &Value| body(&v["description"]),
     owner: Option<GithubUser>, html_url: Option<String>, external_url: Option<String>,
     created_at: Option<String>, updated_at: Option<String>,
 });
 
-model!(GithubCheckSuite {
+model!(GithubCheckSuite + GithubCheckSuiteDetails {
     id: Option<u64>, node_id: Option<String>, head_branch: Option<String>, head_sha: Option<String>,
     before: Option<String>, after: Option<String>, status: Option<String>, conclusion: Option<String>,
     app: Option<GithubApp>, head_commit: Option<GithubCommit>, pull_requests: Vec<GithubPullRequestReference>,
@@ -400,7 +387,7 @@ model!(GithubCheckSuite {
     check_runs_url: Option<String>, rerequestable: Option<bool>, runs_rerequestable: Option<bool>,
 });
 
-model!(GithubRelease {
+model!(GithubRelease + GithubReleaseDetails {
     id: Option<u64>, node_id: Option<String>, tag_name: Option<String>, target_commitish: Option<String>,
     name: Option<String>, body: Option<String> = |v: &Value| body(&v["body"]),
     html_url: Option<String>, draft: Option<bool>, prerelease: Option<bool>, immutable: Option<bool>,
@@ -408,14 +395,14 @@ model!(GithubRelease {
     assets: Vec<GithubReleaseAsset>, tarball_url: Option<String>, zipball_url: Option<String>,
 });
 
-model!(GithubReleaseAsset {
+model!(GithubReleaseAsset + GithubReleaseAssetDetails {
     id: Option<u64>, node_id: Option<String>, name: Option<String>, label: Option<String>,
     content_type: Option<String>, state: Option<String>, size: Option<u64>, download_count: Option<u64>,
     browser_download_url: Option<String>, uploader: Option<GithubUser>, digest: Option<String>,
     created_at: Option<String>, updated_at: Option<String>,
 });
 
-model!(GithubDiscussion {
+model!(GithubDiscussion + GithubDiscussionDetails {
     id: Option<u64>, node_id: Option<String>, number: Option<u64>, title: Option<String>,
     body: Option<String> = |v: &Value| body(&v["body"]),
     html_url: Option<String>, user: Option<GithubUser>, category: Option<GithubDiscussionCategory>,
@@ -425,13 +412,13 @@ model!(GithubDiscussion {
     created_at: Option<String>, updated_at: Option<String>, author_association: Option<String>, reactions: Option<GithubReactions>,
 });
 
-model!(GithubDiscussionCategory {
+model!(GithubDiscussionCategory + GithubDiscussionCategoryDetails {
     id: Option<u64>, node_id: Option<String>, repository_id: Option<u64>, name: Option<String>,
     description: Option<String>, slug: Option<String>, emoji: Option<String>, is_answerable: Option<bool>,
     created_at: Option<String>, updated_at: Option<String>,
 });
 
-model!(GithubDeployment {
+model!(GithubDeployment + GithubDeploymentDetails {
     id: Option<u64>, node_id: Option<String>,
     #[serde(rename = "ref")]
     ref_name: Option<String> = |v: &Value| String::read(&v["ref"]),
@@ -442,7 +429,7 @@ model!(GithubDeployment {
     performed_via_github_app: Option<GithubApp>, payload: Option<Value>,
 });
 
-model!(GithubDeploymentStatus {
+model!(GithubDeploymentStatus + GithubDeploymentStatusDetails {
     id: Option<u64>, node_id: Option<String>, state: Option<String>,
     description: Option<String> = |v: &Value| body(&v["description"]),
     environment: Option<String>, environment_url: Option<String>, target_url: Option<String>, log_url: Option<String>,
@@ -450,16 +437,16 @@ model!(GithubDeploymentStatus {
     deployment_url: Option<String>, performed_via_github_app: Option<GithubApp>,
 });
 
-model!(GithubChanges {
+model!(GithubChanges + GithubChangesDetails {
     body: Option<GithubStringChange>, title: Option<GithubStringChange>, name: Option<GithubStringChange>,
     description: Option<GithubStringChange>, color: Option<GithubStringChange>,
     category: Option<GithubCategoryChange>, homepage: Option<GithubStringChange>, default_branch: Option<GithubStringChange>,
 });
 
-model!(GithubStringChange {
+model!(GithubStringChange + GithubStringChangeDetails {
     from: Option<String> = |v: &Value| body(&v["from"]),
 });
 
-model!(GithubCategoryChange {
+model!(GithubCategoryChange + GithubCategoryChangeDetails {
     from: Option<GithubDiscussionCategory>,
 });

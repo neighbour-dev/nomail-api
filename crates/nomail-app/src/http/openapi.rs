@@ -532,6 +532,21 @@ mod tests {
             "ref",
             "commits",
             "state",
+            "installation",
+            "organization",
+            "enterprise",
+            "alert",
+            "location",
+            "projects_v2",
+            "projects_v2_item",
+            "projects_v2_status_update",
+            "repository_ruleset",
+            "merge_group",
+            "package",
+            "registry_package",
+            "sponsorship",
+            "client_payload",
+            "inputs",
         ] {
             assert!(
                 schemas["GithubWebhookPayload"]["properties"]
@@ -584,6 +599,81 @@ mod tests {
                 .is_some()
         );
         assert!(schemas["GithubTimestamp"]["anyOf"].is_array());
+        assert_eq!(
+            schemas["GithubCommentValue"]["anyOf"]
+                .as_array()
+                .unwrap()
+                .len(),
+            2
+        );
+        assert_eq!(
+            schemas["GithubWorkflowValue"]["anyOf"]
+                .as_array()
+                .unwrap()
+                .len(),
+            2
+        );
+        for name in [
+            "GithubInstallation",
+            "GithubInstallationPermissions",
+            "GithubOrganization",
+            "GithubEnterprise",
+            "GithubAlert",
+            "GithubAlertSecurityAdvisory",
+            "GithubProjectsV2Item",
+            "GithubRepositoryRuleset",
+            "GithubMergeGroup",
+            "GithubPackage",
+            "GithubChangesFieldValue",
+        ] {
+            assert!(
+                schemas.contains_key(name),
+                "missing detailed GitHub schema: {name}"
+            );
+        }
+        for name in [
+            "GithubWebhookPayload",
+            "GithubRepository",
+            "GithubIssue",
+            "GithubPullRequest",
+            "GithubUser",
+            "GithubWorkflowRun",
+            "GithubCheckRun",
+        ] {
+            assert!(
+                schemas[name]["properties"].get("details").is_none(),
+                "synthetic details wrapper in {name}"
+            );
+        }
+        for (name, field) in [
+            ("GithubRepository", "permissions"),
+            ("GithubRepository", "security_and_analysis"),
+            ("GithubRepository", "custom_properties"),
+            ("GithubPullRequest", "auto_merge"),
+            ("GithubPullRequest", "_links"),
+            ("GithubWorkflowRun", "workflow_id"),
+        ] {
+            assert!(
+                schemas[name]["properties"].get(field).is_some(),
+                "missing {name}.{field}"
+            );
+            assert!(schemas[name]["properties"][field].get("default").is_none());
+        }
+        assert_eq!(
+            schemas["GithubProjectsV2Item"]["properties"]["node_id"]["type"],
+            json!(["string", "null"])
+        );
+        assert_eq!(
+            schemas["GithubRepository"]["properties"]["custom_properties"]["type"],
+            json!(["object", "null"])
+        );
+        assert_eq!(
+            schemas["GithubChangesFieldValueFromValue"]["anyOf"]
+                .as_array()
+                .unwrap()
+                .len(),
+            3
+        );
         assert!(
             schemas
                 .keys()

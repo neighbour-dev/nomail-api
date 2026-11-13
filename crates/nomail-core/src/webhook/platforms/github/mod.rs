@@ -2,8 +2,13 @@
 pub mod config;
 pub(in crate::webhook) const RAW_HEADER_BLACKLIST: &[&str] =
     &["x-hub-signature", "x-hub-signature-256"];
+#[macro_use]
+mod support;
+mod generated;
 mod models;
+pub use generated::*;
 pub use models::*;
+pub use support::GithubNumber;
 #[cfg(test)]
 mod tests;
 use crate::webhook::{

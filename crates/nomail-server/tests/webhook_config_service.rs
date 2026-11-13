@@ -454,6 +454,78 @@ async fn config_service_preserves_sparse_concurrent_updates_credentials_and_scop
                 .collect::<Vec<_>>(),
             ["one", "two"]
         );
+        if provider == "github" {
+            let fixtures: Value = serde_json::from_str(include_str!(
+                "../../nomail-core/src/webhook/platforms/github/fixtures/deliveries.json"
+            ))
+            .unwrap();
+            for fixture in fixtures.as_array().unwrap() {
+                let body = fixture["payload"].to_string();
+                // Encoding every byte is valid form encoding and keeps the
+                // exact signed wire bytes independent of test-only libraries.
+                let mut form = String::from("payload=");
+                for byte in body.bytes() {
+                    use std::fmt::Write;
+                    write!(&mut form, "%{byte:02X}").unwrap();
+                }
+                let mut message_id = Value::Null;
+                for (wire, content_type, duplicate) in [
+                    (&body, "application/json", false),
+                    (&form, "application/x-www-form-urlencoded", true),
+                ] {
+                    let mut mac = Hmac::<Sha256>::new_from_slice(b"platform-secret").unwrap();
+                    mac.update(wire.as_bytes());
+                    let response = test::call_service(
+                        &app,
+                        test::TestRequest::post()
+                            .uri(receive_path)
+                            .insert_header(("Content-Type", content_type))
+                            .insert_header(("X-GitHub-Event", fixture["event"].as_str().unwrap()))
+                            .insert_header(("X-GitHub-Delivery", fixture["name"].as_str().unwrap()))
+                            .insert_header((
+                                "X-Hub-Signature-256",
+                                format!("sha256={}", hex::encode(mac.finalize().into_bytes())),
+                            ))
+                            .set_payload(wire.clone())
+                            .to_request(),
+                    )
+                    .await;
+                    assert_eq!(response.status(), StatusCode::OK);
+                    let ack: Value = test::read_body_json(response).await;
+                    assert_eq!(ack["data"]["duplicate"], duplicate);
+                    if duplicate {
+                        assert_eq!(ack["data"]["messageId"], message_id);
+                    }
+                    message_id = ack["data"]["messageId"].clone();
+                }
+                let path = format!("/api/messages/{}", message_id.as_str().unwrap());
+                let detail = api!(get, &path, json!({})).1;
+                let mut expected = fixture["payload"].clone();
+                expected.as_object_mut().unwrap().remove("future_metadata");
+                assert_eq!(detail["platformData"]["event"]["payload"], expected);
+                assert!(detail["platformDataError"].is_null());
+                assert_eq!(
+                    detail["metadata"]["deduplicationKey"]["scope"],
+                    "github:delivery"
+                );
+                let updated = api!(patch, &path, json!({"pinned":true,"status":"read"})).1;
+                assert_eq!(updated["platformData"], detail["platformData"]);
+                let response = test::call_service(
+                    &app,
+                    test::TestRequest::get()
+                        .uri(&format!("{path}/raw"))
+                        .insert_header(("Authorization", format!("Bearer {token}")))
+                        .to_request(),
+                )
+                .await;
+                let original: Value = test::read_body_json(response).await;
+                assert_eq!(
+                    serde_json::from_str::<Value>(original["data"]["payload"].as_str().unwrap())
+                        .unwrap(),
+                    fixture["payload"]
+                );
+            }
+        }
         if provider == "stripe" {
             let fixtures: Value = serde_json::from_str(include_str!(
                 "../../nomail-core/src/webhook/platforms/stripe/fixtures/deliveries.json"

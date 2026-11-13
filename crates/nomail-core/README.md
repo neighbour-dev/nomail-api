@@ -91,13 +91,21 @@ Serde 适配保留三态；`JsonFieldExt` 仅方便展示映射访问非空值�
 
 raw.payload 完整保留解码内容，包括上游放在业务内容中的字段；HTTP 头的黑名单过滤不代表对 payload 做了脱敏，例如飞书业务 JSON 内的验证 Token 仍属于完整解码内容。通用标题、正文、来源等由 `MessageContent` 映射生成，不混进平台 payload；不隐式调用外部 API。
 
-GitHub 模型位于 `github/models.rs`，保持上游字段路径；PR 分支使用 `head.ref/base.ref`。`GithubTimestamp` 支持字符串和 Unix 秒，label 保留字符串或对象类型。完整字段以模型定义为准。
+GitHub 模型由 `github/models.rs` 的现有字段及 `github/generated.rs` 的详细嵌套类型组成，保持上游字段路径；PR 分支使用 `head.ref/base.ref`。`GithubTimestamp` 支持字符串和 Unix 秒，label 保留字符串或对象类型。完整字段及 Rust 访问方式见 [GitHub 模型说明](src/webhook/platforms/github/README.md)。
 
 接收先验签并解码，再逐字段提取；单个可选字段类型异常不丢弃其他有效字段。字符串原样提取，不将数字/布尔值转成字符串，不裁剪文本。产品版本的不兼容变更及升级要求见 [CHANGELOG.md](../../CHANGELOG.md)。
 
 Generic 明确是 **NoMail 自定义协议**，不是任意平台自动识别器。`GenericWebhook.header` 表达 `X-NoMail-*` 输入；`payload` 是支持的 JSON 字段、原样文本或 JSON null。JSON 分支的通用展示映射不继承文本分支的请求头。非 UTF-8 文本显式拒绝，不用有损替换伪装成可读原文。
 
 ## 使用
+
+### GitHub
+
+依据官方 `github/rest-api-description` 固定快照的 `x-webhooks` 定义扩展模型，以规范中的 276 个事件/action 条目、76 个事件名为入口展开引用资源字段；不是从整个 REST API 无差别生成模型，也不代表订阅后会收到所有这些事件。除既有 Issue/PR、审核、Workflow/Check、Release 等字段外，细化仓库权限与安全配置、安装和组织上下文、安全告警、Projects v2、规则集、包、合并队列等原生结构。
+
+保留原生 JSON 层级、缺失/null/实际值、开放 action/status 字符串以及已有时间戳和 label 变体。根级 `comment` 和 `workflow` 分别区分评论/工作流对象与部署审核评论/手动触发工作流名称的文本变体；Rust 调用方需先匹配对应联合枚举，不把文本伪装成对象。不联网获取引用资源，不实现部署审批/保护回调。未知和类型异常内容保留在 raw；无法按目标元素/值类型提取的数组/字典整体省略，不再过滤无效数组元素后改变索引。鉴权、原始 JSON/表单 Body 验签、Ping 控制请求及 Delivery ID 去重保持不变。
+
+这些是合并各 action 已声明字段的宽容读取投影，不是严格的事件/action 组合校验器或所有 GitHub/GHES 历史版本的完整 Schema。来源、生成检查命令、兼容边界和样例分类见 [GitHub 模型说明](src/webhook/platforms/github/README.md)。
 
 ### Gitea
 
@@ -173,7 +181,7 @@ match receive(&config, &WebhookRequest { headers: &headers, body })? {
 | 平台 | 接收能力 | 内置映射 |
 |---|---|---|
 | Generic | HMAC-SHA256 或显式无认证；JSON/UTF-8 文本 | JSON 字段与文本请求头分别建模，再映射消息 |
-| GitHub | 原始 JSON/表单 Body HMAC；事件头；Ping | Issues、PR、评论、Push、Workflow Run 摘要 |
+| GitHub | 原始 JSON/表单 Body HMAC；事件头；Ping；基于官方 Webhook 规范的详细原生数据投影 | Issues、PR、评论、Push、Workflow Run 摘要；其余使用原文回退 |
 | Gitea | JSON 原文或表单解码后 JSON HMAC；原生事件/精确类型头；POST | Issue/PR/审核、Push、引用、Fork、Wiki、Release、Package、Commit Status、Workflow/Job 摘要与独立资源模型 |
 | App Store Connect | POST JSON 原文 HMAC-SHA256；`x-apple-signature` | App/Build/Beta/后台资源状态、反馈资源创建、替代分发可用性和资源关系；不隐式查询 API |
 | GitLab | 固定 Token 或 Standard Webhooks 签名；轮换签名；时间窗口 | MR/评论摘要；自定义模板保留并使用 JSON 回退 |
@@ -183,7 +191,7 @@ match receive(&config, &WebhookRequest { headers: &headers, body })? {
 | Telegram | 固定 Secret Token；Update 类型分流 | 文本、caption、按钮 data，非文本使用 JSON 回退 |
 | Shopify | Base64 HMAC；主题、API 版本、店铺、投递与事件 ID | title/name 摘要，裁剪字段使用 JSON 回退 |
 
-事件结构采用平台专属的 `XxxWebhook { header, payload }`。Stripe 根据 payload.object 区分 Snapshot/Thin，保留 `data.object` 和 `related_object.type` 原有位置；Slack 保留 Events API 的 `event` 层、交互的 `team/user` 对象及 Slash Command 原有参数；飞书保留 payload 内原生 `header/event/sender_id`，不再生成 `content_json`。**各平台的模型覆盖范围不同：Stripe 按固定版本官方资源规范生成详细类型，其他平台的具体字段以各自模型定义为准；这些都是读取投影，不是覆盖所有上游事件及 API 版本的严格校验 Schema。** 未建模内容由 raw 完整保留，部分未知对象还提供原生对象回退；未知普通事件一般使用 raw 摘要。版本保留在元数据中，并不表示已验证所有 API 版本的字段兼容性。
+事件结构采用平台专属的 `XxxWebhook { header, payload }`。Stripe 根据 payload.object 区分 Snapshot/Thin，保留 `data.object` 和 `related_object.type` 原有位置；Slack 保留 Events API 的 `event` 层、交互的 `team/user` 对象及 Slash Command 原有参数；飞书保留 payload 内原生 `header/event/sender_id`，不再生成 `content_json`。**各平台的模型覆盖范围不同：GitHub 按固定快照官方 Webhook 规范、Stripe 按固定版本官方资源规范生成详细类型，其他平台的具体字段以各自模型定义为准；这些都是读取投影，不是覆盖所有上游事件及 API 版本的严格校验 Schema。** 未建模内容由 raw 完整保留，部分未知对象还提供原生对象回退；未知普通事件一般使用 raw 摘要。版本保留在元数据中，并不表示已验证所有 API 版本的字段兼容性。
 
 Telegram 模型依据 [Bot API Update](https://core.telegram.org/bots/api#update)（2026-11-10），不包括 Telegram Gateway：
 

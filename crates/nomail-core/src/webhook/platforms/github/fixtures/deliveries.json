@@ -1,0 +1,77 @@
+[
+  {
+    "name": "github-detailed-pr",
+    "event": "pull_request",
+    "payload": {
+      "action": "opened",
+      "installation": { "id": 1, "permissions": { "contents": "read", "pull_requests": "write" }, "events": ["pull_request"] },
+      "repository": { "id": 2, "full_name": "example/repo", "permissions": { "admin": false, "pull": true }, "custom_properties": { "flags": [null, false, 0] }, "allow_auto_merge": false },
+      "pull_request": {
+        "id": 3,
+        "number": 4,
+        "title": "  新功能  ",
+        "merge_commit_sha": null,
+        "auto_merge": { "enabled_by": { "id": 5, "login": "actor" }, "merge_method": "squash", "commit_title": "", "commit_message": "  Keep whitespace\n" },
+        "_links": { "self": { "href": "https://example.invalid/pr/4" } },
+        "head": { "ref": "feature", "repo": { "id": 6, "full_name": "example/fork", "allow_auto_merge": true } },
+        "base": { "ref": "main" }
+      },
+      "future_metadata": { "keep_in_raw": true }
+    }
+  },
+  {
+    "name": "github-detailed-security",
+    "event": "dependabot_alert",
+    "payload": {
+      "action": "created",
+      "alert": {
+        "number": 7,
+        "state": "open",
+        "dependency": { "package": { "ecosystem": "npm", "name": "example-package" }, "manifest_path": "package.json", "scope": "runtime" },
+        "security_advisory": { "ghsa_id": "GHSA-example", "cvss": { "score": 9.25, "vector_string": null }, "identifiers": [{ "type": "CVE", "value": "CVE-example" }] },
+        "security_vulnerability": { "severity": "critical", "vulnerable_version_range": "< 1.0.0", "first_patched_version": { "identifier": "1.0.0" } }
+      },
+      "future_metadata": { "keep_in_raw": true }
+    }
+  },
+  {
+    "name": "github-detailed-projects",
+    "event": "projects_v2_item",
+    "payload": {
+      "action": "edited",
+      "projects_v2_item": { "id": 8, "node_id": "PVTI_example", "project_node_id": "PVT_example", "content_node_id": "I_example", "content_type": "Issue", "archived_at": null },
+      "changes": { "field_value": { "field_node_id": "PVTF_example", "field_name": "Status", "field_type": "single_select", "from": null, "to": { "id": "option_example", "name": "Ready", "color": "GREEN" } } },
+      "future_metadata": { "keep_in_raw": true }
+    }
+  },
+  {
+    "name": "github-detailed-dispatch",
+    "event": "workflow_dispatch",
+    "payload": {
+      "ref": "main",
+      "workflow": "  deploy.yml  ",
+      "inputs": { "enabled": false, "count": 0, "text": "  原样保留  ", "empty": null, "items": [null, false, 0] },
+      "future_metadata": { "keep_in_raw": true }
+    }
+  },
+  {
+    "name": "github-detailed-deployment-review",
+    "event": "deployment_review",
+    "payload": {
+      "action": "approved",
+      "comment": "  Approved\n",
+      "workflow_run": { "id": 9 },
+      "deployment_callback_url": "https://example.invalid/callback",
+      "future_metadata": { "keep_in_raw": true }
+    }
+  },
+  {
+    "name": "github-detailed-future-event",
+    "event": "future_github_event",
+    "payload": {
+      "action": "future_action",
+      "repository": { "id": 10, "full_name": "example/repo" },
+      "future_metadata": { "keep_in_raw": true }
+    }
+  }
+]

@@ -115,10 +115,10 @@ fn issue_comments_are_normal_and_retain_structured_detail() {
     };
     let github = &github.payload;
     assert_eq!(github.issue.value().unwrap().number.into_value(), Some(123));
-    assert_eq!(
-        github.comment.value().unwrap().body.value_deref(),
-        Some("  Reply  ")
-    );
+    let super::GithubCommentValue::Comment(comment) = github.comment.value().unwrap() else {
+        panic!("expected comment object")
+    };
+    assert_eq!(comment.body.value_deref(), Some("  Reply  "));
     assert_eq!(
         serde_json::to_value(&github.issue.value().unwrap().labels.value().unwrap()[0]).unwrap()["name"],
         "bug"
@@ -322,7 +322,9 @@ fn reviews_preserve_code_locations_reply_threads_and_review_outcome() {
     let review = github.review.into_value().unwrap();
     assert_eq!(review.state.value_deref(), Some("changes_requested"));
     assert_eq!(review.body.value_deref(), Some("  Please fix  "));
-    let comment = github.comment.into_value().unwrap();
+    let super::GithubCommentValue::Comment(comment) = github.comment.into_value().unwrap() else {
+        panic!("expected comment object")
+    };
     assert_eq!(comment.path.value_deref(), Some("src/lib.rs"));
     assert_eq!(
         (
@@ -365,8 +367,12 @@ fn workflow_jobs_steps_and_check_outputs_are_structured() {
             "check_suite":{"id":11,"head_branch":"feature","conclusion":"failure","latest_check_runs_count":1}
         }),
     );
+    let super::GithubWorkflowValue::Workflow(workflow) = github.workflow.into_value().unwrap()
+    else {
+        panic!("expected workflow object")
+    };
     assert_eq!(
-        github.workflow.into_value().unwrap().path.value_deref(),
+        workflow.path.value_deref(),
         Some(".github/workflows/ci.yml")
     );
     let run = github.workflow_run.into_value().unwrap();
@@ -574,11 +580,332 @@ fn malformed_new_fields_do_not_discard_siblings_or_reject_events() {
     let job = github.workflow_job.into_value().unwrap();
     assert!(job.id.is_none());
     assert_eq!(job.name.value_deref(), Some("Still present"));
-    assert_eq!(job.steps.value().unwrap().len(), 1);
-    assert!(job.steps.value().unwrap()[0].conclusion.is_none());
+    // Do not silently move the second step to index zero. The malformed whole
+    // collection stays in raw; valid sibling properties remain modeled.
+    assert!(job.steps.is_none());
     assert!(github.review.is_none());
     let issue = github.issue.into_value().unwrap();
-    assert_eq!(issue.assignees.value().unwrap().len(), 1);
-    assert_eq!(issue.assignees.value().unwrap()[0].id.into_value(), Some(2));
-    assert_eq!(issue.labels.value().unwrap().len(), 2);
+    assert!(issue.assignees.is_none());
+    assert!(issue.labels.is_none());
+}
+
+fn signed_github(kind: &str, delivery: &str, payload: &serde_json::Value) -> PlatformEvent {
+    let body = serde_json::to_vec(payload).unwrap();
+    let signature = format!(
+        "sha256={}",
+        hex::encode(sign(b"github-example-secret", &body))
+    );
+    let h = headers(&[
+        ("X-GitHub-Event", kind),
+        ("X-GitHub-Delivery", delivery),
+        ("X-Hub-Signature-256", &signature),
+    ]);
+    let parsed = event(
+        receive_with(
+            Provider::Github,
+            Authentication::HmacSha256("github-example-secret"),
+            &h,
+            &body,
+        )
+        .unwrap(),
+    );
+    assert_eq!(parsed.raw.as_json(), Some(payload));
+    assert!(
+        parsed
+            .raw
+            .header
+            .iter()
+            .all(|h| !h.name.eq_ignore_ascii_case("x-hub-signature-256"))
+    );
+    assert_eq!(parse_raw(Provider::Github, &parsed.raw).ok(), parsed.data);
+    assert_eq!(
+        serde_json::from_value::<PlatformEvent>(serde_json::to_value(&parsed).unwrap()).unwrap(),
+        parsed
+    );
+    assert_eq!(
+        parsed.metadata.deduplication_key.as_ref().unwrap().scope,
+        "github:delivery"
+    );
+    assert_eq!(
+        parsed.metadata.deduplication_key.as_ref().unwrap().value,
+        delivery
+    );
+    parsed
+}
+
+fn projection(event: &PlatformEvent) -> serde_json::Value {
+    serde_json::to_value(&event.data).unwrap()["event"]["payload"].clone()
+}
+
+fn assert_native_values(expected: &serde_json::Value, actual: &serde_json::Value, path: &str) {
+    use serde_json::Value;
+    match expected {
+        Value::Object(fields) => {
+            assert!(actual.is_object(), "{path}: expected object, got {actual}");
+            for (key, value) in fields {
+                let next = format!("{path}.{key}");
+                assert!(actual.get(key).is_some(), "{next}: missing modeled field");
+                assert_native_values(value, &actual[key], &next);
+            }
+        }
+        Value::Array(values) => {
+            assert!(actual.is_array(), "{path}: expected array");
+            assert_eq!(
+                values.len(),
+                actual.as_array().unwrap().len(),
+                "{path}: array positions changed"
+            );
+            for (index, value) in values.iter().enumerate() {
+                assert_native_values(value, &actual[index], &format!("{path}[{index}]"));
+            }
+        }
+        _ => assert_eq!(expected, actual, "{path}: scalar type/value changed"),
+    }
+}
+
+#[test]
+fn pinned_webhook_catalog_uses_canonical_event_names_not_example_header_typos() {
+    let operations = super::generated::WEBHOOK_OPERATIONS;
+    assert_eq!(operations.len(), super::GITHUB_MODEL_OPERATION_COUNT);
+    assert_eq!(operations.len(), 276);
+    let events: std::collections::BTreeSet<_> =
+        operations.iter().map(|(_, event)| *event).collect();
+    assert_eq!(events.len(), super::GITHUB_MODEL_EVENT_COUNT);
+    assert_eq!(events.len(), 76);
+    assert!(events.contains("discussion"));
+    assert!(events.contains("projects_v2"));
+    assert!(events.contains("projects_v2_item"));
+    assert!(!events.contains("discussions"));
+    assert!(!events.contains("project-v2"));
+}
+
+#[test]
+fn detailed_facades_keep_their_stack_footprint_bounded() {
+    let payload = std::mem::size_of::<super::GithubWebhookPayload>();
+    let repository = std::mem::size_of::<super::GithubRepository>();
+    let pull_request = std::mem::size_of::<super::GithubPullRequest>();
+    assert!(
+        payload < 64 * 1024,
+        "payload occupies {payload} stack bytes"
+    );
+    assert!(
+        repository < 4096,
+        "repository occupies {repository} stack bytes"
+    );
+    assert!(
+        pull_request < 16 * 1024,
+        "pull request occupies {pull_request} stack bytes"
+    );
+}
+
+#[test]
+fn bounded_schema_probes_preserve_documented_fields_across_all_event_families() {
+    let fixtures: serde_json::Value =
+        serde_json::from_str(include_str!("fixtures/operations.json")).unwrap();
+    assert_eq!(fixtures.as_array().unwrap().len(), 76);
+    let mut failed = Vec::new();
+    for fixture in fixtures.as_array().unwrap() {
+        let kind = fixture["event"].as_str().unwrap();
+        if kind == "ping" {
+            continue;
+        } // Control ACKs are tested separately.
+        let result = std::panic::catch_unwind(|| {
+            let parsed =
+                signed_github(kind, fixture["name"].as_str().unwrap(), &fixture["payload"]);
+            let projected = projection(&parsed);
+            assert_native_values(&fixture["payload"], &projected, kind);
+            assert_native_values(&projected, &fixture["payload"], kind);
+        });
+        if result.is_err() {
+            failed.push(kind);
+        }
+    }
+    assert!(failed.is_empty(), "schema probes failed for: {failed:?}");
+}
+
+#[test]
+fn sanitized_official_examples_keep_raw_and_do_not_invent_projected_values() {
+    let fixtures: serde_json::Value =
+        serde_json::from_str(include_str!("fixtures/official.json")).unwrap();
+    assert_eq!(fixtures.as_array().unwrap().len(), 6);
+    for fixture in fixtures.as_array().unwrap() {
+        let kind = fixture["event"].as_str().unwrap();
+        let body = serde_json::to_vec(&fixture["payload"]).unwrap();
+        if kind == "ping" {
+            let signature = format!(
+                "sha256={}",
+                hex::encode(sign(b"github-example-secret", &body))
+            );
+            let h = headers(&[
+                ("X-GitHub-Event", "ping"),
+                ("X-Hub-Signature-256", &signature),
+            ]);
+            assert_eq!(
+                response(
+                    receive_with(
+                        Provider::Github,
+                        Authentication::HmacSha256("github-example-secret"),
+                        &h,
+                        &body
+                    )
+                    .unwrap()
+                )
+                .body,
+                b"pong"
+            );
+            continue;
+        }
+        let parsed = signed_github(kind, fixture["name"].as_str().unwrap(), &fixture["payload"]);
+        // Public examples can contain historical fields absent from the current
+        // webhook schema. All raw fields survive; projected fields must be exact.
+        let projected = projection(&parsed);
+        assert_native_values(&projected, &fixture["payload"], kind);
+        assert_eq!(projected["action"], fixture["payload"]["action"]);
+        assert_eq!(
+            projected["repository"]["url"],
+            fixture["payload"]["repository"]["url"]
+        );
+    }
+}
+
+#[test]
+fn native_pr_repository_and_installation_details_have_no_details_json_wrapper() {
+    let payload = json!({
+        "action":"opened", "installation":{"id":1,"permissions":{"contents":"read","pull_requests":"write"},"events":["pull_request"],"repository_selection":"selected"},
+        "organization":{"id":2,"login":"example","members_url":"https://example.invalid/members","public_members_url":"https://example.invalid/public-members"},
+        "repository":{"id":3,"full_name":"example/repo","url":"https://example.invalid/repo",
+            "permissions":{"admin":false,"pull":true,"push":false}, "allow_auto_merge":false,
+            "custom_properties":{"environment":"preview","flags":[false,0,null]},
+            "security_and_analysis":{"secret_scanning":{"status":"enabled"}}},
+        "pull_request":{"number":4,"title":"  UI  ","merge_commit_sha":null,
+            "auto_merge":{"enabled_by":{"id":5,"login":"actor"},"merge_method":"squash","commit_title":"","commit_message":"  Keep whitespace\n"},
+            "_links":{"self":{"href":"https://example.invalid/pr/4"}},
+            "head":{"ref":"feature","repo":{"id":6,"full_name":"example/fork","allow_auto_merge":true}},"base":{"ref":"main"}}
+    });
+    let parsed = signed_github("pull_request", "github-rich-pr", &payload);
+    assert_eq!(projection(&parsed), payload);
+    let Some(PlatformData::Github(webhook)) = parsed.data else {
+        panic!("wrong provider")
+    };
+    assert_eq!(
+        webhook
+            .payload
+            .repository
+            .value()
+            .unwrap()
+            .details
+            .allow_auto_merge
+            .value(),
+        Some(&false)
+    );
+    assert_eq!(
+        webhook
+            .payload
+            .pull_request
+            .value()
+            .unwrap()
+            .issue
+            .title
+            .value_deref(),
+        Some("  UI  ")
+    );
+    assert!(webhook.payload.details.installation.value().is_some());
+}
+
+#[test]
+fn arbitrary_dispatch_inputs_and_unknown_fields_are_not_coerced_or_reinterpreted() {
+    let payload = json!({"action":"custom.action.not.in.catalog", "client_payload":{"enabled":false,"count":0,"items":[null,{"key":" value "}]},
+        "inputs":{"enabled":true,"count":0,"text":"  value  ","empty":null},
+        "future":{"arbitrary":true}});
+    let parsed = signed_github("repository_dispatch", "github-dispatch", &payload);
+    let mut expected = payload.clone();
+    expected.as_object_mut().unwrap().remove("future");
+    assert_eq!(projection(&parsed), expected);
+    assert_eq!(parsed.metadata.event_type, "repository_dispatch");
+    let malformed = signed_github(
+        "workflow_job",
+        "github-malformed",
+        &json!({
+            "workflow_job":{"id":7,"name":"Still present","labels":["linux",false,"arm64"],
+                "steps":[{"name":"Build","number":1,"conclusion":{}}]},
+            "installation":{"id":"wrong","permissions":{"contents":"read"}}
+        }),
+    );
+    assert_eq!(
+        projection(&malformed),
+        json!({"workflow_job":{"id":7,"name":"Still present","steps":[{"name":"Build","number":1}]},
+        "installation":{"permissions":{"contents":"read"}}})
+    );
+}
+
+#[test]
+fn deployment_review_comments_and_dispatch_workflows_preserve_text_wire_variants() {
+    let review = json!({"action":"approved", "comment":"  Approved\n", "workflow_run":{"id":7}});
+    let parsed = signed_github("deployment_review", "github-text-comment", &review);
+    assert_eq!(projection(&parsed), review);
+    let Some(PlatformData::Github(webhook)) = parsed.data else {
+        panic!("wrong provider")
+    };
+    assert!(
+        matches!(webhook.payload.comment.value(), Some(super::GithubCommentValue::Text(text)) if text == "  Approved\n")
+    );
+    let dispatch = json!({"ref":"main", "workflow":"  deploy.yml  ", "inputs":{"dry_run":false}});
+    let parsed = signed_github("workflow_dispatch", "github-text-workflow", &dispatch);
+    assert_eq!(projection(&parsed), dispatch);
+    let Some(PlatformData::Github(webhook)) = parsed.data else {
+        panic!("wrong provider")
+    };
+    assert!(
+        matches!(webhook.payload.workflow.value(), Some(super::GithubWorkflowValue::Name(name)) if name == "  deploy.yml  ")
+    );
+}
+
+#[test]
+fn security_advisories_projects_and_typed_change_values_remain_native() {
+    let payload = json!({"action":"created", "alert":{"number":1,"state":"open",
+        "dependency":{"package":{"ecosystem":"npm","name":"example-package"},"manifest_path":"package.json","scope":"runtime"},
+        "security_advisory":{"ghsa_id":"GHSA-example","cvss":{"score":9.25,"vector_string":null},
+            "identifiers":[{"type":"CVE","value":"CVE-example"}]},
+        "security_vulnerability":{"severity":"critical","vulnerable_version_range":"< 1.0.0","first_patched_version":{"identifier":"1.0.0"}}}});
+    assert_eq!(
+        projection(&signed_github(
+            "dependabot_alert",
+            "github-security",
+            &payload
+        )),
+        payload
+    );
+    for value in [
+        json!("  old  "),
+        json!(7),
+        json!({"id":"option_id","name":"Ready","color":"GREEN"}),
+    ] {
+        let payload = json!({"action":"edited", "projects_v2_item":{"id":9007199254740993_u64,"node_id":"PVTI_example","project_node_id":"PVT_example","content_node_id":"I_example","content_type":"Issue","archived_at":null},
+            "changes":{"field_value":{"field_node_id":"PVTF_example","field_name":"Status","field_type":"single_select","from":null,"to":value}}});
+        assert_eq!(
+            projection(&signed_github(
+                "projects_v2_item",
+                "github-project-change",
+                &payload
+            )),
+            payload
+        );
+    }
+}
+
+#[test]
+fn shared_runtime_deliveries_keep_native_details_and_raw_without_api_queries() {
+    let fixtures: serde_json::Value =
+        serde_json::from_str(include_str!("fixtures/deliveries.json")).unwrap();
+    for fixture in fixtures.as_array().unwrap() {
+        let parsed = signed_github(
+            fixture["event"].as_str().unwrap(),
+            fixture["name"].as_str().unwrap(),
+            &fixture["payload"],
+        );
+        let mut expected = fixture["payload"].clone();
+        expected.as_object_mut().unwrap().remove("future_metadata");
+        assert_eq!(projection(&parsed), expected, "{}", fixture["name"]);
+        assert_eq!(parsed.to_message_content().level, MessageLevel::Normal);
+    }
 }
