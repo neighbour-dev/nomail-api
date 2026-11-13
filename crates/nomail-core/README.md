@@ -67,9 +67,9 @@ WebhookRequest（签名用的原始字节）+ 可信配置
 
 类型化 header 仅提取白名单中的 ASCII 值；非 ASCII 值留在 raw，不额外导致鉴权后的拒收。正文和 JSON 支持 UTF-8。接收和 raw 重建共用模型解析入口。
 
-`raw.header` 是 `{ "name": "...", "value": "..." }` 条目列表，保留重复项和空值，不合并或裁剪。过滤只按 `RAW_HEADER_BLACKLIST` 精确名称、大小写不敏感匹配，省略已知鉴权、Cookie 和签名头；未知头保留。`RawHeader::from_bytes()` 将非 UTF-8 值编码为 Base64 并标记 `encoding: "base64"`；编码值不能替代原始鉴权输入。捕获范围取决于调用方的运行时，无法恢复已被规范化的线上报文。
+`raw.header` 是 `{ "name": "...", "value": "..." }` 条目列表，保留重复项和空值，不合并或裁剪。过滤按通用 `RAW_HEADER_BLACKLIST` 和各平台声明的黑名单精确名称、大小写不敏感匹配，省略已知鉴权、Cookie 和签名头；未知头保留。`RawHeader::from_bytes()` 将非 UTF-8 值编码为 Base64 并标记 `encoding: "base64"`；编码值不能替代原始鉴权输入。捕获范围取决于调用方的运行时，无法恢复已被规范化的线上报文。
 
-黑名单集中在 Core，所有平台和两端共用；只有成功鉴权并产出业务事件后才将过滤结果附加到 raw。**黑名单之外的自定义敏感头也会保存**，新增认证头时必须同步维护黑名单。此策略只过滤 header，不扫描或删改 payload 中的同名业务字段。
+黑名单由 Core 统一聚合：通用 HTTP 项维护在 `webhook/raw.rs`，平台专属项维护在各自的 `webhook/platforms/<平台>/mod.rs`，所有平台和两端共用完整过滤范围；只有成功鉴权并产出业务事件后才将过滤结果附加到 raw。**黑名单之外的自定义敏感头也会保存**，新增认证头时必须同步维护对应黑名单，新增平台时还需将其列表加入聚合。此策略只过滤 header，不扫描或删改 payload 中的同名业务字段。
 
 `raw.to_readable_string()` / Display 序列化 Core 内存中的 `{ header, payload: { format, value } }`，`raw.media_type()` 描述该内存封装的 JSON 序列化格式；它不是 raw HTTP 查询接口的响应 DTO。原始 HTTP Content-Type 若存在则在 raw.header 中，内存中的解码类型由 payload.format 标识。
 

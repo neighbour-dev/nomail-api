@@ -1,5 +1,7 @@
 //! GitHub webhook authentication, JSON/form decoding, event model and inbox mapping.
 pub mod config;
+pub(in crate::webhook) const RAW_HEADER_BLACKLIST: &[&str] =
+    &["x-hub-signature", "x-hub-signature-256"];
 mod models;
 pub use models::*;
 #[cfg(test)]

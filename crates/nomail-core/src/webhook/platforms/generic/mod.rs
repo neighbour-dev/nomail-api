@@ -1,6 +1,7 @@
 //! NoMail's custom Generic protocol. JSON fields and text header fields are inputs,
 //! not defaults shared with other platforms.
 pub mod config;
+pub(in crate::webhook) const RAW_HEADER_BLACKLIST: &[&str] = &["x-nomail-signature"];
 #[cfg(test)]
 mod tests;
 use crate::webhook::{

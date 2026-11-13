@@ -2,6 +2,7 @@
 //! Sources: developer.apple.com/documentation/appstoreconnectapi/webhook-events
 //! and /configuring-webhook-notifications. No API lookups or IAP/JWS handling.
 pub mod config;
+pub(in crate::webhook) const RAW_HEADER_BLACKLIST: &[&str] = &["x-apple-signature"];
 mod models;
 pub use models::*;
 #[cfg(test)]

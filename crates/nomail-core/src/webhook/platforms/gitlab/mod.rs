@@ -1,5 +1,7 @@
 //! GitLab authentication policies, custom/default payloads and inbox mapping.
 pub mod config;
+pub(in crate::webhook) const RAW_HEADER_BLACKLIST: &[&str] =
+    &["x-gitlab-token", "webhook-signature"];
 #[cfg(test)]
 mod tests;
 use crate::webhook::{

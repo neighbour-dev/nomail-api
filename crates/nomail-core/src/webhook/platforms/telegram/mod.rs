@@ -1,5 +1,6 @@
 //! Telegram Bot API authentication, Update model and inbox mapping.
 pub mod config;
+pub(in crate::webhook) const RAW_HEADER_BLACKLIST: &[&str] = &["x-telegram-bot-api-secret-token"];
 mod models;
 pub use models::*;
 #[cfg(test)]

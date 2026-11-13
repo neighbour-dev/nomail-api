@@ -1,5 +1,7 @@
 //! Feishu credential policy, signature/decryption, control requests and inbox mapping.
 pub mod config;
+pub(in crate::webhook) const RAW_HEADER_BLACKLIST: &[&str] =
+    &["x-lark-signature", "x-feishu-signature"];
 #[cfg(test)]
 mod tests;
 use crate::webhook::{

@@ -1,5 +1,6 @@
 //! Gitea's native headers, decoded-JSON HMAC, event resources and inbox mapping.
 pub mod config;
+pub(in crate::webhook) const RAW_HEADER_BLACKLIST: &[&str] = &["x-gitea-signature"];
 mod models;
 pub use models::*;
 #[cfg(test)]

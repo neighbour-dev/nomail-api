@@ -1,12 +1,13 @@
 //! Complete decoded payload plus runtime-visible headers, excluding an explicit
 //! case-insensitive blacklist. This is not a byte-for-byte HTTP request archive.
-use super::{EventContent, HeaderLookup};
+use super::{EventContent, HeaderLookup, platforms};
 use base64::{Engine, engine::general_purpose::STANDARD};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::fmt;
 
-/// Exact names only: unknown/custom headers are retained unless listed here.
+/// Common HTTP credentials. Platform-specific names are declared by each platform.
+/// Exact names only: unknown/custom headers are retained unless explicitly listed.
 /// Timestamp, nonce, delivery and version headers are not credentials.
 pub const RAW_HEADER_BLACKLIST: &[&str] = &[
     "authorization",
@@ -20,24 +21,29 @@ pub const RAW_HEADER_BLACKLIST: &[&str] = &[
     "x-xsrf-token",
     "cf-access-jwt-assertion",
     "x-forwarded-access-token",
-    "x-nomail-signature",
-    "x-hub-signature",
-    "x-hub-signature-256",
-    "x-gitea-signature",
-    "x-gitlab-token",
-    "webhook-signature",
-    "stripe-signature",
-    "x-slack-signature",
-    "x-lark-signature",
-    "x-feishu-signature",
-    "x-telegram-bot-api-secret-token",
-    "x-shopify-hmac-sha256",
-    "x-apple-signature",
+];
+
+const PLATFORM_RAW_HEADER_BLACKLISTS: &[&[&str]] = &[
+    platforms::generic::RAW_HEADER_BLACKLIST,
+    platforms::github::RAW_HEADER_BLACKLIST,
+    platforms::gitea::RAW_HEADER_BLACKLIST,
+    platforms::app_store_connect::RAW_HEADER_BLACKLIST,
+    platforms::gitlab::RAW_HEADER_BLACKLIST,
+    platforms::stripe::RAW_HEADER_BLACKLIST,
+    platforms::slack::RAW_HEADER_BLACKLIST,
+    platforms::feishu::RAW_HEADER_BLACKLIST,
+    platforms::telegram::RAW_HEADER_BLACKLIST,
+    platforms::shopify::RAW_HEADER_BLACKLIST,
 ];
 
 pub fn is_raw_header_blocked(name: &str) -> bool {
     RAW_HEADER_BLACKLIST
         .iter()
+        .chain(
+            PLATFORM_RAW_HEADER_BLACKLISTS
+                .iter()
+                .flat_map(|headers| headers.iter()),
+        )
         .any(|blocked| name.eq_ignore_ascii_case(blocked))
 }
 
@@ -204,7 +210,11 @@ mod tests {
             ("X-Lark-Request-Nonce", "nonce-1"),
         ]);
         let expected = source.entries();
-        for name in RAW_HEADER_BLACKLIST {
+        for name in RAW_HEADER_BLACKLIST.iter().chain(
+            PLATFORM_RAW_HEADER_BLACKLISTS
+                .iter()
+                .flat_map(|headers| headers.iter()),
+        ) {
             source.push((name.to_ascii_uppercase(), "private-header-value".into()));
             source.push(((*name).to_owned(), "private-header-value".into()));
         }

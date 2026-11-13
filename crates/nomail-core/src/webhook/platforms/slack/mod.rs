@@ -1,5 +1,6 @@
 //! Slack authentication, Events API/interactions/commands and inbox mapping.
 pub mod config;
+pub(in crate::webhook) const RAW_HEADER_BLACKLIST: &[&str] = &["x-slack-signature"];
 #[cfg(test)]
 mod tests;
 use super::JsonFieldExt;

@@ -1,5 +1,6 @@
 //! Shopify HMAC verification, versioned topic payloads and inbox mapping.
 pub mod config;
+pub(in crate::webhook) const RAW_HEADER_BLACKLIST: &[&str] = &["x-shopify-hmac-sha256"];
 #[cfg(test)]
 mod tests;
 use crate::webhook::{

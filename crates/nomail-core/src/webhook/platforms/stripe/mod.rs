@@ -1,5 +1,6 @@
 //! Stripe signatures, Snapshot/Thin event models and built-in inbox mapping.
 pub mod config;
+pub(in crate::webhook) const RAW_HEADER_BLACKLIST: &[&str] = &["stripe-signature"];
 #[cfg(test)]
 mod tests;
 use super::native::NativeValue;
