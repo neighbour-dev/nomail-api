@@ -8,11 +8,13 @@
 
 ### 新增
 
+- 细化 Gitea 原生模型，按 v28.3.0 固定源码快照的 26 个对外事件、14 种载荷及自定义序列化核对字段，补齐用户 `username` 和仓库事件中组织对象的完整 User 字段。保留原生 JSON 层级、负数系统用户 ID 及实际收到的别名值，不联网补全资源。
 - 扩展 GitHub 详细数据模型，以固定快照官方 Webhook 规范中的 276 个事件/action 条目、76 个事件名为入口，补齐仓库/PR、安装和组织、安全告警、Projects v2、规则集、包、合并队列等原生嵌套字段，保留原生 JSON 层级；不调用 GitHub API 补全详情。
 - 扩展 Stripe 原生数据模型，依据固定版本官方公开 OpenAPI `2026-10-28.endive` 建模 200 个资源分支（含已删除资源，非事件类型数）及其详细嵌套结构，覆盖支付、Checkout、订阅、账单、退款、账户等资源。Snapshot/Thin 使用独立信封类型，区分可展开 ID/对象、整数金额和十进制字符串，保留字段缺失/null/实际值，并补充 Thin 的原因、关联资源与 Snapshot 事件 ID，供客户端进行结构化展示；不调用 Stripe API 补全详情。
 
 ### 变更
 
+- **Gitea 读取投影及 Rust API 不兼容变更：**集合中的合法 null 元素现在保留原位置，相关 Rust 字段改为可空元素集合；其他元素/字典值类型不兼容时整体省略集合字段并保留 raw，不再过滤并重排。Rust 调用方需调整新增字段的初始化及集合元素访问，详见 [Gitea 模型说明](crates/nomail-core/src/webhook/platforms/gitea/README.md)。
 - **GitHub 读取投影调整及 Rust API 不兼容变更：**根级 `comment` / `workflow` 支持对象或文本，保留部署审核评论和手动触发工作流名称；新增字段也会出现在已存 raw 消息的读取投影中。无法按目标元素/值类型提取的数组/字典整体省略并保留于 raw，不再过滤无效数组元素后改变索引。Rust 调用方需调整相关枚举匹配及结构体初始化，详见 [GitHub 模型说明](crates/nomail-core/src/webhook/platforms/github/README.md)。
 - **Stripe 平台数据读取投影不兼容变更：**保留原生 JSON 层级，不增加 NoMail 分支包装，但不保证响应字段集合与旧模型相同：已知资源改为按规范提取字段，未覆盖的历史/未知字段及类型异常值保留在 raw；未知资源或缺少资源判别字段时仍使用原生对象回退，未知顶层信封的 `platformData` 为 null。需要完整内容的客户端应读取 raw；Rust 调用方需匹配新的信封/资源枚举。验签、入库、优先级和 ACK 行为不变，也不实现 Issuing 同步授权决策。
 - 初始账号改为通过公开的 `POST /api/auth/setup` 接口创建，`GET /api/auth/setup` 查询初始化状态；用户名、密码由接口提交并校验强度。不再读取 `INITIAL_USERNAME` / `INITIAL_PASSWORD`，启动和登录不再自动创建账号。已有账号保持不变。初始化不使用密钥或时间窗口，公网新实例存在被抢先初始化的风险，请部署后及时完成；重新部署不会清除持久化账号。

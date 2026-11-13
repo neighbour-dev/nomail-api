@@ -675,6 +675,35 @@ test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, a
         }
       }
       if (platform.provider === 'gitea') {
+        const probes = JSON.parse(await readFile(new URL('../../nomail-core/src/webhook/platforms/gitea/fixtures/wire-probes.json', import.meta.url), 'utf8'));
+        for (const probe of probes) {
+          const delivery = `gitea-source-${probe.payload_type}-${probe.mode}`;
+          const event = probe.events[0];
+          const body = JSON.stringify(probe.payload);
+          const signature = sign('platform-secret', body);
+          let messageId;
+          for (const duplicate of [false, true]) {
+            const wire = duplicate ? new URLSearchParams({ payload: body }).toString() : body;
+            const response = await fetch(origin + item.url, { method: 'POST', body: wire, headers: {
+              'Content-Type': duplicate ? 'application/x-www-form-urlencoded' : 'application/json',
+              'X-Gitea-Event': event.event, 'X-Gitea-Event-Type': event.event_type,
+              'X-Gitea-Delivery': delivery, 'X-Gitea-Signature': signature,
+            } });
+            const ack = await response.json();
+            assert.equal(response.status, 200, JSON.stringify(ack));
+            validateResponse('POST', item.url, 200, ack);
+            assert.equal(ack.data.duplicate, duplicate);
+            if (duplicate) assert.equal(ack.data.messageId, messageId);
+            messageId = ack.data.messageId;
+          }
+          const messagePath = `/api/messages/${messageId}`;
+          const detail = await api('GET', messagePath, undefined, token);
+          assert.deepEqual(detail.platformData.event.payload, probe.payload, delivery);
+          assert.equal(detail.platformData.event.header.event_type, event.event_type);
+          const updated = await api('PATCH', messagePath, { pinned: true, status: 'read' }, token);
+          assert.deepEqual(updated.platformData, detail.platformData);
+          assert.deepEqual(JSON.parse((await inspectRaw(messagePath)).payload), probe.payload);
+        }
         const detail = await api('GET', `/api/messages/${ack.data.messageId}`, undefined, token);
         assert.equal(detail.platformData.provider, 'gitea');
         assert.equal(detail.platformData.event.payload.sender.id, -2);

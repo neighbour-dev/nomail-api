@@ -286,13 +286,26 @@ fn issues_comments_prs_and_changes_keep_gitea_specific_fields() {
         Some("example")
     );
     assert_eq!(
-        issue.assets.value().unwrap()[0].uuid.value_deref(),
+        issue.assets.value().unwrap()[0]
+            .as_ref()
+            .unwrap()
+            .uuid
+            .value_deref(),
         Some("synthetic-file")
     );
-    assert_eq!(issue.projects.value().unwrap()[0].id.into_value(), Some(7));
+    assert_eq!(
+        issue.projects.value().unwrap()[0]
+            .as_ref()
+            .unwrap()
+            .id
+            .into_value(),
+        Some(7)
+    );
     assert_eq!(issue.content_version.into_value(), Some(2));
     assert_eq!(
         comment(&parsed).assets.value().unwrap()[0]
+            .as_ref()
+            .unwrap()
             .uuid
             .value_deref(),
         Some("synthetic-reply")
@@ -302,6 +315,8 @@ fn issues_comments_prs_and_changes_keep_gitea_specific_fields() {
     assert_eq!(pr.head.value().unwrap().repo_id.into_value(), Some(1));
     assert_eq!(
         pr.requested_reviewers_teams.value().unwrap()[0]
+            .as_ref()
+            .unwrap()
             .units_map
             .value()
             .unwrap()["repo.code"],
@@ -322,6 +337,8 @@ fn issues_comments_prs_and_changes_keep_gitea_specific_fields() {
     );
     assert_eq!(
         changes.added_labels.value().unwrap()[0]
+            .as_ref()
+            .unwrap()
             .exclusive
             .into_value(),
         Some(true)
@@ -376,6 +393,8 @@ fn push_ref_and_status_use_gitea_commit_and_pusher_shapes() {
     );
     assert_eq!(
         push.commits.value().unwrap()[0]
+            .as_ref()
+            .unwrap()
             .author
             .value()
             .unwrap()
@@ -384,6 +403,8 @@ fn push_ref_and_status_use_gitea_commit_and_pusher_shapes() {
         Some("author")
     );
     let verification = push.commits.value().unwrap()[0]
+        .as_ref()
+        .unwrap()
         .verification
         .value()
         .unwrap();
@@ -483,6 +504,8 @@ fn wiki_fork_package_and_release_have_typed_resources() {
             .assets
             .value()
             .unwrap()[0]
+            .as_ref()
+            .unwrap()
             .uuid
             .value_deref(),
         Some("file-id")
@@ -503,6 +526,8 @@ fn workflow_ids_actors_completion_times_and_steps_are_typed() {
     assert_eq!(run.completed_at.value_deref(), Some("2026-01-01T00:01:00Z"));
     assert_eq!(
         run.pull_requests.value().unwrap()[0]
+            .as_ref()
+            .unwrap()
             .head
             .value()
             .unwrap()
@@ -527,6 +552,8 @@ fn workflow_ids_actors_completion_times_and_steps_are_typed() {
             .steps
             .value()
             .unwrap()[0]
+            .as_ref()
+            .unwrap()
             .conclusion
             .value_deref(),
         Some("failure")
@@ -593,7 +620,7 @@ fn sparse_unknown_malformed_fields_and_header_boundaries_remain_safe() {
         Some("Kept")
     );
     assert!(g.workflow_run.value().unwrap().id.is_none());
-    assert_eq!(g.issue.value().unwrap().labels.value().unwrap().len(), 1);
+    assert!(g.issue.value().unwrap().labels.is_none());
     assert!(g.issue.value().unwrap().user.is_none());
     let h = headers(&[("X-Gitea-Event", "future_event")]);
     let sparse = event(receive_with(Provider::Gitea, Authentication::None, &h, b"{}").unwrap());
@@ -617,5 +644,185 @@ fn sparse_unknown_malformed_fields_and_header_boundaries_remain_safe() {
             b"{}"
         )
         .is_ok()
+    );
+}
+
+fn assert_native(expected: &Value, actual: &Value, path: &str) {
+    match expected {
+        Value::Object(fields) => {
+            assert!(actual.is_object(), "{path}: expected object");
+            assert_eq!(
+                fields.len(),
+                actual.as_object().unwrap().len(),
+                "{path}: native property count changed"
+            );
+            for (key, value) in fields {
+                assert!(actual.get(key).is_some(), "{path}.{key}: field missing");
+                assert_native(value, &actual[key], &format!("{path}.{key}"));
+            }
+        }
+        Value::Array(values) => {
+            assert!(actual.is_array(), "{path}: expected array");
+            assert_eq!(
+                values.len(),
+                actual.as_array().unwrap().len(),
+                "{path}: array positions changed"
+            );
+            for (index, value) in values.iter().enumerate() {
+                assert_native(value, &actual[index], &format!("{path}[{index}]"));
+            }
+        }
+        _ => assert_eq!(expected, actual, "{path}: native scalar type/value changed"),
+    }
+}
+
+#[test]
+fn pinned_source_catalog_tracks_external_dispatch_and_custom_serialization() {
+    let contract: Value =
+        serde_json::from_str(include_str!("fixtures/source-contract.json")).unwrap();
+    assert_eq!(contract["source"]["version"], "v28.3.0");
+    assert_eq!(
+        contract["source"]["commit"],
+        "4f5a3e13e5f3aca85d830e3a9024c893b0bbf1e1"
+    );
+    assert_eq!(contract["events"].as_array().unwrap().len(), 26);
+    let payloads: std::collections::BTreeSet<_> = contract["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|e| e["payload_type"].as_str().unwrap())
+        .collect();
+    assert_eq!(payloads.len(), 14);
+    assert!(contract["types"].get("WorkflowDispatchPayload").is_none());
+    assert!(contract["types"].get("WorkflowCallPayload").is_none());
+    assert_eq!(contract["custom_serializers"], json!(["User.MarshalJSON"]));
+    assert_eq!(
+        contract["types"]["User"]["fields"]["username"]["custom_serializer"],
+        true
+    );
+    assert_eq!(
+        contract["types"]["RepositoryPayload"]["fields"]["organization"]["go_type"],
+        "*User"
+    );
+    assert_eq!(
+        contract["types"]["PackagePayload"]["fields"]["organization"]["go_type"],
+        "*Organization"
+    );
+}
+
+#[test]
+fn upstream_go_serialized_probes_preserve_every_supplied_wire_field() {
+    let probes: Value = serde_json::from_str(include_str!("fixtures/wire-probes.json")).unwrap();
+    assert_eq!(probes.as_array().unwrap().len(), 28);
+    let mut checked = 0;
+    for probe in probes.as_array().unwrap() {
+        for headers in probe["events"].as_array().unwrap() {
+            let parsed = receive_json(
+                headers["event"].as_str().unwrap(),
+                headers["event_type"].as_str().unwrap(),
+                &probe["payload"],
+            );
+            let projected = serde_json::to_value(model(&parsed)).unwrap();
+            assert_native(
+                &probe["payload"],
+                &projected,
+                &format!(
+                    "{}:{}:{}",
+                    probe["payload_type"], probe["mode"], headers["event_type"]
+                ),
+            );
+            assert_eq!(parse_raw(Provider::Gitea, &parsed.raw).ok(), parsed.data);
+            checked += 1;
+        }
+    }
+    assert_eq!(checked, 52);
+}
+
+#[test]
+fn user_username_and_both_organization_shapes_preserve_independent_wire_keys() {
+    let user_org = json!({"id":-2,"login":"login-value","username":"compat-value","type":"organization",
+        "login_name":"","source_id":0,"full_name":"  Full name  ","email":"member@example.invalid",
+        "avatar_url":"","html_url":"https://example.invalid/org","language":"zh-CN","is_admin":false,
+        "last_login":"0001-01-01T00:00:00Z","created":"2026-11-13T01:02:03Z","restricted":false,
+        "active":false,"prohibit_login":true,"location":"","website":"","description":"  Description\n",
+        "visibility":"private","followers_count":0,"following_count":0,"starred_repos_count":0});
+    let payload = json!({"action":"renamed","organization":user_org,"sender":user_org,"repository":{"id":7,"owner":user_org}});
+    let parsed = receive_json("repository", "repository", &payload);
+    assert_eq!(serde_json::to_value(model(&parsed)).unwrap(), payload);
+    assert_eq!(
+        model(&parsed)
+            .organization
+            .value()
+            .unwrap()
+            .user_type
+            .value_deref(),
+        Some("organization")
+    );
+    assert_eq!(
+        model(&parsed)
+            .sender
+            .value()
+            .unwrap()
+            .username
+            .value_deref(),
+        Some("compat-value")
+    );
+    let without_alias = receive_json(
+        "repository",
+        "repository",
+        &json!({"sender":{"login":"only-login"}}),
+    );
+    assert!(
+        model(&without_alias)
+            .sender
+            .value()
+            .unwrap()
+            .username
+            .is_none()
+    );
+    let package = json!({"organization":{"id":8,"name":"native-org","username":"org","full_name":"Organization",
+        "email":"org@example.invalid","avatar_url":"","description":"","website":"","location":"",
+        "visibility":"public","repo_admin_change_team_access":false}});
+    assert_eq!(
+        serde_json::to_value(model(&receive_json("package", "package", &package))).unwrap(),
+        package
+    );
+}
+
+#[test]
+fn nullable_pointer_collections_keep_nulls_positions_and_presence_states() {
+    let payload = json!({"commits":[null,{"id":"abc","added":[],"removed":null}],
+        "issue":{"assets":[null,{"id":1}],"labels":[null,{"id":2}],"projects":[null,{"id":3}],"assignees":[null,{"id":-2}]},
+        "pull_request":{"labels":[],"assignees":null,"requested_reviewers":[null,{"id":4}],"requested_reviewers_teams":[null,{"id":5,"units_map":{"repo.code":"read"}}]},
+        "changes":{"added_labels":[null,{"id":6}],"removed_labels":[]},
+        "workflow_run":{"pull_requests":[null,{"id":7}]},"workflow_job":{"steps":[null,{"number":1,"conclusion":null}]}});
+    let parsed = receive_json("push", "push", &payload);
+    assert_eq!(serde_json::to_value(model(&parsed)).unwrap(), payload);
+    let commits = model(&parsed).commits.value().unwrap();
+    assert!(commits[0].is_none());
+    assert_eq!(commits[1].as_ref().unwrap().id.value_deref(), Some("abc"));
+}
+
+#[test]
+fn malformed_collections_do_not_filter_elements_or_remove_valid_object_siblings() {
+    let payload = json!({"issue":{"number":1,"labels":[null,false,{"id":2}]},
+        "pull_request":{"number":3,"requested_reviewers_teams":[{"id":4,"name":"Kept","units_map":{"repo.code":"read","repo.issues":false}}]},
+        "workflow_job":{"id":5,"labels":["linux",false,"arm64"],"steps":[null,{"number":1,"name":"Build","conclusion":{}}]}});
+    let parsed = receive_json("workflow_job", "workflow_job", &payload);
+    assert_eq!(
+        serde_json::to_value(model(&parsed)).unwrap(),
+        json!({"issue":{"number":1},
+        "pull_request":{"number":3,"requested_reviewers_teams":[{"id":4,"name":"Kept"}]},
+        "workflow_job":{"id":5,"steps":[null,{"number":1,"name":"Build"}]}})
+    );
+    assert_eq!(parsed.raw.as_json(), Some(&payload));
+}
+
+#[test]
+fn full_gitea_models_keep_the_stack_footprint_bounded() {
+    let size = std::mem::size_of::<super::GiteaWebhookPayload>();
+    assert!(
+        size < 64 * 1024,
+        "Gitea payload occupies {size} stack bytes"
     );
 }

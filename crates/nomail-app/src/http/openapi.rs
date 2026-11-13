@@ -500,6 +500,61 @@ mod tests {
             json!(["string", "null"])
         );
         assert_eq!(schemas["GiteaUser"]["properties"]["id"]["format"], "int64");
+        for name in ["GiteaUser", "GiteaOrganization"] {
+            assert_eq!(
+                schemas[name]["properties"]["username"]["type"],
+                json!(["string", "null"])
+            );
+            for field in [
+                "type",
+                "login_name",
+                "source_id",
+                "language",
+                "is_admin",
+                "last_login",
+                "created",
+                "restricted",
+                "active",
+                "prohibit_login",
+                "followers_count",
+                "following_count",
+                "starred_repos_count",
+            ] {
+                assert!(
+                    schemas[name]["properties"].get(field).is_some(),
+                    "missing complete user field {name}.{field}"
+                );
+            }
+        }
+        for (name, field, element) in [
+            ("GiteaWebhookPayload", "commits", "GiteaCommit"),
+            ("GiteaIssue", "labels", "GiteaLabel"),
+            ("GiteaIssue", "assets", "GiteaAttachment"),
+            ("GiteaIssue", "projects", "GiteaProject"),
+            ("GiteaIssue", "assignees", "GiteaUser"),
+            ("GiteaPullRequest", "requested_reviewers", "GiteaUser"),
+            ("GiteaPullRequest", "requested_reviewers_teams", "GiteaTeam"),
+            ("GiteaRepoTransfer", "teams", "GiteaTeam"),
+            (
+                "GiteaWorkflowRun",
+                "pull_requests",
+                "GiteaPullRequestReference",
+            ),
+            ("GiteaWorkflowJob", "steps", "GiteaWorkflowStep"),
+        ] {
+            let items = &schemas[name]["properties"][field]["items"]["anyOf"];
+            assert!(
+                items
+                    .as_array()
+                    .unwrap()
+                    .contains(&json!({"$ref":format!("#/components/schemas/{element}")})),
+                "missing native element type for {name}.{field}"
+            );
+            assert!(
+                items.as_array().unwrap().contains(&json!({"type":"null"})),
+                "Go pointer slice lost nullability: {name}.{field}"
+            );
+        }
         for field in [
             "ref",
             "commits",

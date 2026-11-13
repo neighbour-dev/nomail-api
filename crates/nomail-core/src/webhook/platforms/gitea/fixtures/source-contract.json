@@ -1,0 +1,4207 @@
+{
+  "custom_serializers": [
+    "User.MarshalJSON"
+  ],
+  "events": [
+    {
+      "event": "create",
+      "event_type": "create",
+      "payload_type": "CreatePayload"
+    },
+    {
+      "event": "delete",
+      "event_type": "delete",
+      "payload_type": "DeletePayload"
+    },
+    {
+      "event": "fork",
+      "event_type": "fork",
+      "payload_type": "ForkPayload"
+    },
+    {
+      "event": "push",
+      "event_type": "push",
+      "payload_type": "PushPayload"
+    },
+    {
+      "event": "issues",
+      "event_type": "issues",
+      "payload_type": "IssuePayload"
+    },
+    {
+      "event": "issues",
+      "event_type": "issue_assign",
+      "payload_type": "IssuePayload"
+    },
+    {
+      "event": "issues",
+      "event_type": "issue_label",
+      "payload_type": "IssuePayload"
+    },
+    {
+      "event": "issues",
+      "event_type": "issue_milestone",
+      "payload_type": "IssuePayload"
+    },
+    {
+      "event": "issue_comment",
+      "event_type": "issue_comment",
+      "payload_type": "IssueCommentPayload"
+    },
+    {
+      "event": "pull_request",
+      "event_type": "pull_request",
+      "payload_type": "PullRequestPayload"
+    },
+    {
+      "event": "pull_request",
+      "event_type": "pull_request_assign",
+      "payload_type": "PullRequestPayload"
+    },
+    {
+      "event": "pull_request",
+      "event_type": "pull_request_label",
+      "payload_type": "PullRequestPayload"
+    },
+    {
+      "event": "pull_request",
+      "event_type": "pull_request_milestone",
+      "payload_type": "PullRequestPayload"
+    },
+    {
+      "event": "issue_comment",
+      "event_type": "pull_request_comment",
+      "payload_type": "IssueCommentPayload"
+    },
+    {
+      "event": "pull_request_approved",
+      "event_type": "pull_request_review_approved",
+      "payload_type": "PullRequestPayload"
+    },
+    {
+      "event": "pull_request_rejected",
+      "event_type": "pull_request_review_rejected",
+      "payload_type": "PullRequestPayload"
+    },
+    {
+      "event": "pull_request_comment",
+      "event_type": "pull_request_review_comment",
+      "payload_type": "PullRequestPayload"
+    },
+    {
+      "event": "pull_request",
+      "event_type": "pull_request_sync",
+      "payload_type": "PullRequestPayload"
+    },
+    {
+      "event": "pull_request",
+      "event_type": "pull_request_review_request",
+      "payload_type": "PullRequestPayload"
+    },
+    {
+      "event": "wiki",
+      "event_type": "wiki",
+      "payload_type": "WikiPayload"
+    },
+    {
+      "event": "repository",
+      "event_type": "repository",
+      "payload_type": "RepositoryPayload"
+    },
+    {
+      "event": "release",
+      "event_type": "release",
+      "payload_type": "ReleasePayload"
+    },
+    {
+      "event": "package",
+      "event_type": "package",
+      "payload_type": "PackagePayload"
+    },
+    {
+      "event": "status",
+      "event_type": "status",
+      "payload_type": "CommitStatusPayload"
+    },
+    {
+      "event": "workflow_run",
+      "event_type": "workflow_run",
+      "payload_type": "WorkflowRunPayload"
+    },
+    {
+      "event": "workflow_job",
+      "event_type": "workflow_job",
+      "payload_type": "WorkflowJobPayload"
+    }
+  ],
+  "source": {
+    "commit": "4f5a3e13e5f3aca85d830e3a9024c893b0bbf1e1",
+    "version": "v28.3.0"
+  },
+  "types": {
+    "AccessLevelName": {
+      "alias": {
+        "named": "string"
+      },
+      "source": "repo_collaborator.go"
+    },
+    "ActionWorkflow": {
+      "fields": {
+        "badge_url": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "created_at": {
+          "go_type": "time.Time",
+          "options": [],
+          "type": {
+            "scalar": "string"
+          }
+        },
+        "deleted_at": {
+          "go_type": "time.Time",
+          "options": [],
+          "type": {
+            "scalar": "string"
+          }
+        },
+        "html_url": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "id": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "name": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "path": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "state": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "updated_at": {
+          "go_type": "time.Time",
+          "options": [],
+          "type": {
+            "scalar": "string"
+          }
+        },
+        "url": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        }
+      },
+      "source": "repo_actions.go"
+    },
+    "ActionWorkflowJob": {
+      "fields": {
+        "completed_at": {
+          "go_type": "time.Time",
+          "options": [],
+          "type": {
+            "scalar": "string"
+          }
+        },
+        "conclusion": {
+          "go_type": "string",
+          "options": [
+            "omitempty"
+          ],
+          "type": {
+            "named": "string"
+          }
+        },
+        "created_at": {
+          "go_type": "time.Time",
+          "options": [],
+          "type": {
+            "scalar": "string"
+          }
+        },
+        "head_branch": {
+          "go_type": "string",
+          "options": [
+            "omitempty"
+          ],
+          "type": {
+            "named": "string"
+          }
+        },
+        "head_sha": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "html_url": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "id": {
+          "go_type": "int64",
+          "options": [],
+          "type": {
+            "named": "int64"
+          }
+        },
+        "labels": {
+          "go_type": "[]string",
+          "options": [],
+          "type": {
+            "slice": {
+              "named": "string"
+            }
+          }
+        },
+        "name": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "run_attempt": {
+          "go_type": "int64",
+          "options": [],
+          "type": {
+            "named": "int64"
+          }
+        },
+        "run_id": {
+          "go_type": "int64",
+          "options": [],
+          "type": {
+            "named": "int64"
+          }
+        },
+        "run_url": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "runner_id": {
+          "go_type": "int64",
+          "options": [
+            "omitempty"
+          ],
+          "type": {
+            "named": "int64"
+          }
+        },
+        "runner_name": {
+          "go_type": "string",
+          "options": [
+            "omitempty"
+          ],
+          "type": {
+            "named": "string"
+          }
+        },
+        "started_at": {
+          "go_type": "time.Time",
+          "options": [],
+          "type": {
+            "scalar": "string"
+          }
+        },
+        "status": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "steps": {
+          "go_type": "[]*ActionWorkflowStep",
+          "options": [],
+          "type": {
+            "slice": {
+              "pointer": {
+                "named": "ActionWorkflowStep"
+              }
+            }
+          }
+        },
+        "url": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        }
+      },
+      "source": "repo_actions.go"
+    },
+    "ActionWorkflowRun": {
+      "fields": {
+        "actor": {
+          "go_type": "*User",
+          "options": [
+            "omitempty"
+          ],
+          "type": {
+            "pointer": {
+              "named": "User"
+            }
+          }
+        },
+        "artifacts_url": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "cancel_url": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "completed_at": {
+          "go_type": "time.Time",
+          "options": [],
+          "type": {
+            "scalar": "string"
+          }
+        },
+        "conclusion": {
+          "go_type": "string",
+          "options": [
+            "omitempty"
+          ],
+          "type": {
+            "named": "string"
+          }
+        },
+        "created_at": {
+          "go_type": "time.Time",
+          "options": [],
+          "type": {
+            "scalar": "string"
+          }
+        },
+        "display_title": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "event": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "head_branch": {
+          "go_type": "string",
+          "options": [
+            "omitempty"
+          ],
+          "type": {
+            "named": "string"
+          }
+        },
+        "head_repository": {
+          "go_type": "*Repository",
+          "options": [
+            "omitempty"
+          ],
+          "type": {
+            "pointer": {
+              "named": "Repository"
+            }
+          }
+        },
+        "head_sha": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "html_url": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "id": {
+          "go_type": "int64",
+          "options": [],
+          "type": {
+            "named": "int64"
+          }
+        },
+        "jobs_url": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "logs_url": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "path": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "previous_attempt_url": {
+          "go_type": "*string",
+          "options": [],
+          "type": {
+            "pointer": {
+              "named": "string"
+            }
+          }
+        },
+        "pull_requests": {
+          "go_type": "[]*PullRequestMinimal",
+          "options": [],
+          "type": {
+            "slice": {
+              "pointer": {
+                "named": "PullRequestMinimal"
+              }
+            }
+          }
+        },
+        "repository": {
+          "go_type": "*Repository",
+          "options": [
+            "omitempty"
+          ],
+          "type": {
+            "pointer": {
+              "named": "Repository"
+            }
+          }
+        },
+        "repository_id": {
+          "go_type": "int64",
+          "options": [
+            "omitempty"
+          ],
+          "type": {
+            "named": "int64"
+          }
+        },
+        "rerun_url": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "run_attempt": {
+          "go_type": "int64",
+          "options": [],
+          "type": {
+            "named": "int64"
+          }
+        },
+        "run_number": {
+          "go_type": "int64",
+          "options": [],
+          "type": {
+            "named": "int64"
+          }
+        },
+        "started_at": {
+          "go_type": "time.Time",
+          "options": [],
+          "type": {
+            "scalar": "string"
+          }
+        },
+        "status": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "trigger_actor": {
+          "go_type": "*User",
+          "options": [
+            "omitempty"
+          ],
+          "type": {
+            "pointer": {
+              "named": "User"
+            }
+          }
+        },
+        "updated_at": {
+          "go_type": "time.Time",
+          "options": [],
+          "type": {
+            "scalar": "string"
+          }
+        },
+        "url": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        }
+      },
+      "source": "repo_actions.go"
+    },
+    "ActionWorkflowStep": {
+      "fields": {
+        "completed_at": {
+          "go_type": "time.Time",
+          "options": [],
+          "type": {
+            "scalar": "string"
+          }
+        },
+        "conclusion": {
+          "go_type": "string",
+          "options": [
+            "omitempty"
+          ],
+          "type": {
+            "named": "string"
+          }
+        },
+        "name": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "number": {
+          "go_type": "int64",
+          "options": [],
+          "type": {
+            "named": "int64"
+          }
+        },
+        "started_at": {
+          "go_type": "time.Time",
+          "options": [],
+          "type": {
+            "scalar": "string"
+          }
+        },
+        "status": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        }
+      },
+      "source": "repo_actions.go"
+    },
+    "Attachment": {
+      "fields": {
+        "browser_download_url": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "created_at": {
+          "go_type": "time.Time",
+          "options": [],
+          "type": {
+            "scalar": "string"
+          }
+        },
+        "download_count": {
+          "go_type": "int64",
+          "options": [],
+          "type": {
+            "named": "int64"
+          }
+        },
+        "id": {
+          "go_type": "int64",
+          "options": [],
+          "type": {
+            "named": "int64"
+          }
+        },
+        "name": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "size": {
+          "go_type": "int64",
+          "options": [],
+          "type": {
+            "named": "int64"
+          }
+        },
+        "uuid": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        }
+      },
+      "source": "attachment.go"
+    },
+    "ChangesFromPayload": {
+      "fields": {
+        "from": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        }
+      },
+      "source": "hook.go"
+    },
+    "ChangesPayload": {
+      "fields": {
+        "added_labels": {
+          "go_type": "[]*Label",
+          "options": [],
+          "type": {
+            "slice": {
+              "pointer": {
+                "named": "Label"
+              }
+            }
+          }
+        },
+        "body": {
+          "go_type": "*ChangesFromPayload",
+          "options": [
+            "omitempty"
+          ],
+          "type": {
+            "pointer": {
+              "named": "ChangesFromPayload"
+            }
+          }
+        },
+        "name": {
+          "go_type": "*ChangesFromPayload",
+          "options": [
+            "omitempty"
+          ],
+          "type": {
+            "pointer": {
+              "named": "ChangesFromPayload"
+            }
+          }
+        },
+        "ref": {
+          "go_type": "*ChangesFromPayload",
+          "options": [
+            "omitempty"
+          ],
+          "type": {
+            "pointer": {
+              "named": "ChangesFromPayload"
+            }
+          }
+        },
+        "removed_labels": {
+          "go_type": "[]*Label",
+          "options": [],
+          "type": {
+            "slice": {
+              "pointer": {
+                "named": "Label"
+              }
+            }
+          }
+        },
+        "title": {
+          "go_type": "*ChangesFromPayload",
+          "options": [
+            "omitempty"
+          ],
+          "type": {
+            "pointer": {
+              "named": "ChangesFromPayload"
+            }
+          }
+        }
+      },
+      "source": "hook.go"
+    },
+    "Comment": {
+      "fields": {
+        "assets": {
+          "go_type": "[]*Attachment",
+          "options": [],
+          "type": {
+            "slice": {
+              "pointer": {
+                "named": "Attachment"
+              }
+            }
+          }
+        },
+        "body": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "created_at": {
+          "go_type": "time.Time",
+          "options": [],
+          "type": {
+            "scalar": "string"
+          }
+        },
+        "html_url": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "id": {
+          "go_type": "int64",
+          "options": [],
+          "type": {
+            "named": "int64"
+          }
+        },
+        "issue_url": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "original_author": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "original_author_id": {
+          "go_type": "int64",
+          "options": [],
+          "type": {
+            "named": "int64"
+          }
+        },
+        "pull_request_url": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "updated_at": {
+          "go_type": "time.Time",
+          "options": [],
+          "type": {
+            "scalar": "string"
+          }
+        },
+        "user": {
+          "go_type": "*User",
+          "options": [],
+          "type": {
+            "pointer": {
+              "named": "User"
+            }
+          }
+        }
+      },
+      "source": "issue_comment.go"
+    },
+    "CommitStatusPayload": {
+      "fields": {
+        "commit": {
+          "go_type": "*PayloadCommit",
+          "options": [],
+          "type": {
+            "pointer": {
+              "named": "PayloadCommit"
+            }
+          }
+        },
+        "context": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "created_at": {
+          "go_type": "time.Time",
+          "options": [],
+          "type": {
+            "scalar": "string"
+          }
+        },
+        "description": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "id": {
+          "go_type": "int64",
+          "options": [],
+          "type": {
+            "named": "int64"
+          }
+        },
+        "repository": {
+          "go_type": "*Repository",
+          "options": [],
+          "type": {
+            "pointer": {
+              "named": "Repository"
+            }
+          }
+        },
+        "sender": {
+          "go_type": "*User",
+          "options": [],
+          "type": {
+            "pointer": {
+              "named": "User"
+            }
+          }
+        },
+        "sha": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "state": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "target_url": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "updated_at": {
+          "go_type": "*time.Time",
+          "options": [],
+          "type": {
+            "pointer": {
+              "scalar": "string"
+            }
+          }
+        }
+      },
+      "source": "hook.go"
+    },
+    "CreatePayload": {
+      "fields": {
+        "ref": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "ref_type": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "repository": {
+          "go_type": "*Repository",
+          "options": [],
+          "type": {
+            "pointer": {
+              "named": "Repository"
+            }
+          }
+        },
+        "sender": {
+          "go_type": "*User",
+          "options": [],
+          "type": {
+            "pointer": {
+              "named": "User"
+            }
+          }
+        },
+        "sha": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        }
+      },
+      "source": "hook.go"
+    },
+    "DeletePayload": {
+      "fields": {
+        "pusher_type": {
+          "go_type": "PusherType",
+          "options": [],
+          "type": {
+            "named": "PusherType"
+          }
+        },
+        "ref": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "ref_type": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "repository": {
+          "go_type": "*Repository",
+          "options": [],
+          "type": {
+            "pointer": {
+              "named": "Repository"
+            }
+          }
+        },
+        "sender": {
+          "go_type": "*User",
+          "options": [],
+          "type": {
+            "pointer": {
+              "named": "User"
+            }
+          }
+        }
+      },
+      "source": "hook.go"
+    },
+    "ExternalTracker": {
+      "fields": {
+        "external_tracker_format": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "external_tracker_regexp_pattern": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "external_tracker_style": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "external_tracker_url": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        }
+      },
+      "source": "repo.go"
+    },
+    "ExternalWiki": {
+      "fields": {
+        "external_wiki_url": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        }
+      },
+      "source": "repo.go"
+    },
+    "ForkPayload": {
+      "fields": {
+        "forkee": {
+          "go_type": "*Repository",
+          "options": [],
+          "type": {
+            "pointer": {
+              "named": "Repository"
+            }
+          }
+        },
+        "repository": {
+          "go_type": "*Repository",
+          "options": [],
+          "type": {
+            "pointer": {
+              "named": "Repository"
+            }
+          }
+        },
+        "sender": {
+          "go_type": "*User",
+          "options": [],
+          "type": {
+            "pointer": {
+              "named": "User"
+            }
+          }
+        }
+      },
+      "source": "hook.go"
+    },
+    "HookIssueAction": {
+      "alias": {
+        "named": "string"
+      },
+      "source": "hook.go"
+    },
+    "HookIssueCommentAction": {
+      "alias": {
+        "named": "string"
+      },
+      "source": "hook.go"
+    },
+    "HookPackageAction": {
+      "alias": {
+        "named": "string"
+      },
+      "source": "hook.go"
+    },
+    "HookReleaseAction": {
+      "alias": {
+        "named": "string"
+      },
+      "source": "hook.go"
+    },
+    "HookRepoAction": {
+      "alias": {
+        "named": "string"
+      },
+      "source": "hook.go"
+    },
+    "HookWikiAction": {
+      "alias": {
+        "named": "string"
+      },
+      "source": "hook.go"
+    },
+    "InternalTracker": {
+      "fields": {
+        "allow_only_contributors_to_track_time": {
+          "go_type": "bool",
+          "options": [],
+          "type": {
+            "named": "bool"
+          }
+        },
+        "enable_issue_dependencies": {
+          "go_type": "bool",
+          "options": [],
+          "type": {
+            "named": "bool"
+          }
+        },
+        "enable_time_tracker": {
+          "go_type": "bool",
+          "options": [],
+          "type": {
+            "named": "bool"
+          }
+        }
+      },
+      "source": "repo.go"
+    },
+    "Issue": {
+      "fields": {
+        "assets": {
+          "go_type": "[]*Attachment",
+          "options": [],
+          "type": {
+            "slice": {
+              "pointer": {
+                "named": "Attachment"
+              }
+            }
+          }
+        },
+        "assignee": {
+          "go_type": "*User",
+          "options": [],
+          "type": {
+            "pointer": {
+              "named": "User"
+            }
+          }
+        },
+        "assignees": {
+          "go_type": "[]*User",
+          "options": [],
+          "type": {
+            "slice": {
+              "pointer": {
+                "named": "User"
+              }
+            }
+          }
+        },
+        "body": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "closed_at": {
+          "go_type": "*time.Time",
+          "options": [],
+          "type": {
+            "pointer": {
+              "scalar": "string"
+            }
+          }
+        },
+        "comments": {
+          "go_type": "int",
+          "options": [],
+          "type": {
+            "named": "int"
+          }
+        },
+        "content_version": {
+          "go_type": "int",
+          "options": [],
+          "type": {
+            "named": "int"
+          }
+        },
+        "created_at": {
+          "go_type": "time.Time",
+          "options": [],
+          "type": {
+            "scalar": "string"
+          }
+        },
+        "due_date": {
+          "go_type": "*time.Time",
+          "options": [],
+          "type": {
+            "pointer": {
+              "scalar": "string"
+            }
+          }
+        },
+        "html_url": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "id": {
+          "go_type": "int64",
+          "options": [],
+          "type": {
+            "named": "int64"
+          }
+        },
+        "is_locked": {
+          "go_type": "bool",
+          "options": [],
+          "type": {
+            "named": "bool"
+          }
+        },
+        "labels": {
+          "go_type": "[]*Label",
+          "options": [],
+          "type": {
+            "slice": {
+              "pointer": {
+                "named": "Label"
+              }
+            }
+          }
+        },
+        "milestone": {
+          "go_type": "*Milestone",
+          "options": [],
+          "type": {
+            "pointer": {
+              "named": "Milestone"
+            }
+          }
+        },
+        "number": {
+          "go_type": "int64",
+          "options": [],
+          "type": {
+            "named": "int64"
+          }
+        },
+        "original_author": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "original_author_id": {
+          "go_type": "int64",
+          "options": [],
+          "type": {
+            "named": "int64"
+          }
+        },
+        "pin_order": {
+          "go_type": "int",
+          "options": [],
+          "type": {
+            "named": "int"
+          }
+        },
+        "projects": {
+          "go_type": "[]*Project",
+          "options": [],
+          "type": {
+            "slice": {
+              "pointer": {
+                "named": "Project"
+              }
+            }
+          }
+        },
+        "pull_request": {
+          "go_type": "*PullRequestMeta",
+          "options": [],
+          "type": {
+            "pointer": {
+              "named": "PullRequestMeta"
+            }
+          }
+        },
+        "ref": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "repository": {
+          "go_type": "*RepositoryMeta",
+          "options": [],
+          "type": {
+            "pointer": {
+              "named": "RepositoryMeta"
+            }
+          }
+        },
+        "state": {
+          "go_type": "StateType",
+          "options": [],
+          "type": {
+            "named": "StateType"
+          }
+        },
+        "time_estimate": {
+          "go_type": "int64",
+          "options": [],
+          "type": {
+            "named": "int64"
+          }
+        },
+        "title": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "updated_at": {
+          "go_type": "time.Time",
+          "options": [],
+          "type": {
+            "scalar": "string"
+          }
+        },
+        "url": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "user": {
+          "go_type": "*User",
+          "options": [],
+          "type": {
+            "pointer": {
+              "named": "User"
+            }
+          }
+        }
+      },
+      "source": "issue.go"
+    },
+    "IssueCommentPayload": {
+      "fields": {
+        "action": {
+          "go_type": "HookIssueCommentAction",
+          "options": [],
+          "type": {
+            "named": "HookIssueCommentAction"
+          }
+        },
+        "changes": {
+          "go_type": "*ChangesPayload",
+          "options": [
+            "omitempty"
+          ],
+          "type": {
+            "pointer": {
+              "named": "ChangesPayload"
+            }
+          }
+        },
+        "comment": {
+          "go_type": "*Comment",
+          "options": [],
+          "type": {
+            "pointer": {
+              "named": "Comment"
+            }
+          }
+        },
+        "is_pull": {
+          "go_type": "bool",
+          "options": [],
+          "type": {
+            "named": "bool"
+          }
+        },
+        "issue": {
+          "go_type": "*Issue",
+          "options": [],
+          "type": {
+            "pointer": {
+              "named": "Issue"
+            }
+          }
+        },
+        "pull_request": {
+          "go_type": "*PullRequest",
+          "options": [
+            "omitempty"
+          ],
+          "type": {
+            "pointer": {
+              "named": "PullRequest"
+            }
+          }
+        },
+        "repository": {
+          "go_type": "*Repository",
+          "options": [],
+          "type": {
+            "pointer": {
+              "named": "Repository"
+            }
+          }
+        },
+        "sender": {
+          "go_type": "*User",
+          "options": [],
+          "type": {
+            "pointer": {
+              "named": "User"
+            }
+          }
+        }
+      },
+      "source": "hook.go"
+    },
+    "IssuePayload": {
+      "fields": {
+        "action": {
+          "go_type": "HookIssueAction",
+          "options": [],
+          "type": {
+            "named": "HookIssueAction"
+          }
+        },
+        "changes": {
+          "go_type": "*ChangesPayload",
+          "options": [
+            "omitempty"
+          ],
+          "type": {
+            "pointer": {
+              "named": "ChangesPayload"
+            }
+          }
+        },
+        "commit_id": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "issue": {
+          "go_type": "*Issue",
+          "options": [],
+          "type": {
+            "pointer": {
+              "named": "Issue"
+            }
+          }
+        },
+        "number": {
+          "go_type": "int64",
+          "options": [],
+          "type": {
+            "named": "int64"
+          }
+        },
+        "repository": {
+          "go_type": "*Repository",
+          "options": [],
+          "type": {
+            "pointer": {
+              "named": "Repository"
+            }
+          }
+        },
+        "sender": {
+          "go_type": "*User",
+          "options": [],
+          "type": {
+            "pointer": {
+              "named": "User"
+            }
+          }
+        }
+      },
+      "source": "hook.go"
+    },
+    "Label": {
+      "fields": {
+        "color": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "description": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "exclusive": {
+          "go_type": "bool",
+          "options": [],
+          "type": {
+            "named": "bool"
+          }
+        },
+        "id": {
+          "go_type": "int64",
+          "options": [],
+          "type": {
+            "named": "int64"
+          }
+        },
+        "is_archived": {
+          "go_type": "bool",
+          "options": [],
+          "type": {
+            "named": "bool"
+          }
+        },
+        "name": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "url": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        }
+      },
+      "source": "issue_label.go"
+    },
+    "Milestone": {
+      "fields": {
+        "closed_at": {
+          "go_type": "*time.Time",
+          "options": [],
+          "type": {
+            "pointer": {
+              "scalar": "string"
+            }
+          }
+        },
+        "closed_issues": {
+          "go_type": "int",
+          "options": [],
+          "type": {
+            "named": "int"
+          }
+        },
+        "created_at": {
+          "go_type": "time.Time",
+          "options": [],
+          "type": {
+            "scalar": "string"
+          }
+        },
+        "description": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "due_on": {
+          "go_type": "*time.Time",
+          "options": [],
+          "type": {
+            "pointer": {
+              "scalar": "string"
+            }
+          }
+        },
+        "id": {
+          "go_type": "int64",
+          "options": [],
+          "type": {
+            "named": "int64"
+          }
+        },
+        "open_issues": {
+          "go_type": "int",
+          "options": [],
+          "type": {
+            "named": "int"
+          }
+        },
+        "state": {
+          "go_type": "StateType",
+          "options": [],
+          "type": {
+            "named": "StateType"
+          }
+        },
+        "title": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "updated_at": {
+          "go_type": "*time.Time",
+          "options": [],
+          "type": {
+            "pointer": {
+              "scalar": "string"
+            }
+          }
+        }
+      },
+      "source": "issue_milestone.go"
+    },
+    "ObjectFormatName": {
+      "alias": {
+        "named": "string"
+      },
+      "source": "repo.go"
+    },
+    "Organization": {
+      "fields": {
+        "avatar_url": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "description": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "email": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "full_name": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "id": {
+          "go_type": "int64",
+          "options": [],
+          "type": {
+            "named": "int64"
+          }
+        },
+        "location": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "name": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "repo_admin_change_team_access": {
+          "go_type": "bool",
+          "options": [],
+          "type": {
+            "named": "bool"
+          }
+        },
+        "username": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "visibility": {
+          "go_type": "VisibilityString",
+          "options": [],
+          "type": {
+            "named": "VisibilityString"
+          }
+        },
+        "website": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        }
+      },
+      "source": "org.go"
+    },
+    "PRBranchInfo": {
+      "fields": {
+        "label": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "ref": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "repo": {
+          "go_type": "*Repository",
+          "options": [],
+          "type": {
+            "pointer": {
+              "named": "Repository"
+            }
+          }
+        },
+        "repo_id": {
+          "go_type": "int64",
+          "options": [],
+          "type": {
+            "named": "int64"
+          }
+        },
+        "sha": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        }
+      },
+      "source": "pull.go"
+    },
+    "Package": {
+      "fields": {
+        "created_at": {
+          "go_type": "time.Time",
+          "options": [],
+          "type": {
+            "scalar": "string"
+          }
+        },
+        "creator": {
+          "go_type": "*User",
+          "options": [],
+          "type": {
+            "pointer": {
+              "named": "User"
+            }
+          }
+        },
+        "html_url": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "id": {
+          "go_type": "int64",
+          "options": [],
+          "type": {
+            "named": "int64"
+          }
+        },
+        "name": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "owner": {
+          "go_type": "*User",
+          "options": [],
+          "type": {
+            "pointer": {
+              "named": "User"
+            }
+          }
+        },
+        "repository": {
+          "go_type": "*Repository",
+          "options": [],
+          "type": {
+            "pointer": {
+              "named": "Repository"
+            }
+          }
+        },
+        "type": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "version": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        }
+      },
+      "source": "package.go"
+    },
+    "PackagePayload": {
+      "fields": {
+        "action": {
+          "go_type": "HookPackageAction",
+          "options": [],
+          "type": {
+            "named": "HookPackageAction"
+          }
+        },
+        "organization": {
+          "go_type": "*Organization",
+          "options": [],
+          "type": {
+            "pointer": {
+              "named": "Organization"
+            }
+          }
+        },
+        "package": {
+          "go_type": "*Package",
+          "options": [],
+          "type": {
+            "pointer": {
+              "named": "Package"
+            }
+          }
+        },
+        "repository": {
+          "go_type": "*Repository",
+          "options": [],
+          "type": {
+            "pointer": {
+              "named": "Repository"
+            }
+          }
+        },
+        "sender": {
+          "go_type": "*User",
+          "options": [],
+          "type": {
+            "pointer": {
+              "named": "User"
+            }
+          }
+        }
+      },
+      "source": "hook.go"
+    },
+    "PayloadCommit": {
+      "fields": {
+        "added": {
+          "go_type": "[]string",
+          "options": [],
+          "type": {
+            "slice": {
+              "named": "string"
+            }
+          }
+        },
+        "author": {
+          "go_type": "*PayloadUser",
+          "options": [],
+          "type": {
+            "pointer": {
+              "named": "PayloadUser"
+            }
+          }
+        },
+        "committer": {
+          "go_type": "*PayloadUser",
+          "options": [],
+          "type": {
+            "pointer": {
+              "named": "PayloadUser"
+            }
+          }
+        },
+        "id": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "message": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "modified": {
+          "go_type": "[]string",
+          "options": [],
+          "type": {
+            "slice": {
+              "named": "string"
+            }
+          }
+        },
+        "removed": {
+          "go_type": "[]string",
+          "options": [],
+          "type": {
+            "slice": {
+              "named": "string"
+            }
+          }
+        },
+        "timestamp": {
+          "go_type": "time.Time",
+          "options": [],
+          "type": {
+            "scalar": "string"
+          }
+        },
+        "url": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "verification": {
+          "go_type": "*PayloadCommitVerification",
+          "options": [],
+          "type": {
+            "pointer": {
+              "named": "PayloadCommitVerification"
+            }
+          }
+        }
+      },
+      "source": "hook.go"
+    },
+    "PayloadCommitVerification": {
+      "fields": {
+        "payload": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "reason": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "signature": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "signer": {
+          "go_type": "*PayloadUser",
+          "options": [],
+          "type": {
+            "pointer": {
+              "named": "PayloadUser"
+            }
+          }
+        },
+        "verified": {
+          "go_type": "bool",
+          "options": [],
+          "type": {
+            "named": "bool"
+          }
+        }
+      },
+      "source": "hook.go"
+    },
+    "PayloadUser": {
+      "fields": {
+        "email": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "name": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "username": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        }
+      },
+      "source": "hook.go"
+    },
+    "Permission": {
+      "fields": {
+        "admin": {
+          "go_type": "bool",
+          "options": [],
+          "type": {
+            "named": "bool"
+          }
+        },
+        "pull": {
+          "go_type": "bool",
+          "options": [],
+          "type": {
+            "named": "bool"
+          }
+        },
+        "push": {
+          "go_type": "bool",
+          "options": [],
+          "type": {
+            "named": "bool"
+          }
+        }
+      },
+      "source": "repo.go"
+    },
+    "Project": {
+      "fields": {
+        "card_type": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "closed_at": {
+          "go_type": "*time.Time",
+          "options": [
+            "omitempty"
+          ],
+          "type": {
+            "pointer": {
+              "scalar": "string"
+            }
+          }
+        },
+        "created_at": {
+          "go_type": "time.Time",
+          "options": [],
+          "type": {
+            "scalar": "string"
+          }
+        },
+        "creator": {
+          "go_type": "*User",
+          "options": [
+            "omitempty"
+          ],
+          "type": {
+            "pointer": {
+              "named": "User"
+            }
+          }
+        },
+        "creator_id": {
+          "go_type": "int64",
+          "options": [],
+          "type": {
+            "named": "int64"
+          }
+        },
+        "description": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "html_url": {
+          "go_type": "string",
+          "options": [
+            "omitempty"
+          ],
+          "type": {
+            "named": "string"
+          }
+        },
+        "id": {
+          "go_type": "int64",
+          "options": [],
+          "type": {
+            "named": "int64"
+          }
+        },
+        "is_closed": {
+          "go_type": "bool",
+          "options": [],
+          "type": {
+            "named": "bool"
+          }
+        },
+        "num_closed_issues": {
+          "go_type": "int64",
+          "options": [],
+          "type": {
+            "named": "int64"
+          }
+        },
+        "num_issues": {
+          "go_type": "int64",
+          "options": [],
+          "type": {
+            "named": "int64"
+          }
+        },
+        "num_open_issues": {
+          "go_type": "int64",
+          "options": [],
+          "type": {
+            "named": "int64"
+          }
+        },
+        "owner_id": {
+          "go_type": "int64",
+          "options": [],
+          "type": {
+            "named": "int64"
+          }
+        },
+        "repo_id": {
+          "go_type": "int64",
+          "options": [],
+          "type": {
+            "named": "int64"
+          }
+        },
+        "state": {
+          "go_type": "StateType",
+          "options": [],
+          "type": {
+            "named": "StateType"
+          }
+        },
+        "template_type": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "title": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "type": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "updated_at": {
+          "go_type": "*time.Time",
+          "options": [
+            "omitempty"
+          ],
+          "type": {
+            "pointer": {
+              "scalar": "string"
+            }
+          }
+        }
+      },
+      "source": "project.go"
+    },
+    "PullRequest": {
+      "fields": {
+        "additions": {
+          "go_type": "*int",
+          "options": [
+            "omitempty"
+          ],
+          "type": {
+            "pointer": {
+              "named": "int"
+            }
+          }
+        },
+        "allow_maintainer_edit": {
+          "go_type": "bool",
+          "options": [],
+          "type": {
+            "named": "bool"
+          }
+        },
+        "assignee": {
+          "go_type": "*User",
+          "options": [],
+          "type": {
+            "pointer": {
+              "named": "User"
+            }
+          }
+        },
+        "assignees": {
+          "go_type": "[]*User",
+          "options": [],
+          "type": {
+            "slice": {
+              "pointer": {
+                "named": "User"
+              }
+            }
+          }
+        },
+        "base": {
+          "go_type": "*PRBranchInfo",
+          "options": [],
+          "type": {
+            "pointer": {
+              "named": "PRBranchInfo"
+            }
+          }
+        },
+        "body": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "changed_files": {
+          "go_type": "*int",
+          "options": [
+            "omitempty"
+          ],
+          "type": {
+            "pointer": {
+              "named": "int"
+            }
+          }
+        },
+        "closed_at": {
+          "go_type": "*time.Time",
+          "options": [],
+          "type": {
+            "pointer": {
+              "scalar": "string"
+            }
+          }
+        },
+        "comments": {
+          "go_type": "int",
+          "options": [],
+          "type": {
+            "named": "int"
+          }
+        },
+        "content_version": {
+          "go_type": "int",
+          "options": [],
+          "type": {
+            "named": "int"
+          }
+        },
+        "created_at": {
+          "go_type": "*time.Time",
+          "options": [],
+          "type": {
+            "pointer": {
+              "scalar": "string"
+            }
+          }
+        },
+        "deletions": {
+          "go_type": "*int",
+          "options": [
+            "omitempty"
+          ],
+          "type": {
+            "pointer": {
+              "named": "int"
+            }
+          }
+        },
+        "diff_url": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "draft": {
+          "go_type": "bool",
+          "options": [],
+          "type": {
+            "named": "bool"
+          }
+        },
+        "due_date": {
+          "go_type": "*time.Time",
+          "options": [],
+          "type": {
+            "pointer": {
+              "scalar": "string"
+            }
+          }
+        },
+        "head": {
+          "go_type": "*PRBranchInfo",
+          "options": [],
+          "type": {
+            "pointer": {
+              "named": "PRBranchInfo"
+            }
+          }
+        },
+        "html_url": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "id": {
+          "go_type": "int64",
+          "options": [],
+          "type": {
+            "named": "int64"
+          }
+        },
+        "is_locked": {
+          "go_type": "bool",
+          "options": [],
+          "type": {
+            "named": "bool"
+          }
+        },
+        "labels": {
+          "go_type": "[]*Label",
+          "options": [],
+          "type": {
+            "slice": {
+              "pointer": {
+                "named": "Label"
+              }
+            }
+          }
+        },
+        "merge_base": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "merge_commit_sha": {
+          "go_type": "*string",
+          "options": [],
+          "type": {
+            "pointer": {
+              "named": "string"
+            }
+          }
+        },
+        "mergeable": {
+          "go_type": "bool",
+          "options": [],
+          "type": {
+            "named": "bool"
+          }
+        },
+        "merged": {
+          "go_type": "bool",
+          "options": [],
+          "type": {
+            "named": "bool"
+          }
+        },
+        "merged_at": {
+          "go_type": "*time.Time",
+          "options": [],
+          "type": {
+            "pointer": {
+              "scalar": "string"
+            }
+          }
+        },
+        "merged_by": {
+          "go_type": "*User",
+          "options": [],
+          "type": {
+            "pointer": {
+              "named": "User"
+            }
+          }
+        },
+        "milestone": {
+          "go_type": "*Milestone",
+          "options": [],
+          "type": {
+            "pointer": {
+              "named": "Milestone"
+            }
+          }
+        },
+        "number": {
+          "go_type": "int64",
+          "options": [],
+          "type": {
+            "named": "int64"
+          }
+        },
+        "patch_url": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "pin_order": {
+          "go_type": "int",
+          "options": [],
+          "type": {
+            "named": "int"
+          }
+        },
+        "requested_reviewers": {
+          "go_type": "[]*User",
+          "options": [],
+          "type": {
+            "slice": {
+              "pointer": {
+                "named": "User"
+              }
+            }
+          }
+        },
+        "requested_reviewers_teams": {
+          "go_type": "[]*Team",
+          "options": [],
+          "type": {
+            "slice": {
+              "pointer": {
+                "named": "Team"
+              }
+            }
+          }
+        },
+        "review_comments": {
+          "go_type": "int",
+          "options": [
+            "omitempty"
+          ],
+          "type": {
+            "named": "int"
+          }
+        },
+        "state": {
+          "go_type": "StateType",
+          "options": [],
+          "type": {
+            "named": "StateType"
+          }
+        },
+        "title": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "updated_at": {
+          "go_type": "*time.Time",
+          "options": [],
+          "type": {
+            "pointer": {
+              "scalar": "string"
+            }
+          }
+        },
+        "url": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "user": {
+          "go_type": "*User",
+          "options": [],
+          "type": {
+            "pointer": {
+              "named": "User"
+            }
+          }
+        }
+      },
+      "source": "pull.go"
+    },
+    "PullRequestMeta": {
+      "fields": {
+        "draft": {
+          "go_type": "bool",
+          "options": [],
+          "type": {
+            "named": "bool"
+          }
+        },
+        "html_url": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "merged": {
+          "go_type": "bool",
+          "options": [],
+          "type": {
+            "named": "bool"
+          }
+        },
+        "merged_at": {
+          "go_type": "*time.Time",
+          "options": [],
+          "type": {
+            "pointer": {
+              "scalar": "string"
+            }
+          }
+        }
+      },
+      "source": "issue.go"
+    },
+    "PullRequestMinimal": {
+      "fields": {
+        "base": {
+          "go_type": "PullRequestMinimalHead",
+          "options": [],
+          "type": {
+            "named": "PullRequestMinimalHead"
+          }
+        },
+        "head": {
+          "go_type": "PullRequestMinimalHead",
+          "options": [],
+          "type": {
+            "named": "PullRequestMinimalHead"
+          }
+        },
+        "id": {
+          "go_type": "int64",
+          "options": [],
+          "type": {
+            "named": "int64"
+          }
+        },
+        "number": {
+          "go_type": "int64",
+          "options": [],
+          "type": {
+            "named": "int64"
+          }
+        },
+        "url": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        }
+      },
+      "source": "repo_actions.go"
+    },
+    "PullRequestMinimalHead": {
+      "fields": {
+        "ref": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "repo": {
+          "go_type": "PullRequestMinimalHeadRepo",
+          "options": [],
+          "type": {
+            "named": "PullRequestMinimalHeadRepo"
+          }
+        },
+        "sha": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        }
+      },
+      "source": "repo_actions.go"
+    },
+    "PullRequestMinimalHeadRepo": {
+      "fields": {
+        "id": {
+          "go_type": "int64",
+          "options": [],
+          "type": {
+            "named": "int64"
+          }
+        },
+        "name": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "url": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        }
+      },
+      "source": "repo_actions.go"
+    },
+    "PullRequestPayload": {
+      "fields": {
+        "action": {
+          "go_type": "HookIssueAction",
+          "options": [],
+          "type": {
+            "named": "HookIssueAction"
+          }
+        },
+        "after": {
+          "go_type": "string",
+          "options": [
+            "omitempty"
+          ],
+          "type": {
+            "named": "string"
+          }
+        },
+        "before": {
+          "go_type": "string",
+          "options": [
+            "omitempty"
+          ],
+          "type": {
+            "named": "string"
+          }
+        },
+        "changes": {
+          "go_type": "*ChangesPayload",
+          "options": [
+            "omitempty"
+          ],
+          "type": {
+            "pointer": {
+              "named": "ChangesPayload"
+            }
+          }
+        },
+        "commit_id": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "number": {
+          "go_type": "int64",
+          "options": [],
+          "type": {
+            "named": "int64"
+          }
+        },
+        "pull_request": {
+          "go_type": "*PullRequest",
+          "options": [],
+          "type": {
+            "pointer": {
+              "named": "PullRequest"
+            }
+          }
+        },
+        "repository": {
+          "go_type": "*Repository",
+          "options": [],
+          "type": {
+            "pointer": {
+              "named": "Repository"
+            }
+          }
+        },
+        "requested_reviewer": {
+          "go_type": "*User",
+          "options": [],
+          "type": {
+            "pointer": {
+              "named": "User"
+            }
+          }
+        },
+        "review": {
+          "go_type": "*ReviewPayload",
+          "options": [],
+          "type": {
+            "pointer": {
+              "named": "ReviewPayload"
+            }
+          }
+        },
+        "sender": {
+          "go_type": "*User",
+          "options": [],
+          "type": {
+            "pointer": {
+              "named": "User"
+            }
+          }
+        }
+      },
+      "source": "hook.go"
+    },
+    "PushPayload": {
+      "fields": {
+        "after": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "before": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "commits": {
+          "go_type": "[]*PayloadCommit",
+          "options": [],
+          "type": {
+            "slice": {
+              "pointer": {
+                "named": "PayloadCommit"
+              }
+            }
+          }
+        },
+        "compare_url": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "head_commit": {
+          "go_type": "*PayloadCommit",
+          "options": [],
+          "type": {
+            "pointer": {
+              "named": "PayloadCommit"
+            }
+          }
+        },
+        "pusher": {
+          "go_type": "*User",
+          "options": [],
+          "type": {
+            "pointer": {
+              "named": "User"
+            }
+          }
+        },
+        "ref": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "repository": {
+          "go_type": "*Repository",
+          "options": [],
+          "type": {
+            "pointer": {
+              "named": "Repository"
+            }
+          }
+        },
+        "sender": {
+          "go_type": "*User",
+          "options": [],
+          "type": {
+            "pointer": {
+              "named": "User"
+            }
+          }
+        },
+        "total_commits": {
+          "go_type": "int",
+          "options": [],
+          "type": {
+            "named": "int"
+          }
+        }
+      },
+      "source": "hook.go"
+    },
+    "PusherType": {
+      "alias": {
+        "named": "string"
+      },
+      "source": "hook.go"
+    },
+    "Release": {
+      "fields": {
+        "assets": {
+          "go_type": "[]*Attachment",
+          "options": [],
+          "type": {
+            "slice": {
+              "pointer": {
+                "named": "Attachment"
+              }
+            }
+          }
+        },
+        "author": {
+          "go_type": "*User",
+          "options": [],
+          "type": {
+            "pointer": {
+              "named": "User"
+            }
+          }
+        },
+        "body": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "created_at": {
+          "go_type": "time.Time",
+          "options": [],
+          "type": {
+            "scalar": "string"
+          }
+        },
+        "draft": {
+          "go_type": "bool",
+          "options": [],
+          "type": {
+            "named": "bool"
+          }
+        },
+        "html_url": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "id": {
+          "go_type": "int64",
+          "options": [],
+          "type": {
+            "named": "int64"
+          }
+        },
+        "name": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "prerelease": {
+          "go_type": "bool",
+          "options": [],
+          "type": {
+            "named": "bool"
+          }
+        },
+        "published_at": {
+          "go_type": "*time.Time",
+          "options": [],
+          "type": {
+            "pointer": {
+              "scalar": "string"
+            }
+          }
+        },
+        "tag_name": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "tarball_url": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "target_commitish": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "upload_url": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "url": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "zipball_url": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        }
+      },
+      "source": "release.go"
+    },
+    "ReleasePayload": {
+      "fields": {
+        "action": {
+          "go_type": "HookReleaseAction",
+          "options": [],
+          "type": {
+            "named": "HookReleaseAction"
+          }
+        },
+        "release": {
+          "go_type": "*Release",
+          "options": [],
+          "type": {
+            "pointer": {
+              "named": "Release"
+            }
+          }
+        },
+        "repository": {
+          "go_type": "*Repository",
+          "options": [],
+          "type": {
+            "pointer": {
+              "named": "Repository"
+            }
+          }
+        },
+        "sender": {
+          "go_type": "*User",
+          "options": [],
+          "type": {
+            "pointer": {
+              "named": "User"
+            }
+          }
+        }
+      },
+      "source": "hook.go"
+    },
+    "RepoTransfer": {
+      "fields": {
+        "doer": {
+          "go_type": "*User",
+          "options": [],
+          "type": {
+            "pointer": {
+              "named": "User"
+            }
+          }
+        },
+        "recipient": {
+          "go_type": "*User",
+          "options": [],
+          "type": {
+            "pointer": {
+              "named": "User"
+            }
+          }
+        },
+        "teams": {
+          "go_type": "[]*Team",
+          "options": [],
+          "type": {
+            "slice": {
+              "pointer": {
+                "named": "Team"
+              }
+            }
+          }
+        }
+      },
+      "source": "repo.go"
+    },
+    "Repository": {
+      "fields": {
+        "allow_fast_forward_only_merge": {
+          "go_type": "bool",
+          "options": [],
+          "type": {
+            "named": "bool"
+          }
+        },
+        "allow_manual_merge": {
+          "go_type": "bool",
+          "options": [],
+          "type": {
+            "named": "bool"
+          }
+        },
+        "allow_merge_commits": {
+          "go_type": "bool",
+          "options": [],
+          "type": {
+            "named": "bool"
+          }
+        },
+        "allow_merge_update": {
+          "go_type": "bool",
+          "options": [],
+          "type": {
+            "named": "bool"
+          }
+        },
+        "allow_rebase": {
+          "go_type": "bool",
+          "options": [],
+          "type": {
+            "named": "bool"
+          }
+        },
+        "allow_rebase_explicit": {
+          "go_type": "bool",
+          "options": [],
+          "type": {
+            "named": "bool"
+          }
+        },
+        "allow_rebase_update": {
+          "go_type": "bool",
+          "options": [],
+          "type": {
+            "named": "bool"
+          }
+        },
+        "allow_squash_merge": {
+          "go_type": "bool",
+          "options": [],
+          "type": {
+            "named": "bool"
+          }
+        },
+        "archived": {
+          "go_type": "bool",
+          "options": [],
+          "type": {
+            "named": "bool"
+          }
+        },
+        "archived_at": {
+          "go_type": "time.Time",
+          "options": [],
+          "type": {
+            "scalar": "string"
+          }
+        },
+        "autodetect_manual_merge": {
+          "go_type": "bool",
+          "options": [],
+          "type": {
+            "named": "bool"
+          }
+        },
+        "avatar_url": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "branch_count": {
+          "go_type": "int",
+          "options": [],
+          "type": {
+            "named": "int"
+          }
+        },
+        "clone_url": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "created_at": {
+          "go_type": "time.Time",
+          "options": [],
+          "type": {
+            "scalar": "string"
+          }
+        },
+        "default_allow_maintainer_edit": {
+          "go_type": "bool",
+          "options": [],
+          "type": {
+            "named": "bool"
+          }
+        },
+        "default_branch": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "default_delete_branch_after_merge": {
+          "go_type": "bool",
+          "options": [],
+          "type": {
+            "named": "bool"
+          }
+        },
+        "default_merge_style": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "default_target_branch": {
+          "go_type": "string",
+          "options": [
+            "omitempty"
+          ],
+          "type": {
+            "named": "string"
+          }
+        },
+        "default_update_style": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "description": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "empty": {
+          "go_type": "bool",
+          "options": [],
+          "type": {
+            "named": "bool"
+          }
+        },
+        "external_tracker": {
+          "go_type": "*ExternalTracker",
+          "options": [
+            "omitempty"
+          ],
+          "type": {
+            "pointer": {
+              "named": "ExternalTracker"
+            }
+          }
+        },
+        "external_wiki": {
+          "go_type": "*ExternalWiki",
+          "options": [
+            "omitempty"
+          ],
+          "type": {
+            "pointer": {
+              "named": "ExternalWiki"
+            }
+          }
+        },
+        "fork": {
+          "go_type": "bool",
+          "options": [],
+          "type": {
+            "named": "bool"
+          }
+        },
+        "forks_count": {
+          "go_type": "int",
+          "options": [],
+          "type": {
+            "named": "int"
+          }
+        },
+        "full_name": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "has_actions": {
+          "go_type": "bool",
+          "options": [],
+          "type": {
+            "named": "bool"
+          }
+        },
+        "has_code": {
+          "go_type": "bool",
+          "options": [],
+          "type": {
+            "named": "bool"
+          }
+        },
+        "has_issues": {
+          "go_type": "bool",
+          "options": [],
+          "type": {
+            "named": "bool"
+          }
+        },
+        "has_packages": {
+          "go_type": "bool",
+          "options": [],
+          "type": {
+            "named": "bool"
+          }
+        },
+        "has_projects": {
+          "go_type": "bool",
+          "options": [],
+          "type": {
+            "named": "bool"
+          }
+        },
+        "has_pull_requests": {
+          "go_type": "bool",
+          "options": [],
+          "type": {
+            "named": "bool"
+          }
+        },
+        "has_releases": {
+          "go_type": "bool",
+          "options": [],
+          "type": {
+            "named": "bool"
+          }
+        },
+        "has_wiki": {
+          "go_type": "bool",
+          "options": [],
+          "type": {
+            "named": "bool"
+          }
+        },
+        "html_url": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "id": {
+          "go_type": "int64",
+          "options": [],
+          "type": {
+            "named": "int64"
+          }
+        },
+        "ignore_whitespace_conflicts": {
+          "go_type": "bool",
+          "options": [],
+          "type": {
+            "named": "bool"
+          }
+        },
+        "internal": {
+          "go_type": "bool",
+          "options": [],
+          "type": {
+            "named": "bool"
+          }
+        },
+        "internal_tracker": {
+          "go_type": "*InternalTracker",
+          "options": [
+            "omitempty"
+          ],
+          "type": {
+            "pointer": {
+              "named": "InternalTracker"
+            }
+          }
+        },
+        "language": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "languages_url": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "licenses": {
+          "go_type": "[]string",
+          "options": [],
+          "type": {
+            "slice": {
+              "named": "string"
+            }
+          }
+        },
+        "link": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "mirror": {
+          "go_type": "bool",
+          "options": [],
+          "type": {
+            "named": "bool"
+          }
+        },
+        "mirror_interval": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "mirror_last_sync_at": {
+          "go_type": "time.Time",
+          "options": [],
+          "type": {
+            "scalar": "string"
+          }
+        },
+        "mirror_updated": {
+          "go_type": "time.Time",
+          "options": [],
+          "type": {
+            "scalar": "string"
+          }
+        },
+        "name": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "object_format_name": {
+          "go_type": "ObjectFormatName",
+          "options": [],
+          "type": {
+            "named": "ObjectFormatName"
+          }
+        },
+        "open_issues_count": {
+          "go_type": "int",
+          "options": [],
+          "type": {
+            "named": "int"
+          }
+        },
+        "open_pr_counter": {
+          "go_type": "int",
+          "options": [],
+          "type": {
+            "named": "int"
+          }
+        },
+        "original_url": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "owner": {
+          "go_type": "*User",
+          "options": [],
+          "type": {
+            "pointer": {
+              "named": "User"
+            }
+          }
+        },
+        "parent": {
+          "go_type": "*Repository",
+          "options": [
+            "omitempty"
+          ],
+          "type": {
+            "pointer": {
+              "named": "Repository"
+            }
+          }
+        },
+        "permissions": {
+          "go_type": "*Permission",
+          "options": [
+            "omitempty"
+          ],
+          "type": {
+            "pointer": {
+              "named": "Permission"
+            }
+          }
+        },
+        "private": {
+          "go_type": "bool",
+          "options": [],
+          "type": {
+            "named": "bool"
+          }
+        },
+        "projects_mode": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "release_counter": {
+          "go_type": "int",
+          "options": [],
+          "type": {
+            "named": "int"
+          }
+        },
+        "repo_transfer": {
+          "go_type": "*RepoTransfer",
+          "options": [
+            "omitempty"
+          ],
+          "type": {
+            "pointer": {
+              "named": "RepoTransfer"
+            }
+          }
+        },
+        "size": {
+          "go_type": "int",
+          "options": [],
+          "type": {
+            "named": "int"
+          }
+        },
+        "ssh_url": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "stars_count": {
+          "go_type": "int",
+          "options": [],
+          "type": {
+            "named": "int"
+          }
+        },
+        "template": {
+          "go_type": "bool",
+          "options": [],
+          "type": {
+            "named": "bool"
+          }
+        },
+        "topics": {
+          "go_type": "[]string",
+          "options": [],
+          "type": {
+            "slice": {
+              "named": "string"
+            }
+          }
+        },
+        "updated_at": {
+          "go_type": "time.Time",
+          "options": [],
+          "type": {
+            "scalar": "string"
+          }
+        },
+        "url": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "watchers_count": {
+          "go_type": "int",
+          "options": [],
+          "type": {
+            "named": "int"
+          }
+        },
+        "website": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        }
+      },
+      "source": "repo.go"
+    },
+    "RepositoryMeta": {
+      "fields": {
+        "full_name": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "id": {
+          "go_type": "int64",
+          "options": [],
+          "type": {
+            "named": "int64"
+          }
+        },
+        "name": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "owner": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        }
+      },
+      "source": "issue.go"
+    },
+    "RepositoryPayload": {
+      "fields": {
+        "action": {
+          "go_type": "HookRepoAction",
+          "options": [],
+          "type": {
+            "named": "HookRepoAction"
+          }
+        },
+        "changes": {
+          "go_type": "*ChangesPayload",
+          "options": [
+            "omitempty"
+          ],
+          "type": {
+            "pointer": {
+              "named": "ChangesPayload"
+            }
+          }
+        },
+        "organization": {
+          "go_type": "*User",
+          "options": [],
+          "type": {
+            "pointer": {
+              "named": "User"
+            }
+          }
+        },
+        "repository": {
+          "go_type": "*Repository",
+          "options": [],
+          "type": {
+            "pointer": {
+              "named": "Repository"
+            }
+          }
+        },
+        "sender": {
+          "go_type": "*User",
+          "options": [],
+          "type": {
+            "pointer": {
+              "named": "User"
+            }
+          }
+        }
+      },
+      "source": "hook.go"
+    },
+    "ReviewPayload": {
+      "fields": {
+        "content": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "type": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        }
+      },
+      "source": "hook.go"
+    },
+    "StateType": {
+      "alias": {
+        "named": "string"
+      },
+      "source": "issue.go"
+    },
+    "Team": {
+      "fields": {
+        "can_create_org_repo": {
+          "go_type": "bool",
+          "options": [],
+          "type": {
+            "named": "bool"
+          }
+        },
+        "description": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "id": {
+          "go_type": "int64",
+          "options": [],
+          "type": {
+            "named": "int64"
+          }
+        },
+        "includes_all_repositories": {
+          "go_type": "bool",
+          "options": [],
+          "type": {
+            "named": "bool"
+          }
+        },
+        "name": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "organization": {
+          "go_type": "*Organization",
+          "options": [],
+          "type": {
+            "pointer": {
+              "named": "Organization"
+            }
+          }
+        },
+        "permission": {
+          "go_type": "AccessLevelName",
+          "options": [],
+          "type": {
+            "named": "AccessLevelName"
+          }
+        },
+        "units": {
+          "go_type": "[]string",
+          "options": [],
+          "type": {
+            "slice": {
+              "named": "string"
+            }
+          }
+        },
+        "units_map": {
+          "go_type": "map[string]string",
+          "options": [],
+          "type": {
+            "map": {
+              "named": "string"
+            }
+          }
+        },
+        "visibility": {
+          "go_type": "TeamVisibility",
+          "options": [],
+          "type": {
+            "named": "TeamVisibility"
+          }
+        }
+      },
+      "source": "org_team.go"
+    },
+    "TeamVisibility": {
+      "alias": {
+        "named": "string"
+      },
+      "source": "org_team.go"
+    },
+    "User": {
+      "fields": {
+        "active": {
+          "go_type": "bool",
+          "options": [],
+          "type": {
+            "named": "bool"
+          }
+        },
+        "avatar_url": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "created": {
+          "go_type": "time.Time",
+          "options": [],
+          "type": {
+            "scalar": "string"
+          }
+        },
+        "description": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "email": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "followers_count": {
+          "go_type": "int",
+          "options": [],
+          "type": {
+            "named": "int"
+          }
+        },
+        "following_count": {
+          "go_type": "int",
+          "options": [],
+          "type": {
+            "named": "int"
+          }
+        },
+        "full_name": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "html_url": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "id": {
+          "go_type": "int64",
+          "options": [],
+          "type": {
+            "named": "int64"
+          }
+        },
+        "is_admin": {
+          "go_type": "bool",
+          "options": [],
+          "type": {
+            "named": "bool"
+          }
+        },
+        "language": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "last_login": {
+          "go_type": "time.Time",
+          "options": [],
+          "type": {
+            "scalar": "string"
+          }
+        },
+        "location": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "login": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "login_name": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "prohibit_login": {
+          "go_type": "bool",
+          "options": [],
+          "type": {
+            "named": "bool"
+          }
+        },
+        "restricted": {
+          "go_type": "bool",
+          "options": [],
+          "type": {
+            "named": "bool"
+          }
+        },
+        "source_id": {
+          "go_type": "int64",
+          "options": [],
+          "type": {
+            "named": "int64"
+          }
+        },
+        "starred_repos_count": {
+          "go_type": "int",
+          "options": [],
+          "type": {
+            "named": "int"
+          }
+        },
+        "type": {
+          "go_type": "UserTypeString",
+          "options": [],
+          "type": {
+            "named": "UserTypeString"
+          }
+        },
+        "username": {
+          "custom_serializer": true,
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "visibility": {
+          "go_type": "VisibilityString",
+          "options": [],
+          "type": {
+            "named": "VisibilityString"
+          }
+        },
+        "website": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        }
+      },
+      "source": "user.go"
+    },
+    "UserTypeString": {
+      "alias": {
+        "named": "string"
+      },
+      "source": "user_type.go"
+    },
+    "VisibilityString": {
+      "alias": {
+        "named": "string"
+      },
+      "source": "visible_type.go"
+    },
+    "WikiPayload": {
+      "fields": {
+        "action": {
+          "go_type": "HookWikiAction",
+          "options": [],
+          "type": {
+            "named": "HookWikiAction"
+          }
+        },
+        "comment": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "page": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "repository": {
+          "go_type": "*Repository",
+          "options": [],
+          "type": {
+            "pointer": {
+              "named": "Repository"
+            }
+          }
+        },
+        "sender": {
+          "go_type": "*User",
+          "options": [],
+          "type": {
+            "pointer": {
+              "named": "User"
+            }
+          }
+        }
+      },
+      "source": "hook.go"
+    },
+    "WorkflowJobPayload": {
+      "fields": {
+        "action": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "organization": {
+          "go_type": "*Organization",
+          "options": [
+            "omitempty"
+          ],
+          "type": {
+            "pointer": {
+              "named": "Organization"
+            }
+          }
+        },
+        "pull_request": {
+          "go_type": "*PullRequest",
+          "options": [
+            "omitempty"
+          ],
+          "type": {
+            "pointer": {
+              "named": "PullRequest"
+            }
+          }
+        },
+        "repository": {
+          "go_type": "*Repository",
+          "options": [],
+          "type": {
+            "pointer": {
+              "named": "Repository"
+            }
+          }
+        },
+        "sender": {
+          "go_type": "*User",
+          "options": [],
+          "type": {
+            "pointer": {
+              "named": "User"
+            }
+          }
+        },
+        "workflow_job": {
+          "go_type": "*ActionWorkflowJob",
+          "options": [],
+          "type": {
+            "pointer": {
+              "named": "ActionWorkflowJob"
+            }
+          }
+        }
+      },
+      "source": "hook.go"
+    },
+    "WorkflowRunPayload": {
+      "fields": {
+        "action": {
+          "go_type": "string",
+          "options": [],
+          "type": {
+            "named": "string"
+          }
+        },
+        "organization": {
+          "go_type": "*Organization",
+          "options": [
+            "omitempty"
+          ],
+          "type": {
+            "pointer": {
+              "named": "Organization"
+            }
+          }
+        },
+        "pull_request": {
+          "go_type": "*PullRequest",
+          "options": [
+            "omitempty"
+          ],
+          "type": {
+            "pointer": {
+              "named": "PullRequest"
+            }
+          }
+        },
+        "repository": {
+          "go_type": "*Repository",
+          "options": [],
+          "type": {
+            "pointer": {
+              "named": "Repository"
+            }
+          }
+        },
+        "sender": {
+          "go_type": "*User",
+          "options": [],
+          "type": {
+            "pointer": {
+              "named": "User"
+            }
+          }
+        },
+        "workflow": {
+          "go_type": "*ActionWorkflow",
+          "options": [],
+          "type": {
+            "pointer": {
+              "named": "ActionWorkflow"
+            }
+          }
+        },
+        "workflow_run": {
+          "go_type": "*ActionWorkflowRun",
+          "options": [],
+          "type": {
+            "pointer": {
+              "named": "ActionWorkflowRun"
+            }
+          }
+        }
+      },
+      "source": "hook.go"
+    }
+  }
+}

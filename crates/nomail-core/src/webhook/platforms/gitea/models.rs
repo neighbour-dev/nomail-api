@@ -34,6 +34,16 @@ impl<T: GiteaValue> GiteaValue for Box<T> {
     }
 }
 
+impl<T: GiteaValue> GiteaValue for Option<T> {
+    fn read(value: &Value) -> Option<Self> {
+        if value.is_null() {
+            Some(None)
+        } else {
+            T::read(value).map(Some)
+        }
+    }
+}
+
 trait Field {
     type Output;
     fn extract(value: &Value) -> Option<Self::Output>;
@@ -49,20 +59,18 @@ impl<T: GiteaValue> Field for Option<T> {
 impl<T: GiteaValue> Field for Vec<T> {
     type Output = Vec<T>;
     fn extract(value: &Value) -> Option<Vec<T>> {
-        Some(value.as_array()?.iter().filter_map(T::read).collect())
+        value.as_array()?.iter().map(T::read).collect()
     }
 }
 
 impl Field for BTreeMap<String, String> {
     type Output = BTreeMap<String, String>;
     fn extract(value: &Value) -> Option<Self::Output> {
-        Some(
-            value
-                .as_object()?
-                .iter()
-                .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_owned())))
-                .collect(),
-        )
+        value
+            .as_object()?
+            .iter()
+            .map(|(key, value)| Some((key.clone(), value.as_str()?.to_owned())))
+            .collect()
     }
 }
 
@@ -109,7 +117,7 @@ model!(GiteaWebhookPayload {
     workflow: Option<GiteaWorkflow>, workflow_run: Option<GiteaWorkflowRun>, workflow_job: Option<GiteaWorkflowJob>,
     #[serde(rename = "ref")]
     ref_name: Option<String> = |v: &Value| String::read(&v["ref"]),
-    compare_url: Option<String>, commits: Vec<GiteaCommit>, total_commits: Option<i64>,
+    compare_url: Option<String>, commits: Vec<Option<GiteaCommit>>, total_commits: Option<i64>,
     head_commit: Option<GiteaCommit>, pusher: Option<GiteaUser>,
     sha: Option<String>, ref_type: Option<String>, pusher_type: Option<String>, page: Option<String>,
     // Wiki comment is a string, while issue/PR comments are objects.
@@ -142,7 +150,9 @@ impl GiteaValue for GiteaWebhookComment {
 }
 
 model!(GiteaUser {
-    id: Option<i64>, login: Option<String>,
+    // User.MarshalJSON emits username as well as login. Preserve both supplied
+    // keys independently; do not synthesize an alias for a missing wire key.
+    id: Option<i64>, login: Option<String>, username: Option<String>,
     #[serde(rename = "type")]
     user_type: Option<String> = |v: &Value| String::read(&v["type"]),
     login_name: Option<String>, source_id: Option<i64>, full_name: Option<String>, email: Option<String>,
@@ -153,11 +163,17 @@ model!(GiteaUser {
 });
 
 // RepositoryPayload uses User here, while Package/Workflow payloads use
-// Organization. Retain the named fields of both shapes, not a GitHub user alias.
+// Organization. Retain every named field of both native shapes, not just their
+// common subset and not a GitHub user alias.
 model!(GiteaOrganization {
     id: Option<i64>, name: Option<String>, username: Option<String>, login: Option<String>, full_name: Option<String>,
     email: Option<String>, avatar_url: Option<String>, html_url: Option<String>, description: Option<String>,
     website: Option<String>, location: Option<String>, visibility: Option<String>, repo_admin_change_team_access: Option<bool>,
+    #[serde(rename = "type")]
+    user_type: Option<String> = |v: &Value| String::read(&v["type"]),
+    login_name: Option<String>, source_id: Option<i64>, language: Option<String>, is_admin: Option<bool>,
+    last_login: Option<String>, created: Option<String>, restricted: Option<bool>, active: Option<bool>, prohibit_login: Option<bool>,
+    followers_count: Option<i64>, following_count: Option<i64>, starred_repos_count: Option<i64>,
 });
 
 model!(GiteaRepository {
@@ -193,7 +209,7 @@ model!(GiteaExternalTracker {
     external_tracker_style: Option<String>, external_tracker_regexp_pattern: Option<String>,
 });
 model!(GiteaExternalWiki { external_wiki_url: Option<String> });
-model!(GiteaRepoTransfer { doer: Option<GiteaUser>, recipient: Option<GiteaUser>, teams: Vec<GiteaTeam> });
+model!(GiteaRepoTransfer { doer: Option<GiteaUser>, recipient: Option<GiteaUser>, teams: Vec<Option<GiteaTeam>> });
 model!(GiteaTeam {
     id: Option<i64>, name: Option<String>, description: Option<String>, organization: Option<GiteaOrganization>,
     includes_all_repositories: Option<bool>, permission: Option<String>, units: Vec<String>,
@@ -206,8 +222,8 @@ model!(GiteaIssue {
     body: Option<String> = |v: &Value| verbatim(&v["body"]),
     #[serde(rename = "ref")]
     ref_name: Option<String> = |v: &Value| String::read(&v["ref"]),
-    assets: Vec<GiteaAttachment>, labels: Vec<GiteaLabel>, milestone: Option<GiteaMilestone>, projects: Vec<GiteaProject>,
-    assignee: Option<GiteaUser>, assignees: Vec<GiteaUser>, state: Option<String>, is_locked: Option<bool>, comments: Option<i64>,
+    assets: Vec<Option<GiteaAttachment>>, labels: Vec<Option<GiteaLabel>>, milestone: Option<GiteaMilestone>, projects: Vec<Option<GiteaProject>>,
+    assignee: Option<GiteaUser>, assignees: Vec<Option<GiteaUser>>, state: Option<String>, is_locked: Option<bool>, comments: Option<i64>,
     created_at: Option<String>, updated_at: Option<String>, closed_at: Option<String>, due_date: Option<String>,
     time_estimate: Option<i64>, pull_request: Option<GiteaPullRequestMeta>, repository: Option<GiteaRepositoryMeta>,
     pin_order: Option<i64>, content_version: Option<i64>,
@@ -236,8 +252,8 @@ model!(GiteaProject {
 model!(GiteaPullRequest {
     id: Option<i64>, url: Option<String>, number: Option<i64>, user: Option<GiteaUser>, title: Option<String>,
     body: Option<String> = |v: &Value| verbatim(&v["body"]),
-    labels: Vec<GiteaLabel>, milestone: Option<GiteaMilestone>, assignee: Option<GiteaUser>, assignees: Vec<GiteaUser>,
-    requested_reviewers: Vec<GiteaUser>, requested_reviewers_teams: Vec<GiteaTeam>,
+    labels: Vec<Option<GiteaLabel>>, milestone: Option<GiteaMilestone>, assignee: Option<GiteaUser>, assignees: Vec<Option<GiteaUser>>,
+    requested_reviewers: Vec<Option<GiteaUser>>, requested_reviewers_teams: Vec<Option<GiteaTeam>>,
     state: Option<String>, draft: Option<bool>, is_locked: Option<bool>, comments: Option<i64>, review_comments: Option<i64>,
     additions: Option<i64>, deletions: Option<i64>, changed_files: Option<i64>, html_url: Option<String>, diff_url: Option<String>, patch_url: Option<String>,
     mergeable: Option<bool>, merged: Option<bool>, merged_at: Option<String>, merge_commit_sha: Option<String>, merged_by: Option<GiteaUser>,
@@ -260,14 +276,14 @@ model!(GiteaChanges {
     title: Option<GiteaChange>, body: Option<GiteaChange>, name: Option<GiteaChange>,
     #[serde(rename = "ref")]
     ref_change: Option<GiteaChange> = |v: &Value| GiteaChange::read(&v["ref"]),
-    added_labels: Vec<GiteaLabel>, removed_labels: Vec<GiteaLabel>,
+    added_labels: Vec<Option<GiteaLabel>>, removed_labels: Vec<Option<GiteaLabel>>,
 });
 model!(GiteaChange { from: Option<String> = |v: &Value| verbatim(&v["from"]) });
 model!(GiteaComment {
     id: Option<i64>, html_url: Option<String>, pull_request_url: Option<String>, issue_url: Option<String>, user: Option<GiteaUser>,
     original_author: Option<String>, original_author_id: Option<i64>,
     body: Option<String> = |v: &Value| verbatim(&v["body"]),
-    assets: Vec<GiteaAttachment>, created_at: Option<String>, updated_at: Option<String>,
+    assets: Vec<Option<GiteaAttachment>>, created_at: Option<String>, updated_at: Option<String>,
 });
 model!(GiteaAttachment {
     id: Option<i64>, name: Option<String>, size: Option<i64>, download_count: Option<i64>,
@@ -289,7 +305,7 @@ model!(GiteaRelease {
     body: Option<String> = |v: &Value| verbatim(&v["body"]),
     url: Option<String>, html_url: Option<String>, tarball_url: Option<String>, zipball_url: Option<String>, upload_url: Option<String>,
     draft: Option<bool>, prerelease: Option<bool>, created_at: Option<String>, published_at: Option<String>,
-    author: Option<GiteaUser>, assets: Vec<GiteaAttachment>,
+    author: Option<GiteaUser>, assets: Vec<Option<GiteaAttachment>>,
 });
 model!(GiteaPackage {
     id: Option<i64>, owner: Option<GiteaUser>, repository: Option<GiteaRepository>, creator: Option<GiteaUser>,
@@ -309,7 +325,7 @@ model!(GiteaWorkflowRun {
     display_title: Option<String>, path: Option<String>, event: Option<String>, run_attempt: Option<i64>, run_number: Option<i64>,
     repository_id: Option<i64>, head_sha: Option<String>, head_branch: Option<String>, status: Option<String>,
     actor: Option<GiteaUser>, trigger_actor: Option<GiteaUser>, repository: Option<GiteaRepository>, head_repository: Option<GiteaRepository>,
-    conclusion: Option<String>, pull_requests: Vec<GiteaPullRequestReference>,
+    conclusion: Option<String>, pull_requests: Vec<Option<GiteaPullRequestReference>>,
     created_at: Option<String>, updated_at: Option<String>, started_at: Option<String>, completed_at: Option<String>,
 });
 model!(GiteaPullRequestReference {
@@ -318,7 +334,7 @@ model!(GiteaPullRequestReference {
 model!(GiteaWorkflowJob {
     id: Option<i64>, url: Option<String>, html_url: Option<String>, run_id: Option<i64>, run_url: Option<String>, name: Option<String>,
     labels: Vec<String>, run_attempt: Option<i64>, head_sha: Option<String>, head_branch: Option<String>, status: Option<String>,
-    conclusion: Option<String>, runner_id: Option<i64>, runner_name: Option<String>, steps: Vec<GiteaWorkflowStep>,
+    conclusion: Option<String>, runner_id: Option<i64>, runner_name: Option<String>, steps: Vec<Option<GiteaWorkflowStep>>,
     created_at: Option<String>, started_at: Option<String>, completed_at: Option<String>,
 });
 model!(GiteaWorkflowStep {

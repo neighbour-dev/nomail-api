@@ -111,7 +111,9 @@ Generic 明确是 **NoMail 自定义协议**，不是任意平台自动识别器
 
 `PlatformConfig` 的 Gitea 分支使用 Secret，验证 Gitea 原生签名，不使用 GitHub 或 Gogs 兼容头替代。
 
-Gitea 使用独立模型（依据上游 v28.3.0），不复用 GitHub 类型。`metadata.event_type` 来自 `X-Gitea-Event`；header 另外保留精确事件类型与 Delivery ID。payload 保持原生层级，用户 ID 为有符号整数，工作流 ID 为字符串。
+Gitea 使用独立模型，依据上游 v28.3.0 固定 commit 的实际派发入口、原生结构体和自定义 JSON 序列化核对，不复用 GitHub 类型。当前快照包含 26 个对外事件类型、14 种载荷；内部 Actions 的 workflow_dispatch/workflow_call 不作为额外对外订阅。`metadata.event_type` 来自 `X-Gitea-Event`；header 另外保留精确事件类型与 Delivery ID。payload 保持原生层级，用户 ID 为有符号整数，工作流定义 ID 为字符串。
+
+用户对象同时保留实际收到的 `login` 和兼容字段 `username`，不自行补造别名；`organization` 覆盖上游 User/Organization 两种结构的字段。Go 指针切片以可空元素保留 `[null, {...}]` 的原始位置；元素/字典值类型不兼容时整体省略集合字段并保留 raw，不再过滤并重排。Rust 调用方需处理新增字段及集合元素的 `Option<T>`。来源、完整性核对与合成样例说明见 [Gitea 模型说明](src/webhook/platforms/gitea/README.md)。
 
 验签始终针对 Gitea 的原始 JSON 文本：JSON 投递使用原 Body，表单投递先提取解码后的 `payload`，不能重新序列化再验签，也不能对整个编码表单验签。去重使用 `gitea:delivery` 与原生 Delivery ID；Gitea 手动 Replay 生成新 UUID，因此会作为新消息处理。Gitea 的测试投递是普通 Push，不是 GitHub Ping。
 

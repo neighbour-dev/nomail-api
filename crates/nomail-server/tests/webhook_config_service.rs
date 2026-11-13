@@ -712,6 +712,75 @@ async fn config_service_preserves_sparse_concurrent_updates_credentials_and_scop
             }
         }
         if provider == "gitea" {
+            let probes: Value = serde_json::from_str(include_str!(
+                "../../nomail-core/src/webhook/platforms/gitea/fixtures/wire-probes.json"
+            ))
+            .unwrap();
+            for probe in probes.as_array().unwrap() {
+                let delivery = format!(
+                    "gitea-source-{}-{}",
+                    probe["payload_type"].as_str().unwrap(),
+                    probe["mode"].as_str().unwrap()
+                );
+                let event = &probe["events"][0];
+                let body = probe["payload"].to_string();
+                let mut mac = Hmac::<Sha256>::new_from_slice(b"platform-secret").unwrap();
+                mac.update(body.as_bytes());
+                let signature = hex::encode(mac.finalize().into_bytes());
+                let mut message_id = Value::Null;
+                for duplicate in [false, true] {
+                    let request = test::TestRequest::post()
+                        .uri(receive_path)
+                        .insert_header(("X-Gitea-Event", event["event"].as_str().unwrap()))
+                        .insert_header((
+                            "X-Gitea-Event-Type",
+                            event["event_type"].as_str().unwrap(),
+                        ))
+                        .insert_header(("X-Gitea-Delivery", delivery.as_str()))
+                        .insert_header(("X-Gitea-Signature", signature.as_str()));
+                    let request = if duplicate {
+                        request.set_form([("payload", body.as_str())])
+                    } else {
+                        request
+                            .insert_header(("Content-Type", "application/json"))
+                            .set_payload(body.clone())
+                    };
+                    let response = test::call_service(&app, request.to_request()).await;
+                    assert_eq!(response.status(), StatusCode::OK);
+                    let ack: Value = test::read_body_json(response).await;
+                    assert_eq!(ack["data"]["duplicate"], duplicate);
+                    if duplicate {
+                        assert_eq!(ack["data"]["messageId"], message_id);
+                    }
+                    message_id = ack["data"]["messageId"].clone();
+                }
+                let path = format!("/api/messages/{}", message_id.as_str().unwrap());
+                let detail = api!(get, &path, json!({})).1;
+                assert_eq!(
+                    detail["platformData"]["event"]["payload"], probe["payload"],
+                    "{delivery}"
+                );
+                assert_eq!(
+                    detail["platformData"]["event"]["header"]["event_type"],
+                    event["event_type"]
+                );
+                let updated = api!(patch, &path, json!({"pinned":true,"status":"read"})).1;
+                assert_eq!(updated["platformData"], detail["platformData"]);
+                let original = test::call_service(
+                    &app,
+                    test::TestRequest::get()
+                        .uri(&format!("{path}/raw"))
+                        .insert_header(("Authorization", format!("Bearer {token}")))
+                        .to_request(),
+                )
+                .await;
+                let original: Value = test::read_body_json(original).await;
+                assert_eq!(
+                    serde_json::from_str::<Value>(original["data"]["payload"].as_str().unwrap())
+                        .unwrap(),
+                    probe["payload"]
+                );
+            }
             let detail = api!(get, &message_path, json!({})).1;
             assert_eq!(detail["platformData"]["provider"], "gitea");
             assert_eq!(
