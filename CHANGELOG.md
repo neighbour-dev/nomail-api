@@ -6,6 +6,8 @@
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-14
+
 ### 新增
 
 - 新增 Mailflare 平台（`mailflare`），支持收信、发信、发送失败及测试通知，使用 Secret 验签并按 Delivery ID 去重；Server 和 Workers 均可配置。不拉取邮件正文或附件。
