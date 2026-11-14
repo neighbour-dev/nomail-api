@@ -31,7 +31,7 @@ pub(crate) fn checked_offset(page: u64, page_size: u64) -> Result<u64, &'static 
 pub fn summarize(text: &str) -> String {
     let summary = nomail_core::webhook::summarize(text);
     if summary.is_empty() {
-        "无法解析消息内容".into()
+        "Cannot parse message content".into()
     } else {
         summary
     }

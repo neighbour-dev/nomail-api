@@ -338,9 +338,9 @@ async fn summaries_are_bounded_receipt_snapshots_and_native_fields_remain_intact
         (json!("中".repeat(30)), "中".repeat(30)),
         (json!("中".repeat(31)), format!("{}…", "中".repeat(29))),
         (json!("😀".repeat(31)), format!("{}…", "😀".repeat(29))),
-        (json!(" \n\t "), "无法解析消息内容".into()),
-        (json!(42), "无法解析消息内容".into()),
-        (Value::Null, "无法解析消息内容".into()),
+        (json!(" \n\t "), "Cannot parse message content".into()),
+        (json!(42), "Cannot parse message content".into()),
+        (Value::Null, "Cannot parse message content".into()),
     ] {
         let payload = json!({"title":"Summary","source":"native source","content":text});
         let raw =
@@ -767,6 +767,12 @@ fn summaries_preserve_whitespace_and_length_behavior() {
         crate::pagination::summarize(&"中".repeat(31)),
         format!("{}…", "中".repeat(29))
     );
-    assert_eq!(crate::pagination::summarize(" \n\t "), "无法解析消息内容");
-    assert_eq!(crate::pagination::summarize(""), "无法解析消息内容");
+    assert_eq!(
+        crate::pagination::summarize(" \n\t "),
+        "Cannot parse message content"
+    );
+    assert_eq!(
+        crate::pagination::summarize(""),
+        "Cannot parse message content"
+    );
 }

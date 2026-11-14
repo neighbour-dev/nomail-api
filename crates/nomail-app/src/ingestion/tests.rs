@@ -182,7 +182,7 @@ async fn authenticated_unmodeled_deliveries_are_stored_before_acknowledgement() 
         assert_eq!(message.raw().unwrap().as_json(), Some(&payload));
         assert!(message.platform_data().is_err());
         assert!(!message.common.title.is_empty());
-        assert_eq!(message.common.summary, "无法解析消息内容");
+        assert_eq!(message.common.summary, "Cannot parse message content");
     }
     assert_eq!(service.store.rows.borrow().len(), 2);
     service.store.fail_write = true;

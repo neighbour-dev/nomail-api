@@ -41,7 +41,7 @@ Server / Workers → nomail-app → nomail-core
 
 JSON 保存为 JSON 文本，文本原样保存，已解码表单按 URL 编码序列化。raw 不是线级 HTTP 归档，过滤规则与敏感数据边界见 [Core](../nomail-core/README.md#事件模型与可读原始内容)。
 
-- **接收：**复用接收阶段解析的 Core `PlatformData`，按平台规则生成并保存 `summary`，不再保存统一的 `source/content`。摘要合并空白，最多 30 个 Unicode 字符（按 Rust `char` 计数），超长时末尾使用 `…`（计入上限）。新接收消息建模失败、无法生成摘要或摘要为空时，由 App 保存固定摘要“无法解析消息内容”；不回退 raw JSON 或事件描述，不阻止已鉴权、已解码消息入库。
+- **接收：**复用接收阶段解析的 Core `PlatformData`，按平台规则生成并保存 `summary`，不再保存统一的 `source/content`。摘要合并空白，最多 30 个 Unicode 字符（按 Rust `char` 计数），超长时末尾使用 `…`（计入上限）。新接收消息建模失败、无法生成摘要或摘要为空时，由 App 保存固定摘要 `Cannot parse message content`；不回退 raw JSON 或事件描述，不阻止已鉴权、已解码消息入库。
 - **详情：**`MessageService` 从消息自身的 provider 和 raw 调用 Core `parse_raw()`，组成临时 `MessageView`。详情响应不再提供统一的 `source/content`，通过 `platformData` 提供结构化内容，完整载荷由独立 raw 接口提供。不重新验签、解密、读取当前凭据或重算摘要等通用字段和用户状态；飞书 Encrypt Key 轮换不影响已保存的解密数据。
 - **模型升级：**Core 平台模型更新后，已保存 raw 消息的读取投影也可能出现新增字段或字段集合变化。仅更新平台模型不需要为此改写 raw 存储或重新入库，也不重算已保存的通用展示字段及用户状态；需要完整解码内容时仍读取原文视图。
 - **投影失败：**`platform_data` 为 `None`，`platform_data_error` 提供诊断，不阻止详情和状态操作；投影失败不能把已提交的状态更新变成错误响应。

@@ -239,9 +239,9 @@ test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, a
     for (const [content, expected] of [
       ['中'.repeat(30), '中'.repeat(30)],
       ['😀'.repeat(31), '😀'.repeat(29) + '…'],
-      [' \n\t ', '无法解析消息内容'],
-      [42, '无法解析消息内容'],
-      [null, '无法解析消息内容'],
+      [' \n\t ', 'Cannot parse message content'],
+      [42, 'Cannot parse message content'],
+      [null, 'Cannot parse message content'],
     ]) {
       const item = await receive({ title: 'Summary boundary', source: 'native source', content });
       const detailPath = `/api/messages/${item.messageId}`;
