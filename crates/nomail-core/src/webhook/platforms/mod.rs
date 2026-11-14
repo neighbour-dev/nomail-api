@@ -128,8 +128,7 @@ impl PlatformEvent {
         let Some(data) = &self.data else {
             return super::support::message(
                 format!("{} notification", self.provider.as_str()),
-                self.raw.payload.to_readable_string(),
-                self.provider.as_str().into(),
+                String::new(),
                 "normal",
                 String::new(),
             );
@@ -171,9 +170,6 @@ impl PlatformEvent {
         };
         if common.title.trim().is_empty() {
             common.title = format!("{} notification", self.provider.as_str());
-        }
-        if common.content.is_empty() {
-            common.content = self.raw.payload.to_readable_string();
         }
         common
     }

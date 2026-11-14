@@ -738,8 +738,16 @@ mod tests {
                 >= 2
         );
         assert_eq!(
-            schemas["MessageListItem"]["properties"]["source"]["type"],
-            "string"
+            schemas["MessageListItem"]["properties"]["summary"]["maxLength"],
+            30
         );
+        for name in ["MessageListItem", "MessageDetail", "MessageCreated"] {
+            for field in ["source", "content"] {
+                assert!(
+                    schemas[name]["properties"].get(field).is_none(),
+                    "{name}.{field}"
+                );
+            }
+        }
     }
 }

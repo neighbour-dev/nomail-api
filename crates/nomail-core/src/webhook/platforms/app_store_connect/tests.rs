@@ -106,10 +106,9 @@ fn all_official_examples_retain_every_documented_field_in_typed_models() {
             payload["data"].get("version").map(|v| v.to_string())
         );
         let summary = parsed.to_message_content();
-        assert_eq!(summary.source.as_deref(), Some("App Store Connect"));
         assert_eq!(summary.level, MessageLevel::Normal);
         assert!(
-            !summary.content.starts_with('{'),
+            !summary.summary.starts_with('{'),
             "known event fell back to raw: {kind}"
         );
     }
@@ -318,13 +317,13 @@ fn state_keys_are_not_conflated_and_build_upload_needs_no_timestamp_or_old_state
     assert_eq!(
         find("appStoreVersionAppVersionStateUpdated")
             .to_message_content()
-            .content,
-        "PREPARE_FOR_SUBMISSION → READY_FOR_REVIEW"
+            .summary,
+        summarize("PREPARE_FOR_SUBMISSION → READY_FOR_REVIEW")
     );
     assert_eq!(
         find("buildBetaDetailExternalBuildStateUpdated")
             .to_message_content()
-            .content,
+            .summary,
         "IN_BETA_REVIEW → BETA_APPROVED"
     );
     let upload = find("buildUploadStateUpdated");
@@ -332,7 +331,7 @@ fn state_keys_are_not_conflated_and_build_upload_needs_no_timestamp_or_old_state
     assert!(attrs.timestamp.is_none());
     assert!(attrs.old_state.is_none());
     assert!(attrs.new_value.is_none());
-    assert_eq!(upload.to_message_content().content, "COMPLETE");
+    assert_eq!(upload.to_message_content().summary, "COMPLETE");
     let feedback = find("betaFeedbackScreenshotSubmissionCreated");
     assert!(
         model(&feedback)
@@ -343,10 +342,7 @@ fn state_keys_are_not_conflated_and_build_upload_needs_no_timestamp_or_old_state
             .new_state
             .is_none()
     );
-    assert_eq!(
-        feedback.to_message_content().content,
-        "Screenshot feedback created"
-    );
+    assert_eq!(feedback.to_message_content().summary, "");
 }
 
 #[test]
@@ -399,21 +395,14 @@ fn malformed_optional_fields_unknown_events_and_management_ping_are_not_control_
             .value_deref(),
         Some("not-a-uuid")
     );
-    assert_eq!(
-        serde_json::from_str::<Value>(&parsed.to_message_content().content).unwrap(),
-        payload
-    );
+    assert!(parsed.to_message_content().summary.is_empty());
+    assert_eq!(parsed.raw.as_json(), Some(&payload));
     // Apple documents webhookPings as a management API resource, not a complete
     // inbound Ping envelope. Never infer a Respond/ACK-only branch from its name.
     let unrecognized =
         parse(&json!({"data":{"type":"webhookPings","id":"example-management-resource"}}));
     assert_eq!(model(&unrecognized).data.event_type, "webhookPings");
-    assert!(
-        unrecognized
-            .to_message_content()
-            .content
-            .contains("webhookPings")
-    );
+    assert!(unrecognized.to_message_content().summary.is_empty());
     for payload in [
         json!({}),
         json!({"data":[]}),

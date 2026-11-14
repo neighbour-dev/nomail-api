@@ -12,8 +12,9 @@ use uuid::Uuid;
 pub struct MessageListItem {
     pub id: Uuid,
     pub title: String,
+    /// Persisted receipt-time preview; legacy rows may have an empty string.
+    #[cfg_attr(feature = "openapi", schemars(length(max = 30)))]
     pub summary: String,
-    pub source: String,
     pub level: MessageLevel,
     pub status: String,
     pub pinned: bool,
@@ -46,8 +47,6 @@ pub struct MessageMetadata {
 pub struct MessageDetail {
     pub id: Uuid,
     pub title: String,
-    pub content: String,
-    pub source: String,
     pub level: MessageLevel,
     pub status: String,
     pub pinned: bool,
@@ -78,8 +77,6 @@ impl From<MessageView> for MessageDetail {
         MessageDetail {
             id: m.id,
             title: content.title,
-            content: content.content,
-            source: content.source.unwrap_or_default(),
             level: content.level,
             status: m.status,
             pinned: m.pinned,
@@ -157,7 +154,6 @@ impl From<MessagePreview> for MessageListItem {
             id: m.id,
             title: m.title,
             summary: m.summary,
-            source: m.source.unwrap_or_default(),
             level: m.level,
             status: m.status,
             pinned: m.pinned,

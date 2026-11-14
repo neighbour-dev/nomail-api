@@ -110,8 +110,6 @@ async fn sparse_updates_bulk_limits_scope_and_raw_reads_use_the_shared_service()
         assert!(after["readAt"].is_string());
         for key in [
             "title",
-            "content",
-            "source",
             "level",
             "provider",
             "metadata",

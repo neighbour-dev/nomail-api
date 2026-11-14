@@ -47,7 +47,7 @@ fn form_signature_covers_original_encoded_body() {
         parsed.to_message_content().title,
         "GitHub issues: opened: owner/repo"
     );
-    assert_eq!(parsed.to_message_content().content, "Bug");
+    assert_eq!(parsed.to_message_content().summary, "Bug");
     assert_eq!(
         parsed.to_message_content().url.as_deref(),
         Some("https://example.com/issue")
@@ -85,7 +85,7 @@ fn control_unknown_events_and_resource_ids() {
         .unwrap(),
     );
     assert!(parsed.metadata().deduplication_key.is_none());
-    assert!(parsed.to_message_content().content.contains("custom"));
+    assert!(parsed.to_message_content().summary.is_empty());
     let missing_header =
         event(receive_with(Provider::Github, Authentication::None, &Vec::new(), b"{}").unwrap());
     assert!(missing_header.metadata.event_type.is_empty());
@@ -101,7 +101,7 @@ fn workflow_mapping() {
         parsed.raw.as_json().unwrap()["workflow_run"]["conclusion"],
         "failure"
     );
-    assert_eq!(parsed.to_message_content().content, "CI");
+    assert_eq!(parsed.to_message_content().summary, "CI");
 }
 
 #[test]

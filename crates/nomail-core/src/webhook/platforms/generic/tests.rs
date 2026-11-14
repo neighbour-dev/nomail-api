@@ -55,8 +55,7 @@ fn signed_json_and_text_mapping() {
         parsed.to_message_content(),
         MessageContent {
             title: "Backup".into(),
-            content: "Backup done".into(),
-            source: Some("NAS".into()),
+            summary: "Backup done".into(),
             level: MessageLevel::Low,
             url: None
         }

@@ -145,7 +145,6 @@ fn business_previews_pages_and_counts_convert_to_the_existing_wire_shape() {
             id: uuid::Uuid::from_u128(1),
             title: "Title".into(),
             summary: "Summary".into(),
-            source: None,
             level: crate::webhook::MessageLevel::Normal,
             status: "unread".into(),
             pinned: false,
@@ -160,7 +159,7 @@ fn business_previews_pages_and_counts_convert_to_the_existing_wire_shape() {
     .into();
     let value = serde_json::to_value(page).unwrap();
     assert_eq!(value["pageSize"], 20);
-    assert_eq!(value["items"][0]["source"], "");
+    assert!(value["items"][0].get("source").is_none());
     assert_eq!(value["items"][0]["createdAt"], json!(now));
     assert_eq!(value["items"][0]["expireAt"], serde_json::Value::Null);
     assert_eq!(value["items"][0]["webhookConfigId"], 7);

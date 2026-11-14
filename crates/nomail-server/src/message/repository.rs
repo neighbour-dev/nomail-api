@@ -34,8 +34,7 @@ fn conversion(error: serde_json::Error) -> MessageError {
 struct ListRow {
     id: Uuid,
     title: String,
-    content: String,
-    source: Option<String>,
+    summary: String,
     level: String,
     status: String,
     pinned: bool,
@@ -49,8 +48,7 @@ impl TryFrom<ListRow> for MessagePreview {
         Ok(Self {
             id: m.id,
             title: m.title,
-            summary: nomail_app::pagination::summarize(&m.content),
-            source: m.source,
+            summary: m.summary,
             level: serde_json::from_value(serde_json::json!(m.level)).map_err(conversion)?,
             status: m.status,
             pinned: m.pinned,
@@ -91,7 +89,7 @@ fn filtered(user_id: i64, q: &MessageFilters) -> Select<message::Entity> {
         query = query.filter(
             Expr::col(message::Column::Title)
                 .like(format!("%{text}%"))
-                .or(Expr::col(message::Column::Content).like(format!("%{text}%"))),
+                .or(Expr::col(message::Column::Summary).like(format!("%{text}%"))),
         );
     }
     if let Some(status) = q.status {
@@ -197,8 +195,7 @@ impl MessageStore for Store<'_> {
             .columns([
                 message::Column::Id,
                 message::Column::Title,
-                message::Column::Content,
-                message::Column::Source,
+                message::Column::Summary,
                 message::Column::Level,
                 message::Column::Status,
                 message::Column::Pinned,
@@ -228,8 +225,7 @@ impl MessageStore for Store<'_> {
             .columns([
                 message::Column::Id,
                 message::Column::Title,
-                message::Column::Content,
-                message::Column::Source,
+                message::Column::Summary,
                 message::Column::Level,
                 message::Column::Status,
                 message::Column::Pinned,
@@ -364,8 +360,7 @@ impl IngestionStore for Store<'_> {
             deduplication_key: Set(key.map(|k| k.value.clone())),
             raw_headers: Set(serde_json::to_string(&m.raw_headers).map_err(conversion)?),
             title: Set(m.common.title.clone()),
-            content: Set(m.common.content.clone()),
-            source: Set(m.common.source.clone()),
+            summary: Set(m.common.summary.clone()),
             level: Set(m.common.level.as_str().into()),
             url: Set(m.common.url.clone()),
             raw_payload: Set(m.raw_payload.clone()),

@@ -3,6 +3,38 @@ use super::{test_support::*, *};
 use serde_json::{Value, json};
 
 #[test]
+fn summaries_use_typed_fields_not_raw_json_or_unmodeled_text() {
+    for payload in [
+        json!({"content":42,"future":{"body":"not a summary"}}),
+        json!({"content":{"text":"not a string"},"source":"not a summary"}),
+        json!({"content":" \n\t "}),
+    ] {
+        let parsed = event(
+            receive_with(
+                Provider::Generic,
+                Authentication::None,
+                &vec![],
+                &serde_json::to_vec(&payload).unwrap(),
+            )
+            .unwrap(),
+        );
+        assert!(parsed.to_message_content().summary.is_empty());
+        assert_eq!(parsed.raw.as_json(), Some(&payload));
+    }
+    let mut parsed = event(
+        receive_with(
+            Provider::Generic,
+            Authentication::None,
+            &vec![],
+            br#"{"content":"raw must not be a second summary source"}"#,
+        )
+        .unwrap(),
+    );
+    parsed.data = None;
+    assert!(parsed.to_message_content().summary.is_empty());
+}
+
+#[test]
 fn every_platform_binds_allowlisted_headers_to_native_payload_fields() {
     let cases = [
         (
@@ -405,7 +437,7 @@ fn undecodable_json_is_rejected_but_unmodeled_json_is_retained() {
                 &serde_json::from_slice::<Value>(body).unwrap()
             );
             assert!(!parsed.to_message_content().title.is_empty());
-            assert!(!parsed.to_message_content().content.is_empty());
+            assert!(parsed.to_message_content().summary.is_empty());
             assert!(parsed.metadata.deduplication_key.is_none());
         }
     }

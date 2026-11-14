@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { createHmac, createHash, createCipheriv } from 'node:crypto';
 import { validateResponse, validateSse, protectedRoutes } from './contract.mjs';
 import { testMessageCursors } from './cursor.mjs';
-import { testRawStorageUpgrade } from './raw-storage.mjs';
+import { testRawStorageUpgrade, testSummaryStorageUpgrade } from './raw-storage.mjs';
 
 test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, async () => {
   const state = await mkdtemp(join(tmpdir(), 'nomail-worker-test-'));
@@ -17,6 +17,7 @@ test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, a
   const origin = 'http://127.0.0.1:8791';
   try {
     await testRawStorageUpgrade(state);
+    await testSummaryStorageUpgrade(state);
     const migration = spawnSync('wrangler', ['d1', 'migrations', 'apply', 'DB', '--local', '--persist-to', state], { encoding: 'utf8', env: { ...process.env, CI: 'true' } });
     assert.equal(migration.status, 0, migration.stdout + migration.stderr);
     child = spawn('wrangler', ['dev', '--local', '--ip', '127.0.0.1', '--port', '8791', '--persist-to', state,
@@ -220,17 +221,45 @@ test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, a
     validateSse(createdEvent);
     const createdDetail = await api('GET', `/api/messages/${created.messageId}`, undefined, token);
     assert.equal(createdEvent, `id: ${created.messageId}\nevent: message.created\ndata: ${JSON.stringify({ id: created.messageId, receivedAt: createdDetail.createdAt })}\n\n`);
-    assert.equal(createdDetail.content, 'hello\n 世界');
+    assert.equal(createdDetail.content, undefined);
+    assert.equal(createdDetail.source, undefined);
+    assert.equal(createdDetail.platformData.event.payload.content, 'hello\n 世界');
     await reader.cancel();
     const duplicates = await Promise.all(Array.from({ length: 5 }, () => receive({ id: 'event-1', title: 'Disk' })));
     assert.ok(duplicates.every(item => item.duplicate && item.messageId === created.messageId));
     const list = await api('GET', '/api/messages?query=%E4%B8%96%E7%95%8C&status=unread&level=urgent&pinned=false', undefined, token);
     assert.equal(list.total, 1);
     assert.equal(list.items[0].summary, 'hello 世界');
+    assert.equal(list.items[0].source, undefined);
+    assert.equal(localSql(`SELECT summary FROM notify_messages WHERE id='${created.messageId}';`)[0].summary, 'hello 世界');
     const normalizedList = await api('GET', '/api/messages?query=%20%E4%B8%96%E7%95%8C%20&status=%20unread%20&level=URGENT&pinned=F&page=0&pageSize=999', undefined, token);
     assert.equal(normalizedList.total, 1);
     assert.equal(normalizedList.page, 1);
     assert.equal(normalizedList.pageSize, 100);
+    for (const [content, expected] of [
+      ['中'.repeat(30), '中'.repeat(30)],
+      ['😀'.repeat(31), '😀'.repeat(29) + '…'],
+      [' \n\t ', '无法解析消息内容'],
+      [42, '无法解析消息内容'],
+      [null, '无法解析消息内容'],
+    ]) {
+      const item = await receive({ title: 'Summary boundary', source: 'native source', content });
+      const detailPath = `/api/messages/${item.messageId}`;
+      const detail = await api('GET', detailPath, undefined, token);
+      assert.equal(detail.source, undefined);
+      assert.equal(detail.content, undefined);
+      assert.equal(detail.platformData.event.payload.source, 'native source');
+      const stored = localSql(`SELECT summary FROM notify_messages WHERE id='${item.messageId}';`)[0];
+      assert.equal(stored.summary, expected);
+      assert.ok(Array.from(stored.summary).length <= 30);
+      assert.deepEqual(JSON.parse((await inspectRaw(detailPath)).payload), { title: 'Summary boundary', source: 'native source', content });
+      localSql(`UPDATE notify_messages SET raw_payload='{invalid' WHERE id='${item.messageId}';`);
+      const previews = await api('GET', '/api/messages?query=Summary%20boundary', undefined, token);
+      assert.equal(previews.items.find(row => row.id === item.messageId).summary, expected);
+      const cursor = await api('GET', '/api/messages/cursor?query=Summary%20boundary', undefined, token);
+      assert.equal(cursor.items.find(row => row.id === item.messageId).summary, expected);
+      await api('DELETE', detailPath, undefined, token);
+    }
     await testMessageCursors(api, localSql, token);
     const path = `/api/messages/${created.messageId}`;
     assert.equal((await api('PATCH', path, { status: 'read', pinned: true }, token)).pinned, true);
@@ -260,7 +289,7 @@ test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, a
       assert.equal(current.status, 'read');
       assert.equal(current.pinned, true);
       assert.equal(typeof current.readAt, 'string');
-      for (const field of ['title', 'content', 'source', 'level', 'provider', 'metadata', 'platformData', 'createdAt', 'expireAt']) assert.deepEqual(current[field], stateSnapshot[field]);
+      for (const field of ['title', 'level', 'provider', 'metadata', 'platformData', 'createdAt', 'expireAt']) assert.deepEqual(current[field], stateSnapshot[field]);
       const pinOnly = await api('PATCH', statePath, { pinned: false, level: 'urgent' }, token);
       assert.equal(pinOnly.readAt, current.readAt);
       assert.equal(pinOnly.level, 'high');

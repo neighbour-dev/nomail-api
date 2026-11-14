@@ -277,10 +277,36 @@ impl MessageLevel {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MessageContent {
     pub title: String,
-    pub content: String,
-    pub source: Option<String>,
+    pub summary: String,
     pub level: MessageLevel,
     pub url: Option<String>,
+}
+
+/// Compact plain-text preview. Inspect at most 31 normalized characters, without
+/// allocating a copy of an entire body. The ellipsis counts toward the limit.
+pub fn summarize(value: &str) -> String {
+    let mut chars = Vec::with_capacity(32);
+    let mut pending_space = false;
+    for ch in value.chars() {
+        if ch.is_whitespace() {
+            pending_space = !chars.is_empty();
+            continue;
+        }
+        if pending_space {
+            chars.push(' ');
+            pending_space = false;
+        }
+        chars.push(ch);
+        if chars.len() > 30 {
+            chars.truncate(29);
+            while chars.last() == Some(&' ') {
+                chars.pop();
+            }
+            chars.push('…');
+            break;
+        }
+    }
+    chars.into_iter().collect()
 }
 
 impl FromStr for MessageLevel {

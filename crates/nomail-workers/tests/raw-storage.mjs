@@ -40,3 +40,35 @@ export async function testRawStorageUpgrade(root) {
   assert.ok(!columns.includes('platform_data'));
   assert.equal(sql('SELECT encrypted_platform FROM webhook_configs WHERE id=1;')[0].encrypted_platform, 'ciphertext-kept');
 }
+
+export async function testSummaryStorageUpgrade(root) {
+  const state = join(root, 'summary-storage-upgrade');
+  const migrations = join(state, 'old-migrations');
+  await mkdir(migrations, { recursive: true });
+  for (const file of ['0001_baseline.sql', '0002_message_cursor.sql', '0003_raw_storage.sql']) {
+    await copyFile(new URL('../migrations/' + file, import.meta.url), join(migrations, file));
+  }
+  const config = join(state, 'old.toml');
+  const original = await readFile(new URL('../wrangler.toml', import.meta.url), 'utf8');
+  await writeFile(config, original.replace('migrations_dir = "migrations"', `migrations_dir = ${JSON.stringify(migrations)}`));
+  const run = args => {
+    const result = spawnSync('wrangler', args, { encoding: 'utf8', env: { ...process.env, CI: 'true' } });
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    return result;
+  };
+  const sql = command => JSON.parse(run(['d1', 'execute', 'DB', '--local', '--persist-to', state, '--json', '--command', command]).stdout)[0].results;
+  run(['d1', 'migrations', 'apply', 'DB', '--config', config, '--local', '--persist-to', state]);
+  sql(`INSERT INTO webhook_configs(id,created_at,updated_at,user_id,name,key,provider,encrypted_platform) VALUES (1,'2026','2026',1,'Kept config','kept-key','generic','kept-ciphertext');
+    INSERT INTO notify_messages(id,created_at,updated_at,webhook_config_id,provider,event_type,title,source,content,level,raw_payload,content_type)
+    VALUES ('10000000-0000-0000-0000-000000000001','2026','2026',1,'generic','message','Kept title','old source','old content','normal','{"source":"native source","content":"native content"}','application/json');`);
+  run(['d1', 'migrations', 'apply', 'DB', '--local', '--persist-to', state]);
+  run(['d1', 'migrations', 'apply', 'DB', '--local', '--persist-to', state]);
+  const columns = sql('PRAGMA table_info(notify_messages);').map(column => column.name);
+  assert.ok(columns.includes('summary'));
+  assert.ok(!columns.includes('source') && !columns.includes('content'));
+  const [row] = sql('SELECT title,summary,raw_payload FROM notify_messages;');
+  assert.equal(row.title, 'Kept title');
+  assert.equal(row.summary, '');
+  assert.deepEqual(JSON.parse(row.raw_payload), { source: 'native source', content: 'native content' });
+  assert.equal(sql('SELECT encrypted_platform FROM webhook_configs;')[0].encrypted_platform, 'kept-ciphertext');
+}

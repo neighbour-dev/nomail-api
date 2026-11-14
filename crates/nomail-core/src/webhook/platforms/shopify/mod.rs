@@ -60,17 +60,15 @@ impl ShopifyWebhook {
     pub fn to_message_content(
         &self,
         metadata: &EventMetadata,
-        raw: &EventContent,
+        _raw: &EventContent,
     ) -> MessageContent {
-        let payload = raw.as_json().unwrap_or(&serde_json::Value::Null);
+        use super::JsonFieldExt;
         message(
             format!("Shopify {}", metadata.event_type),
-            first(&[
-                text(payload, &["title"]),
-                text(payload, &["name"]),
-                raw.to_string(),
+            summary(&[
+                self.payload.title.value_deref(),
+                self.payload.name.value_deref(),
             ]),
-            self.header.shop_domain.clone().unwrap_or_default(),
             "normal",
             String::new(),
         )

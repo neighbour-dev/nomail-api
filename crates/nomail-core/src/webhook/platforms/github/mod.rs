@@ -82,34 +82,70 @@ impl GithubWebhook {
                 title.push_str(&format!(": {part}"));
             }
         }
-        let (content, url) = match kind {
-            "issues" => (
-                text(p, &["issue", "title"]),
-                text(p, &["issue", "html_url"]),
-            ),
-            "issue_comment" | "pull_request_review_comment" => (
-                text(p, &["comment", "body"]),
-                text(p, &["comment", "html_url"]),
-            ),
-            "pull_request" | "pull_request_review" => (
-                text(p, &["pull_request", "title"]),
-                text(p, &["pull_request", "html_url"]),
-            ),
-            "push" => (text(p, &["head_commit", "message"]), text(p, &["compare"])),
-            "workflow_run" => (
-                text(p, &["workflow_run", "name"]),
-                text(p, &["workflow_run", "html_url"]),
-            ),
-            _ => (String::new(), String::new()),
+        let p_model = &self.payload;
+        use super::JsonFieldExt;
+        let comment = p_model.comment.value().and_then(|c| match c {
+            GithubCommentValue::Comment(c) => c.body.value_deref(),
+            GithubCommentValue::Text(text) => Some(text.as_str()),
+        });
+        let preview = match kind {
+            "issues" => summary(&[
+                p_model.issue.value().and_then(|v| v.body.value_deref()),
+                p_model.issue.value().and_then(|v| v.title.value_deref()),
+            ]),
+            "issue_comment" | "pull_request_review_comment" => summary(&[comment]),
+            "pull_request" => summary(&[
+                p_model
+                    .pull_request
+                    .value()
+                    .and_then(|v| v.issue.body.value_deref()),
+                p_model
+                    .pull_request
+                    .value()
+                    .and_then(|v| v.issue.title.value_deref()),
+            ]),
+            "pull_request_review" => {
+                summary(&[p_model.review.value().and_then(|v| v.body.value_deref())])
+            }
+            "push" => summary(&[p_model
+                .head_commit
+                .value()
+                .and_then(|v| v.message.value_deref())]),
+            "workflow_run" => summary(&[p_model
+                .workflow_run
+                .value()
+                .and_then(|v| v.name.value_deref())]),
+            "workflow_job" => summary(&[p_model
+                .workflow_job
+                .value()
+                .and_then(|v| v.name.value_deref())]),
+            "release" => summary(&[
+                p_model.release.value().and_then(|v| v.body.value_deref()),
+                p_model.release.value().and_then(|v| v.name.value_deref()),
+            ]),
+            "discussion" => summary(&[
+                p_model
+                    .discussion
+                    .value()
+                    .and_then(|v| v.body.value_deref()),
+                p_model
+                    .discussion
+                    .value()
+                    .and_then(|v| v.title.value_deref()),
+            ]),
+            _ => String::new(),
+        };
+        let url = match kind {
+            "issues" => text(p, &["issue", "html_url"]),
+            "issue_comment" | "pull_request_review_comment" => text(p, &["comment", "html_url"]),
+            "pull_request" | "pull_request_review" => text(p, &["pull_request", "html_url"]),
+            "push" => text(p, &["compare"]),
+            "workflow_run" => text(p, &["workflow_run", "html_url"]),
+            _ => String::new(),
         };
         message(
             title,
-            first(&[content, raw.to_string()]),
-            first(&[
-                repository.to_owned(),
-                text(p, &["sender", "login"]),
-                "github".into(),
-            ]),
+            preview,
             // Outcomes stay in workflow_run.conclusion, not NoMail priority.
             "normal",
             first(&[url, text(p, &["repository", "html_url"])]),

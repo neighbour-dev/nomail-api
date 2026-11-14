@@ -9,6 +9,7 @@ impl MigratorTrait for Migrator {
             Box::new(Baseline),
             Box::new(MessageCursor),
             Box::new(RawStorage),
+            Box::new(MessageSummary),
         ]
     }
 }
@@ -19,6 +20,28 @@ struct Baseline;
 struct MessageCursor;
 
 struct RawStorage;
+struct MessageSummary;
+impl MigrationName for MessageSummary {
+    fn name(&self) -> &str {
+        "m004_message_summary"
+    }
+}
+#[async_trait::async_trait]
+impl MigrationTrait for MessageSummary {
+    async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+        let transaction = manager.get_connection().begin().await?;
+        transaction
+            .execute_unprepared(include_str!("../migrations/004_message_summary.sql"))
+            .await?;
+        transaction.commit().await?;
+        Ok(())
+    }
+    async fn down(&self, _: &SchemaManager) -> Result<(), DbErr> {
+        Err(DbErr::Custom(
+            "destructive storage rollback is disabled".into(),
+        ))
+    }
+}
 impl MigrationName for RawStorage {
     fn name(&self) -> &str {
         "m003_raw_storage"

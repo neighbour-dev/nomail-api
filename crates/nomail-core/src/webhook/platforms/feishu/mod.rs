@@ -35,6 +35,7 @@ native_model!(FeishuEventHeader {
 native_model!(FeishuEventPayload {
     message: FeishuMessage = "message",
     sender: FeishuSender = "sender",
+    content: String = "content",
 });
 native_model!(FeishuSender {
     sender_id: FeishuSenderId = "sender_id",
@@ -195,26 +196,24 @@ impl FeishuWebhook {
         raw: &EventContent,
     ) -> MessageContent {
         let p = raw.as_json().unwrap_or(&Value::Null);
-        let raw_content = text(p, &["event", "message", "content"]);
-        let message_type = text(p, &["event", "message", "message_type"]);
-        let content = if message_type == "text" {
-            serde_json::from_str::<Value>(&raw_content)
-                .ok()
-                .map(|value| text(&value, &["text"]))
-                .filter(|value| !value.is_empty())
-                .unwrap_or(raw_content)
-        } else {
-            raw_content
-        };
+        use super::JsonFieldExt;
+        let msg = self.payload.event.value().and_then(|v| v.message.value());
+        let decoded = msg
+            .filter(|v| v.message_type.value_deref() == Some("text"))
+            .and_then(|v| v.content.value_deref())
+            .and_then(|v| serde_json::from_str::<Value>(v).ok());
         message(
             first(&[text(p, &["title"]), metadata.event_type.clone()]),
-            first(&[
-                text(p, &["content"]),
-                content,
-                text(p, &["event", "content"]),
-                p["event"].to_string(),
+            summary(&[
+                decoded
+                    .as_ref()
+                    .and_then(|v| v.get("text"))
+                    .and_then(Value::as_str),
+                self.payload
+                    .event
+                    .value()
+                    .and_then(|v| v.content.value_deref()),
             ]),
-            first(&[text(p, &["source"]), "feishu".into()]),
             &text(p, &["level"]),
             text(p, &["url"]),
         )

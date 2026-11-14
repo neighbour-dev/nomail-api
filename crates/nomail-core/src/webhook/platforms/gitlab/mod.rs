@@ -115,16 +115,18 @@ impl GitlabWebhook {
         raw: &EventContent,
     ) -> MessageContent {
         let p = raw.as_json().unwrap_or(&serde_json::Value::Null);
+        use super::JsonFieldExt;
+        let attrs = self.payload.object_attributes.value();
         message(
             format!("GitLab {}", metadata.event_type),
-            first(&[
-                text(p, &["object_attributes", "title"]),
-                text(p, &["object_attributes", "note"]),
-                raw.to_string(),
-            ]),
-            first(&[
-                text(p, &["project", "path_with_namespace"]),
-                "gitlab".into(),
+            summary(&[
+                attrs.and_then(|v| v.get("note")).and_then(Value::as_str),
+                attrs
+                    .and_then(|v| v.get("description"))
+                    .and_then(Value::as_str),
+                attrs.and_then(|v| v.get("title")).and_then(Value::as_str),
+                self.payload.message.value_deref(),
+                self.payload.title.value_deref(),
             ]),
             "normal",
             text(p, &["object_attributes", "url"]),

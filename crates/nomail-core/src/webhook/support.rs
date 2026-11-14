@@ -101,18 +101,22 @@ pub(super) fn challenge(payload: &Value) -> Result<ReceiveOutcome, WebhookError>
     }))
 }
 
-pub(super) fn message(
-    title: String,
-    content: String,
-    source: String,
-    level: &str,
-    url: String,
-) -> MessageContent {
+pub(super) fn message(title: String, summary: String, level: &str, url: String) -> MessageContent {
     MessageContent {
         title,
-        content,
-        source: optional(source),
+        summary,
         level: MessageLevel::from_label(level),
         url: optional(url),
     }
+}
+
+/// Only declared platform fields may supply a preview; never serialize raw as
+/// a fallback or coerce non-string JSON values into display text.
+pub(super) fn summary(values: &[Option<&str>]) -> String {
+    values
+        .iter()
+        .flatten()
+        .find(|value| !value.trim().is_empty())
+        .map(|value| super::summarize(value))
+        .unwrap_or_default()
 }

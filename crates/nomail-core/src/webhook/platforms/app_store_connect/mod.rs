@@ -100,7 +100,7 @@ impl AppStoreConnectWebhookPayload {
     pub fn to_message_content(
         &self,
         metadata: &EventMetadata,
-        raw: &EventContent,
+        _raw: &EventContent,
     ) -> MessageContent {
         let empty = AppStoreConnectAttributes::default();
         let attrs = self.data.attributes.value().unwrap_or(&empty);
@@ -134,19 +134,17 @@ impl AppStoreConnectWebhookPayload {
             ),
             "backgroundAssetVersionInternalBetaReleaseCreated" => (
                 "Background asset internal beta release created",
-                "Internal beta release created".into(),
+                String::new(),
             ),
-            "betaFeedbackScreenshotSubmissionCreated" => (
-                "TestFlight screenshot feedback created",
-                "Screenshot feedback created".into(),
-            ),
-            "betaFeedbackCrashSubmissionCreated" => (
-                "TestFlight crash feedback created",
-                "Crash feedback created".into(),
-            ),
+            "betaFeedbackScreenshotSubmissionCreated" => {
+                ("TestFlight screenshot feedback created", String::new())
+            }
+            "betaFeedbackCrashSubmissionCreated" => {
+                ("TestFlight crash feedback created", String::new())
+            }
             "alternativeDistributionPackageVersionCreated" => (
                 "Alternative distribution package version created",
-                "Package version created".into(),
+                String::new(),
             ),
             "alternativeDistributionPackageAvailableUpdated"
             | "alternativeDistributionTerritoryAvailabilityUpdated" => {
@@ -154,7 +152,7 @@ impl AppStoreConnectWebhookPayload {
                     .available
                     .value()
                     .map(|v| if *v { "Available" } else { "Unavailable" })
-                    .unwrap_or("Availability updated");
+                    .unwrap_or("");
                 let territories = attrs.territories.value_deref().unwrap_or_default();
                 let content = if territories.is_empty() {
                     availability.into()
@@ -163,7 +161,7 @@ impl AppStoreConnectWebhookPayload {
                 };
                 ("Alternative distribution availability updated", content)
             }
-            _ => (metadata.event_type.as_str(), raw.to_string()),
+            _ => (metadata.event_type.as_str(), String::new()),
         };
         let relationships = self.data.relationships.value();
         let url = relationships
@@ -176,8 +174,7 @@ impl AppStoreConnectWebhookPayload {
             });
         message(
             format!("App Store Connect: {label}"),
-            first(&[content, raw.to_string()]),
-            "App Store Connect".into(),
+            summary(&[Some(&content)]),
             "normal",
             url.unwrap_or_default().into(),
         )

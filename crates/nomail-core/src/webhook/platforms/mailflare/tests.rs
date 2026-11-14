@@ -59,25 +59,16 @@ fn native_events_test_deliveries_and_retry_identity() {
         assert_eq!(first.to_message_content().level, level);
         if kind == "message.inbound" {
             assert_eq!(first.to_message_content().title, "Hello");
-            assert!(
-                first
-                    .to_message_content()
-                    .content
-                    .contains("From: sender@example.com")
-            );
+            assert!(first.to_message_content().summary.contains("Hello"));
         }
         if kind == "message.failed" {
             assert!(
                 first
                     .to_message_content()
-                    .content
-                    .contains("Error: Synthetic send failure")
+                    .summary
+                    .contains("Synthetic send failure")
             );
         }
-        assert_eq!(
-            first.to_message_content().source.as_deref(),
-            Some("mailflare")
-        );
         assert_eq!(first.raw.as_json(), Some(&payload));
         assert_eq!(
             serde_json::to_value(first.data.as_ref().unwrap()).unwrap()["event"]["payload"],
@@ -105,7 +96,7 @@ fn native_events_test_deliveries_and_retry_identity() {
         "1",
     );
     assert_eq!(test.to_message_content().title, "Mailflare test delivery");
-    assert!(test.to_message_content().content.contains("test delivery"));
+    assert!(test.to_message_content().summary.contains("test delivery"));
 }
 
 #[test]

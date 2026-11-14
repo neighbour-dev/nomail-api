@@ -29,11 +29,8 @@ fn cropped_fields_versions_and_distinct_identifiers() {
         parsed.metadata().deduplication_key.as_ref().unwrap().value,
         "delivery-1"
     );
-    assert_eq!(
-        parsed.to_message_content().source.as_deref(),
-        Some("demo.myshopify.com")
-    );
-    assert!(parsed.to_message_content().content.contains("29.99"));
+    assert!(parsed.to_message_content().summary.is_empty());
+    assert!(parsed.raw.stored_payload().contains("29.99"));
     let Some(PlatformData::Shopify(event)) = parsed.data else {
         panic!()
     };

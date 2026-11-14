@@ -140,13 +140,12 @@ async fn application_owns_acceptance_defaults_and_duplicate_effects() {
     );
     let event = acceptance.created_event.unwrap();
     assert_eq!(event.title, "Alert");
-    assert_eq!(event.source, "generic");
     assert_eq!(event.level, MessageLevel::High);
     assert_eq!(event.status, "unread");
     assert!(!event.pinned);
     let row = service.store.rows.borrow()[&event.id].clone();
     assert_eq!(row.webhook_config_id, 12);
-    assert_eq!(row.common.content, "body");
+    assert_eq!(row.common.summary, "body");
     assert_eq!(row.status, "unread");
     assert_eq!(
         row.expires_at,
@@ -183,7 +182,7 @@ async fn authenticated_unmodeled_deliveries_are_stored_before_acknowledgement() 
         assert_eq!(message.raw().unwrap().as_json(), Some(&payload));
         assert!(message.platform_data().is_err());
         assert!(!message.common.title.is_empty());
-        assert!(!message.common.content.is_empty());
+        assert_eq!(message.common.summary, "无法解析消息内容");
     }
     assert_eq!(service.store.rows.borrow().len(), 2);
     service.store.fail_write = true;

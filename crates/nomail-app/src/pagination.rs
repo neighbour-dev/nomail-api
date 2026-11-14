@@ -28,14 +28,13 @@ pub(crate) fn checked_offset(page: u64, page_size: u64) -> Result<u64, &'static 
         .ok_or("page is too large")
 }
 
-pub fn summarize(content: &str) -> String {
-    content
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
-        .chars()
-        .take(160)
-        .collect()
+pub fn summarize(text: &str) -> String {
+    let summary = nomail_core::webhook::summarize(text);
+    if summary.is_empty() {
+        "无法解析消息内容".into()
+    } else {
+        summary
+    }
 }
 
 #[cfg(test)]

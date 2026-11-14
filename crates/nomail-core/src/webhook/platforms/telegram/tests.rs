@@ -10,7 +10,7 @@ fn update_types_and_non_text_messages() {
         (
             br#"{"update_id":1,"message":{"photo":[{"file_id":"photo-1"}]}}"#.as_slice(),
             "message",
-            "photo-1",
+            "",
         ),
         (
             br#"{"update_id":2,"callback_query":{"id":"q1","data":"approve"}}"#,
@@ -20,7 +20,7 @@ fn update_types_and_non_text_messages() {
         (
             br#"{"update_id":3,"future_update":{"new_field":true}}"#,
             "future_update",
-            "new_field",
+            "",
         ),
     ] {
         let parsed = event(
@@ -33,7 +33,7 @@ fn update_types_and_non_text_messages() {
             .unwrap(),
         );
         assert_eq!(parsed.metadata().event_type, kind);
-        assert!(parsed.to_message_content().content.contains(expected));
+        assert_eq!(parsed.to_message_content().summary, expected);
     }
     assert!(
         receive_with(

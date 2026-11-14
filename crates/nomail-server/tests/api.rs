@@ -357,7 +357,12 @@ async fn all_api_contracts() {
         Some(&token)
     );
     assert_eq!(status, StatusCode::OK);
-    assert_eq!(detail["data"]["content"], "event");
+    assert!(detail["data"].get("content").is_none());
+    assert!(detail["data"].get("source").is_none());
+    assert_eq!(
+        detail["data"]["platformData"]["event"]["payload"]["content"],
+        "event"
+    );
     let notification = json!({"id": second_id, "receivedAt": detail["data"]["createdAt"]});
     let event = std::str::from_utf8(&event).unwrap();
     assert!(event.starts_with(&format!("id: {second_id}\nevent: message.created\ndata: ")));

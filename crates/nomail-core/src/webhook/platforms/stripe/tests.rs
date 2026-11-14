@@ -32,12 +32,7 @@ fn snapshot_thin_and_rotating_signatures() {
             is_thin
         );
         if is_thin {
-            assert!(
-                parsed
-                    .to_message_content()
-                    .content
-                    .contains("details not fetched")
-            );
+            assert!(parsed.to_message_content().summary.is_empty());
             assert!(parsed.to_message_content().url.is_none());
         } else {
             assert_eq!(parsed.to_message_content().level, MessageLevel::Normal);
@@ -305,12 +300,7 @@ fn thin_notifications_keep_reason_related_object_and_snapshot_link_without_fetch
     });
     let parsed = signed_event(&payload);
     assert_eq!(projected(&parsed), payload);
-    assert!(
-        parsed
-            .to_message_content()
-            .content
-            .contains("details not fetched")
-    );
+    assert!(parsed.to_message_content().summary.is_empty());
     assert!(parsed.to_message_content().url.is_none());
     assert!(!projected(&parsed).as_object().unwrap().contains_key("data"));
     assert_eq!(parsed.metadata.version, None);

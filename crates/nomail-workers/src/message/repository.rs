@@ -49,8 +49,7 @@ fn decode_message(mut row: Value) -> MessageResult<MessageWithConfig> {
 struct ListRow {
     id: Uuid,
     title: String,
-    content: String,
-    source: Option<String>,
+    summary: String,
     level: nomail_app::webhook::MessageLevel,
     status: String,
     pinned: i64,
@@ -64,8 +63,7 @@ fn decode_item(row: Value) -> MessageResult<MessagePreview> {
     Ok(MessagePreview {
         id: row.id,
         title: row.title,
-        summary: nomail_app::pagination::summarize(&row.content),
-        source: row.source,
+        summary: row.summary,
         level: row.level,
         status: row.status,
         pinned: row.pinned == 1,
@@ -78,7 +76,7 @@ fn filter(user_id: i64, q: &MessageFilters) -> (String, Vec<Value>) {
     let mut clause = OWNED.to_owned();
     let mut values = vec![json!(user_id)];
     if let Some(text) = &q.text {
-        clause.push_str(" AND (title LIKE ? OR content LIKE ?)");
+        clause.push_str(" AND (title LIKE ? OR summary LIKE ?)");
         values.extend([json!(format!("%{text}%")), json!(format!("%{text}%"))]);
     }
     if let Some(status) = q.status {
@@ -172,7 +170,7 @@ impl MessageStore for Store<'_> {
             MessageWindow::Latest => (),
         }
         values.push(json!(q.fetch_limit()));
-        self.0.rows(&format!("SELECT id,title,content,source,level,status,pinned,webhook_config_id,created_at,expire_at FROM notify_messages WHERE {clause} ORDER BY created_at {order},id {order} LIMIT ?"), values)
+        self.0.rows(&format!("SELECT id,title,summary,level,status,pinned,webhook_config_id,created_at,expire_at FROM notify_messages WHERE {clause} ORDER BY created_at {order},id {order} LIMIT ?"), values)
             .await.map_err(storage)?.into_iter().map(decode_item).collect()
     }
     async fn list_owned(
@@ -187,7 +185,7 @@ impl MessageStore for Store<'_> {
         page_values.extend([json!(q.page_size()), json!(q.offset().to_string())]);
         let result=self.0.0.batch(vec![
             self.0.statement(&format!("SELECT COUNT(*) AS total FROM notify_messages WHERE {clause}"),values).map_err(storage)?,
-            self.0.statement(&format!("SELECT id,title,content,source,level,status,pinned,webhook_config_id,created_at,expire_at FROM notify_messages WHERE {clause} ORDER BY created_at DESC LIMIT ? OFFSET ?"),page_values).map_err(storage)?,
+            self.0.statement(&format!("SELECT id,title,summary,level,status,pinned,webhook_config_id,created_at,expire_at FROM notify_messages WHERE {clause} ORDER BY created_at DESC LIMIT ? OFFSET ?"),page_values).map_err(storage)?,
         ]).await.map_err(d1)?;
         let counts = result[0].results::<Value>().map_err(d1)?;
         let total = counts
@@ -335,10 +333,10 @@ impl IngestionStore for Store<'_> {
     async fn insert_once(&self, m: &Message) -> MessageResult<InsertOutcome> {
         let key = m.metadata.deduplication_key.as_ref();
         let data = serde_json::to_string(&m.raw_headers).map_err(|e| invalid(e.to_string()))?;
-        let rows=self.0.rows("INSERT INTO notify_messages (id,webhook_config_id,provider,event_type,event_version,deduplication_scope,deduplication_key,raw_headers,title,content,source,level,url,raw_payload,content_type,created_at,updated_at,expire_at,status,pinned,read_at,deleted_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(webhook_config_id,deduplication_scope,deduplication_key) DO NOTHING RETURNING id",
+        let rows=self.0.rows("INSERT INTO notify_messages (id,webhook_config_id,provider,event_type,event_version,deduplication_scope,deduplication_key,raw_headers,title,summary,level,url,raw_payload,content_type,created_at,updated_at,expire_at,status,pinned,read_at,deleted_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(webhook_config_id,deduplication_scope,deduplication_key) DO NOTHING RETURNING id",
             vec![json!(m.id),json!(m.webhook_config_id),json!(m.provider),json!(m.metadata.event_type),json!(m.metadata.version),
-                json!(key.map(|k|&k.scope)),json!(key.map(|k|&k.value)),json!(data),json!(m.common.title),json!(m.common.content),
-                json!(m.common.source),json!(m.common.level),json!(m.common.url),json!(m.raw_payload),json!(m.content_type),
+                 json!(key.map(|k|&k.scope)),json!(key.map(|k|&k.value)),json!(data),json!(m.common.title),json!(m.common.summary),
+                 json!(m.common.level),json!(m.common.url),json!(m.raw_payload),json!(m.content_type),
                 json!(date(m.received_at)),json!(date(m.updated_at)),json!(m.expires_at.map(date)),json!(m.status),json!(m.pinned),json!(m.read_at.map(date)),json!(m.deleted_at.map(date))]).await.map_err(storage)?;
         if !rows.is_empty() {
             return Ok(InsertOutcome::Created(m.id));

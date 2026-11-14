@@ -15,6 +15,9 @@
 
 ### 变更
 
+- **消息 API 及 Rust 模型不兼容变更：**删除统一消息的 `source/content`，列表返回 `summary`，详情通过 `platformData` 和独立 raw 接口提供内容；平台原生同名字段不变。搜索暂时改为匹配 `title + summary`；SSE 仍只发送消息 ID 和接收时间。
+- **消息摘要规则变化：**新接收消息复用已解析的 `PlatformData`，按平台规则生成并保存摘要；合并空白，最多 30 个 Unicode 字符（按 Rust `char` 计数），超长时加 `…` 且计入上限。建模失败、无法生成摘要或摘要为空时保存固定摘要“无法解析消息内容”，不再回退 JSON 或事件描述。摘要是接收时快照，不随详情解析器升级重算，列表查询不现场解析 raw。
+- **消息数据库不兼容变更：**Server/Workers 新增迁移，直接添加默认空字符串的 `summary` 列并删除 `source/content` 列，不检测旧库、不回填、不清空记录。旧消息摘要保持为空，列表原样返回；旧列数据会被删除，平台原生载荷和 raw 不变。
 - **Gitea 读取投影及 Rust API 不兼容变更：**集合中的合法 null 元素现在保留原位置，相关 Rust 字段改为可空元素集合；其他元素/字典值类型不兼容时整体省略集合字段并保留 raw，不再过滤并重排。Rust 调用方需调整新增字段的初始化及集合元素访问，详见 [Gitea 模型说明](crates/nomail-core/src/webhook/platforms/gitea/README.md)。
 - **GitHub 读取投影调整及 Rust API 不兼容变更：**根级 `comment` / `workflow` 支持对象或文本，保留部署审核评论和手动触发工作流名称；新增字段也会出现在已存 raw 消息的读取投影中。无法按目标元素/值类型提取的数组/字典整体省略并保留于 raw，不再过滤无效数组元素后改变索引。Rust 调用方需调整相关枚举匹配及结构体初始化，详见 [GitHub 模型说明](crates/nomail-core/src/webhook/platforms/github/README.md)。
 - **Stripe 平台数据读取投影不兼容变更：**保留原生 JSON 层级，不增加 NoMail 分支包装，但不保证响应字段集合与旧模型相同：已知资源改为按规范提取字段，未覆盖的历史/未知字段及类型异常值保留在 raw；未知资源或缺少资源判别字段时仍使用原生对象回退，未知顶层信封的 `platformData` 为 null。需要完整内容的客户端应读取 raw；Rust 调用方需匹配新的信封/资源枚举。验签、入库、优先级和 ACK 行为不变，也不实现 Issuing 同步授权决策。

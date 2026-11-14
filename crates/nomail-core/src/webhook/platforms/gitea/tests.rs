@@ -365,7 +365,7 @@ fn review_payload_is_type_and_content_not_github_state_and_body() {
         let review = g.review.value().unwrap();
         assert_eq!(review.review_type.value_deref(), Some(exact));
         assert_eq!(review.content.value_deref(), Some("  Review\n"));
-        assert_eq!(parsed.to_message_content().content, "Review");
+        assert_eq!(parsed.to_message_content().summary, "Review");
         assert_eq!(
             parsed.to_message_content().url.as_deref(),
             Some("https://example.com/pr/3")
@@ -462,7 +462,7 @@ fn wiki_fork_package_and_release_have_typed_resources() {
         model(&fork).forkee.value().unwrap().id.into_value(),
         Some(1)
     );
-    assert_eq!(fork.to_message_content().content, "example/fork");
+    assert_eq!(fork.to_message_content().summary, "example/fork");
     let package = receive_json(
         "package",
         "package",
@@ -538,7 +538,7 @@ fn workflow_ids_actors_completion_times_and_steps_are_typed() {
             .into_value(),
         Some(3)
     );
-    assert_eq!(parsed.to_message_content().content, "Build PR");
+    assert_eq!(parsed.to_message_content().summary, "Build PR");
     let job = receive_json(
         "workflow_job",
         "workflow_job",

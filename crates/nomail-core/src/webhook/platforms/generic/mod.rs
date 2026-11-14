@@ -4,6 +4,7 @@ pub mod config;
 pub(in crate::webhook) const RAW_HEADER_BLACKLIST: &[&str] = &["x-nomail-signature"];
 #[cfg(test)]
 mod tests;
+use super::JsonFieldExt;
 use crate::webhook::{
     Authentication, EventContent, EventMetadata, MessageContent, PlatformEvent, ReceiveOutcome,
     WebhookConfig, WebhookError, WebhookRequest, crypto, support::*,
@@ -91,32 +92,33 @@ impl GenericWebhook {
         raw: &EventContent,
     ) -> MessageContent {
         match &self.payload {
-            GenericWebhookPayload::Text(_) => message(
+            GenericWebhookPayload::Text(body) => message(
                 self.header
                     .title
                     .as_deref()
                     .and_then(optional)
                     .unwrap_or_else(|| "Webhook notification".into()),
-                raw.as_text().unwrap_or("").trim().to_owned(),
-                self.header.source.clone().unwrap_or_default(),
+                summary(&[Some(body)]),
                 self.header.level.as_deref().unwrap_or(""),
                 self.header.url.clone().unwrap_or_default(),
             ),
             GenericWebhookPayload::Json(_) | GenericWebhookPayload::Null => {
                 let p = raw.as_json().unwrap_or(&Value::Null);
+                let preview = match &self.payload {
+                    GenericWebhookPayload::Json(p) => summary(&[
+                        p.content.value_deref(),
+                        p.message.value_deref(),
+                        p.body.value_deref(),
+                    ]),
+                    _ => String::new(),
+                };
                 message(
                     first(&[
                         text(p, &["title"]),
                         metadata.event_type.clone(),
                         "Webhook notification".into(),
                     ]),
-                    first(&[
-                        text(p, &["content"]),
-                        text(p, &["message"]),
-                        text(p, &["body"]),
-                        raw.to_string(),
-                    ]),
-                    text(p, &["source"]),
+                    preview,
                     &text(p, &["level"]),
                     text(p, &["url"]),
                 )

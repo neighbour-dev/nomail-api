@@ -85,7 +85,7 @@ async fn raw_schema_upgrade_requires_empty_messages_and_preserves_other_tables()
         config.try_get::<String>("", "encrypted_platform").unwrap(),
         "existing-ciphertext"
     );
-    db.execute_unprepared("INSERT INTO notify_messages(id,created_at,updated_at,webhook_config_id,provider,event_type,raw_headers,title,content,level,raw_payload,content_type) VALUES (randomblob(16),'2026','2026',1,'generic','message','[]','new title','new body','normal','new body','text/plain')").await.unwrap();
+    db.execute_unprepared("INSERT INTO notify_messages(id,created_at,updated_at,webhook_config_id,provider,event_type,raw_headers,title,summary,level,raw_payload,content_type) VALUES (randomblob(16),'2026','2026',1,'generic','message','[]','new title','new body','normal','new body','text/plain')").await.unwrap();
     for value in ["{}", "null", "invalid"] {
         assert!(
             db.execute_unprepared(&format!("UPDATE notify_messages SET raw_headers='{value}'"))

@@ -85,82 +85,94 @@ impl GiteaWebhook {
                 title.push_str(&part);
             }
         }
-        let (content, url) = match kind {
-            "issues" => (
-                text(p, &["issue", "title"]),
-                text(p, &["issue", "html_url"]),
-            ),
-            "issue_comment" => (
-                text(p, &["comment", "body"]),
-                text(p, &["comment", "html_url"]),
-            ),
-            "pull_request" => (
-                text(p, &["pull_request", "title"]),
-                text(p, &["pull_request", "html_url"]),
-            ),
-            "pull_request_approved" | "pull_request_rejected" | "pull_request_comment" => (
-                first(&[
-                    text(p, &["review", "content"]),
-                    text(p, &["pull_request", "title"]),
-                ]),
-                text(p, &["pull_request", "html_url"]),
-            ),
-            "push" => (
-                text(p, &["head_commit", "message"]),
-                text(p, &["compare_url"]),
-            ),
-            "create" | "delete" => (text(p, &["ref"]), String::new()),
-            "fork" => (
-                text(p, &["forkee", "full_name"]),
-                text(p, &["forkee", "html_url"]),
-            ),
-            "wiki" => (
-                first(&[text(p, &["comment"]), text(p, &["page"])]),
-                String::new(),
-            ),
-            "release" => (
-                first(&[
-                    text(p, &["release", "name"]),
-                    text(p, &["release", "tag_name"]),
-                ]),
-                text(p, &["release", "html_url"]),
-            ),
-            "package" => (
-                first(&[
-                    text(p, &["package", "name"]),
-                    text(p, &["package", "version"]),
-                ]),
-                text(p, &["package", "html_url"]),
-            ),
-            "status" => (
-                first(&[
-                    text(p, &["description"]),
-                    text(p, &["context"]),
-                    text(p, &["state"]),
-                ]),
-                text(p, &["target_url"]),
-            ),
-            "workflow_run" => (
-                first(&[
-                    text(p, &["workflow_run", "display_title"]),
-                    text(p, &["workflow", "name"]),
-                ]),
-                text(p, &["workflow_run", "html_url"]),
-            ),
-            "workflow_job" => (
-                text(p, &["workflow_job", "name"]),
-                text(p, &["workflow_job", "html_url"]),
-            ),
-            "repository" => (
-                text(p, &["repository", "full_name"]),
-                text(p, &["repository", "html_url"]),
-            ),
-            _ => (String::new(), String::new()),
+        use super::JsonFieldExt;
+        let model = &self.payload;
+        let comment = model.comment.value().and_then(|v| match v {
+            GiteaWebhookComment::Text(text) => Some(text.as_str()),
+            GiteaWebhookComment::Comment(comment) => comment.body.value_deref(),
+        });
+        let preview = match kind {
+            "issues" => summary(&[
+                model.issue.value().and_then(|v| v.body.value_deref()),
+                model.issue.value().and_then(|v| v.title.value_deref()),
+            ]),
+            "issue_comment" => summary(&[comment]),
+            "pull_request" => summary(&[
+                model
+                    .pull_request
+                    .value()
+                    .and_then(|v| v.body.value_deref()),
+                model
+                    .pull_request
+                    .value()
+                    .and_then(|v| v.title.value_deref()),
+            ]),
+            "pull_request_approved" | "pull_request_rejected" | "pull_request_comment" => {
+                summary(&[
+                    model.review.value().and_then(|v| v.content.value_deref()),
+                    model
+                        .pull_request
+                        .value()
+                        .and_then(|v| v.title.value_deref()),
+                ])
+            }
+            "push" => summary(&[model
+                .head_commit
+                .value()
+                .and_then(|v| v.message.value_deref())]),
+            "create" | "delete" => summary(&[model.ref_name.value_deref()]),
+            "fork" => summary(&[model.forkee.value().and_then(|v| v.full_name.value_deref())]),
+            "wiki" => summary(&[comment, model.page.value_deref()]),
+            "release" => summary(&[
+                model.release.value().and_then(|v| v.body.value_deref()),
+                model.release.value().and_then(|v| v.name.value_deref()),
+                model.release.value().and_then(|v| v.tag_name.value_deref()),
+            ]),
+            "package" => summary(&[
+                model.package.value().and_then(|v| v.name.value_deref()),
+                model.package.value().and_then(|v| v.version.value_deref()),
+            ]),
+            "status" => summary(&[
+                model.description.value_deref(),
+                model.context.value_deref(),
+                model.state.value_deref(),
+            ]),
+            "workflow_run" => summary(&[
+                model
+                    .workflow_run
+                    .value()
+                    .and_then(|v| v.display_title.value_deref()),
+                model.workflow.value().and_then(|v| v.name.value_deref()),
+            ]),
+            "workflow_job" => summary(&[model
+                .workflow_job
+                .value()
+                .and_then(|v| v.name.value_deref())]),
+            "repository" => summary(&[model
+                .repository
+                .value()
+                .and_then(|v| v.full_name.value_deref())]),
+            _ => String::new(),
+        };
+        let url = match kind {
+            "issues" => text(p, &["issue", "html_url"]),
+            "issue_comment" => text(p, &["comment", "html_url"]),
+            "pull_request"
+            | "pull_request_approved"
+            | "pull_request_rejected"
+            | "pull_request_comment" => text(p, &["pull_request", "html_url"]),
+            "push" => text(p, &["compare_url"]),
+            "fork" => text(p, &["forkee", "html_url"]),
+            "release" => text(p, &["release", "html_url"]),
+            "package" => text(p, &["package", "html_url"]),
+            "status" => text(p, &["target_url"]),
+            "workflow_run" => text(p, &["workflow_run", "html_url"]),
+            "workflow_job" => text(p, &["workflow_job", "html_url"]),
+            _ => String::new(),
         };
         message(
             title,
-            first(&[content, raw.to_string()]),
-            first(&[repository, text(p, &["sender", "login"]), "gitea".into()]),
+            preview,
             "normal",
             first(&[url, text(p, &["repository", "html_url"])]),
         )

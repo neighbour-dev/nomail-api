@@ -22,12 +22,7 @@ fn legacy_token_and_custom_payload() {
         parsed.metadata().deduplication_key.as_ref().unwrap().value,
         "msg-1"
     );
-    assert!(
-        parsed
-            .to_message_content()
-            .content
-            .contains("custom template")
-    );
+    assert!(parsed.to_message_content().summary.is_empty());
 }
 
 #[test]

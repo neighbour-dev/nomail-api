@@ -1,10 +1,10 @@
 use super::*;
 use crate::webhook::{
-    self, Authentication, DeduplicationKey, MessageLevel, PlatformEvent, Provider, ReceiveOutcome,
-    WebhookConfig, WebhookRequest,
+    self, Authentication, DeduplicationKey, EventMetadata, MessageLevel, PlatformEvent, Provider,
+    RawWebhook, ReceiveOutcome, WebhookConfig, WebhookRequest, parse_raw,
 };
 use chrono::{DateTime, Duration, Utc};
-use serde_json::json;
+use serde_json::{Value, json};
 use std::{
     cell::{Cell, RefCell},
     collections::{HashMap, HashSet},
@@ -95,8 +95,7 @@ impl MessageStore for Store {
             .map(|m| MessagePreview {
                 id: m.id,
                 title: m.common.title.clone(),
-                summary: crate::pagination::summarize(&m.common.content),
-                source: m.common.source.clone(),
+                summary: m.common.summary.clone(),
                 level: m.common.level,
                 status: m.status.clone(),
                 pinned: m.pinned,
@@ -124,8 +123,7 @@ impl MessageStore for Store {
                 .map(|m| MessagePreview {
                     id: m.id,
                     title: m.common.title.clone(),
-                    summary: crate::pagination::summarize(&m.common.content),
-                    source: m.common.source.clone(),
+                    summary: m.common.summary.clone(),
                     level: m.common.level,
                     status: m.status.clone(),
                     pinned: m.pinned,
@@ -306,7 +304,7 @@ fn received_message_factory_preserves_platform_content_and_sets_inbox_defaults()
     assert!(!created.pinned);
     assert_eq!(created.status, "unread");
     assert_eq!(record.common.title, "Title");
-    assert_eq!(record.common.source.as_deref(), Some("generic"));
+    assert!(!record.common.summary.is_empty());
     assert_eq!(record.webhook_config_id, 1);
     assert_eq!(record.provider, original.provider());
     assert_eq!(record.metadata, original.metadata);
@@ -331,6 +329,52 @@ fn received_message_factory_rejects_an_unrepresentable_expiry() {
         Message::from_received_event(1, event(None, "normal"), Uuid::from_u128(1), DateTime::<Utc>::MAX_UTC),
         Err(MessageError::Internal(message)) if message == "invalid message expiry"
     ));
+}
+
+#[tokio::test]
+async fn summaries_are_bounded_receipt_snapshots_and_native_fields_remain_intact() {
+    for (text, expected) in [
+        (json!("  hello\n\t世界  "), "hello 世界".to_owned()),
+        (json!("中".repeat(30)), "中".repeat(30)),
+        (json!("中".repeat(31)), format!("{}…", "中".repeat(29))),
+        (json!("😀".repeat(31)), format!("{}…", "😀".repeat(29))),
+        (json!(" \n\t "), "无法解析消息内容".into()),
+        (json!(42), "无法解析消息内容".into()),
+        (Value::Null, "无法解析消息内容".into()),
+    ] {
+        let payload = json!({"title":"Summary","source":"native source","content":text});
+        let raw =
+            RawWebhook::from_stored(vec![], &payload.to_string(), "application/json").unwrap();
+        let data = parse_raw(Provider::Generic, &raw).ok();
+        let event = PlatformEvent {
+            provider: Provider::Generic,
+            metadata: EventMetadata {
+                event_type: String::new(),
+                version: None,
+                deduplication_key: None,
+            },
+            data,
+            raw,
+        };
+        let mut message =
+            Message::from_received_event(1, event, Uuid::from_u128(1), now()).unwrap();
+        assert_eq!(message.common.summary, expected);
+        assert!(message.common.summary.chars().count() <= 30);
+        assert_eq!(
+            serde_json::from_str::<Value>(&message.raw_payload).unwrap(),
+            payload
+        );
+        let wire = serde_json::to_value(&message).unwrap();
+        assert!(wire.get("source").is_none() && wire.get("content").is_none());
+        // A later platform projection failure never recomputes the receipt snapshot.
+        message.raw_payload = "{invalid".into();
+        let view = MessageView::from_stored(MessageWithConfig {
+            message,
+            config_name: "Config".into(),
+        });
+        assert!(view.platform_data.is_none());
+        assert_eq!(view.message.common.summary, expected);
+    }
 }
 
 #[tokio::test]
@@ -713,6 +757,16 @@ fn summaries_preserve_whitespace_and_length_behavior() {
         crate::pagination::summarize(&"中".repeat(200))
             .chars()
             .count(),
-        160
+        30
     );
+    assert_eq!(
+        crate::pagination::summarize(&"中".repeat(30)),
+        "中".repeat(30)
+    );
+    assert_eq!(
+        crate::pagination::summarize(&"中".repeat(31)),
+        format!("{}…", "中".repeat(29))
+    );
+    assert_eq!(crate::pagination::summarize(" \n\t "), "无法解析消息内容");
+    assert_eq!(crate::pagination::summarize(""), "无法解析消息内容");
 }

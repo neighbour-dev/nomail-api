@@ -136,27 +136,17 @@ impl SlackWebhook {
     pub fn to_message_content(
         &self,
         metadata: &EventMetadata,
-        raw: &EventContent,
+        _raw: &EventContent,
     ) -> MessageContent {
-        let p = raw.as_json();
-        let team_id = p
-            .map(|p| first(&[text(p, &["team_id"]), text(p, &["team", "id"])]))
-            .unwrap_or_else(|| self.payload.team_id.value().cloned().unwrap_or_default());
-        let content = p
-            .map(|p| first(&[text(p, &["event", "text"]), text(p, &["text"])]))
-            .unwrap_or_else(|| {
-                self.payload
-                    .text
-                    .value()
-                    .map(String::as_str)
-                    .unwrap_or("")
-                    .trim()
-                    .to_owned()
-            });
         message(
             format!("Slack {}", metadata.event_type),
-            first(&[content, raw.to_string()]),
-            first(&[team_id, "slack".into()]),
+            summary(&[
+                self.payload
+                    .event
+                    .value()
+                    .and_then(|v| v.text.value_deref()),
+                self.payload.text.value_deref(),
+            ]),
             "normal",
             String::new(),
         )

@@ -7,7 +7,6 @@ pub struct MessagePreview {
     pub id: Uuid,
     pub title: String,
     pub summary: String,
-    pub source: Option<String>,
     pub level: MessageLevel,
     pub status: String,
     pub pinned: bool,

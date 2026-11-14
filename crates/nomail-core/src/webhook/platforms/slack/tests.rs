@@ -100,7 +100,10 @@ fn events_interactions_and_slash_commands() {
             2 => assert_eq!(webhook.payload.command.value_deref(), Some("/example")),
             _ => unreachable!(),
         }
-        assert!(!parsed.to_message_content().content.is_empty());
+        assert!(parsed.to_message_content().summary.chars().count() <= 30);
+        if kind != 1 {
+            assert!(!parsed.to_message_content().summary.is_empty());
+        }
         let stored = RawWebhook::from_stored(
             parsed.raw.header.clone(),
             &parsed.raw.stored_payload(),

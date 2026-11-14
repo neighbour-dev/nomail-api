@@ -2,18 +2,12 @@
 use super::{MessageContent, Provider};
 
 /// Modify common fields in-place. Never discard or rewrite platform data/raw.
-pub fn apply_inbox_rules(message: &mut MessageContent, provider: Provider) {
+pub fn apply_inbox_rules(message: &mut MessageContent, _provider: Provider) {
     message.title = message.title.trim().chars().take(255).collect();
     if message.title.is_empty() {
         message.title = "Webhook message".into();
     }
-    message.content = message.content.trim().into();
-    let source = message
-        .source
-        .as_deref()
-        .filter(|s| !s.trim().is_empty())
-        .unwrap_or(provider.as_str());
-    message.source = Some(source.trim().chars().take(100).collect());
+    message.summary = crate::pagination::summarize(&message.summary);
     message.url = message
         .url
         .as_deref()
@@ -40,8 +34,7 @@ mod tests {
         let mut content = event.to_message_content();
         apply_inbox_rules(&mut content, event.provider());
         assert_eq!(content.title, "Alert");
-        assert_eq!(content.content, "body");
-        assert_eq!(content.source.as_deref(), Some("generic"));
+        assert_eq!(content.summary, "body");
         assert_eq!(content.level, MessageLevel::Urgent);
         assert_eq!(event, original);
     }

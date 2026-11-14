@@ -96,30 +96,29 @@ impl StripeWebhook {
     pub fn to_message_content(
         &self,
         metadata: &EventMetadata,
-        raw: &EventContent,
+        _raw: &EventContent,
     ) -> MessageContent {
         let kind = &metadata.event_type;
-        let content = if raw
-            .as_json()
-            .is_some_and(|p| text(p, &["object"]) == "v2.core.event")
-        {
-            format!(
-                "Stripe event {} (thin notification; details not fetched): {}",
-                raw.as_json()
-                    .map(|value| text(value, &["id"]))
-                    .unwrap_or_default(),
-                raw
-            )
-        } else {
-            raw.to_string()
+        use super::JsonFieldExt;
+        let preview = match &self.payload {
+            StripeWebhookPayload::Snapshot(event) => {
+                let resource = event.data.value().and_then(|v| v.object.value());
+                use generated::StripeResource;
+                match resource {
+                    Some(StripeResource::PaymentIntent(v)) => {
+                        summary(&[v.description.value_deref()])
+                    }
+                    Some(StripeResource::Charge(v)) => summary(&[v.description.value_deref()]),
+                    Some(StripeResource::Invoice(v)) => summary(&[v.description.value_deref()]),
+                    Some(StripeResource::Customer(v)) => {
+                        summary(&[v.description.value_deref(), v.name.value_deref()])
+                    }
+                    _ => String::new(),
+                }
+            }
+            StripeWebhookPayload::Thin(_) => String::new(),
         };
         // related_object.url may be an API-relative path, not a user-facing link.
-        message(
-            format!("Stripe {kind}"),
-            content,
-            "stripe".into(),
-            "normal",
-            String::new(),
-        )
+        message(format!("Stripe {kind}"), preview, "normal", String::new())
     }
 }

@@ -64,7 +64,7 @@ WebhookRequest（签名用的原始字节）+ 可信配置
       └── Ignored：无需生成业务事件
 ```
 
-`raw.payload` 的“原始”指未经消息映射的平台业务内容，不是 HTTP Body 字节：GitHub 表单取解码后的 `payload` JSON；飞书取解密后的事件 JSON；Slack 交互取内层 JSON，Slash Command 保留已解码表单字段；普通文本保留 UTF-8 文本（包含原来的空白）。`EventContent` 使用 `{ "format": "json|text|form", "value": ... }` 区分内容类型，未知字段留在 raw.payload，不随平台模型裁剪。通用消息映射只接收这部分内容，不会把原始头拼进通知正文。
+`raw.payload` 的“原始”指未经消息映射的平台业务内容，不是 HTTP Body 字节：GitHub 表单取解码后的 `payload` JSON；飞书取解密后的事件 JSON；Slack 交互取内层 JSON，Slash Command 保留已解码表单字段；普通文本保留 UTF-8 文本（包含原来的空白）。`EventContent` 使用 `{ "format": "json|text|form", "value": ... }` 区分内容类型，未知字段留在 raw.payload，不随平台模型裁剪。摘要映射使用解析后的平台字段，不把 raw 请求头或整段载荷拼成摘要。
 
 类型化 header 仅提取白名单中的 ASCII 值；非 ASCII 值留在 raw，不额外导致鉴权后的拒收。正文和 JSON 支持 UTF-8。接收和 raw 重建共用模型解析入口。
 
@@ -76,7 +76,7 @@ WebhookRequest（签名用的原始字节）+ 可信配置
 
 `RawWebhook::stored_payload()` 和 `payload_content_type()` 提供仅含解码 payload 的序列化文本及格式；`from_stored()` 从头条目、payload 文本和格式恢复 raw。`parse_raw(provider, raw)` 仅生成平台模型，不重新验签、解密、检查投递时间窗口或读取凭据。产品存储及查询投影由 [App](../nomail-app/README.md) 定义。
 
-**raw 不能用于重新验签或精确 HTTP 回放**：验签使用接收流程中的原始字节，JSON 空白、字段顺序、表单编码、密文和线级 HTTP 报文不归档。未知事件/版本、缺失展示元数据及模型不支持的合法 JSON 仍可产出带 raw 的事件，模型不可用时采用通用展示回退。鉴权、必要解密及格式解码失败仍返回错误；已识别的控制请求按平台协议处理。
+**raw 不能用于重新验签或精确 HTTP 回放**：验签使用接收流程中的原始字节，JSON 空白、字段顺序、表单编码、密文和线级 HTTP 报文不归档。未知事件/版本、缺失展示元数据及模型不支持的合法 JSON 仍可产出带 raw 的事件，模型不可用时 Core 使用通用标题和空摘要。鉴权、必要解密及格式解码失败仍返回错误；已识别的控制请求按平台协议处理。
 
 `data.header` 只保存白名单内的平台事件类型、投递 ID、版本等信息，与采用黑名单的 raw.header 不同。`data.payload` 按平台原有路径提取已支持字段，不混入 NoMail 摘要或 HTTP 头；来源可以是 JSON、解码后的表单或文本。没有附加投递信息时，header 为 `{}`；Generic 纯文本的 payload 是字符串。
 
@@ -90,7 +90,7 @@ payload 的可缺失已建模字段采用 `JsonField<T> = Option<Option<T>>`，�
 
 Serde 适配保留三态；`JsonFieldExt` 仅方便展示映射访问非空值，不改变序列化。类型异常字段留在 raw，模型必填字段缺失时 data 可以为 `None`，不影响已鉴权解码事件的产出。header 的可选字段使用普通 `Option<String>`。
 
-raw.payload 完整保留解码内容，包括上游放在业务内容中的字段；HTTP 头的黑名单过滤不代表对 payload 做了脱敏，例如飞书业务 JSON 内的验证 Token 仍属于完整解码内容。通用标题、正文、来源等由 `MessageContent` 映射生成，不混进平台 payload；不隐式调用外部 API。
+raw.payload 完整保留解码内容，包括上游放在业务内容中的字段；HTTP 头的黑名单过滤不代表对 payload 做了脱敏，例如飞书业务 JSON 内的验证 Token 仍属于完整解码内容。通用标题、短摘要、优先级和链接由 `MessageContent` 映射生成，不混进平台 payload；不隐式调用外部 API。
 
 GitHub 模型由 `github/models.rs` 的现有字段及 `github/generated.rs` 的详细嵌套类型组成，保持上游字段路径；PR 分支使用 `head.ref/base.ref`。`GithubTimestamp` 支持字符串和 Unix 秒，label 保留字符串或对象类型。完整字段及 Rust 访问方式见 [GitHub 模型说明](src/webhook/platforms/github/README.md)。
 
@@ -134,7 +134,7 @@ Gitea 使用独立模型，依据上游 v28.3.0 固定 commit 的实际派发入
 
 Snapshot 与 Thin 使用独立信封类型，序列化保持原生 JSON 层级，不增加分支包装；这不表示响应字段集合与旧模型完全相同。Snapshot 的 `created` 是 Unix 秒整数，Thin 是时间字符串；Thin 模型包含 `reason.request`、`related_object` 和 `snapshot_event` 等可选字段，只投影实际收到的内容，不调用 Stripe API 补全详情。
 
-资源模型依据官方公开 GA OpenAPI `2026-10-28.endive`（固定 commit），生成 200 个 live/deleted 资源分支及其嵌套类型。`data.object` 根据原生 `object` 分派，可展开字段区分 ID、展开资源及已删除资源。整数金额、十进制字符串、普通数值字段与原生列表/字典分别保留类型；状态枚举仍以字符串保留未来值。`previous_attributes` 保持稀疏旧值映射，未知资源使用原生对象回退；未知顶层信封无法生成平台模型，但仍保留 raw 并采用通用展示回退。已鉴权解码的投递不因建模失败而丢失。
+资源模型依据官方公开 GA OpenAPI `2026-10-28.endive`（固定 commit），生成 200 个 live/deleted 资源分支及其嵌套类型。`data.object` 根据原生 `object` 分派，可展开字段区分 ID、展开资源及已删除资源。整数金额、十进制字符串、普通数值字段与原生列表/字典分别保留类型；状态枚举仍以字符串保留未来值。`previous_attributes` 保持稀疏旧值映射，未知资源使用原生对象回退；未知顶层信封无法生成平台模型，但仍保留 raw，Core 使用通用标题和空摘要。已鉴权解码的投递不因建模失败而丢失。
 
 这些资源分支不是事件类型清单，也不意味着一条消息会包含所有资源或字段。实际投递取决于事件订阅、业务活动和所用 Stripe 产品；一些模型用于描述关联资源或 API 展开结构，Webhook 不一定直接携带。Thin 通常只有轻量通知，可展开字段也可能只有 ID；UI 应按实际收到的类型和字段适配，不能把缺失字段当作零值或已补全的详情。
 
@@ -175,7 +175,7 @@ match receive(&config, &WebhookRequest { headers: &headers, body })? {
 
 `receive()` 是安全接入入口，将配置对应的认证、必要的解密/解码和解析放在同一流程中，避免调用方忘记验签。输出业务请求时是 `ReceiveOutcome::Event(Box<PlatformEvent>)`（Box 避免放大控制结果的枚举大小）；控制请求不伪装成消息。
 
-`to_message_content()` 是纯映射：提取标题、正文、来源、必填 MessageLevel 和链接，不生成 ID、不读取系统时间、不设置用户状态、不调用外部 API。Core 提供平台基础文案及模型不可用时的通用展示回退，不改写平台模型或 raw；上层产品再执行字段规范化、长度限制，并决定接收时间、已读、置顶、过期和删除规则。
+`to_message_content()` 是纯映射：提取标题、短摘要、必填 MessageLevel 和链接，不生成 ID、不读取系统时间、不设置用户状态、不调用外部 API。摘要从已解析平台模型的明确字段按平台规则生成，例如提取评论文本，或将状态字段映射成状态变化；合并空白，最多 30 个 Unicode 字符（按 Rust `char` 计数，超长时含末尾 `…`）。没有可用摘要时返回空字符串，不将 raw JSON 或事件描述作为摘要回退。上层产品决定空摘要的错误回退、接收时间、已读、置顶、过期和删除规则，不改写平台模型或 raw。
 
 `MessageLevel` 为 `low / normal / high / urgent`，定义 `priority_rank()` / `is_at_least()`。这是关注优先级，不是结果或故障严重程度。`from_label()` 支持这四个标签（去首尾空白、不区分大小写），未知或旧标签回退 normal；严格解析拒绝其他值。平台成功、失败等状态保留在 data/raw，没有明确优先级规则时默认 normal。Core 不决定保留期、通知或删除行为。
 
@@ -183,18 +183,21 @@ match receive(&config, &WebhookRequest { headers: &headers, body })? {
 
 | 平台 | 接收能力 | 内置映射 |
 |---|---|---|
-| Generic | HMAC-SHA256 或显式无认证；JSON/UTF-8 文本 | JSON 字段与文本请求头分别建模，再映射消息 |
-| GitHub | 原始 JSON/表单 Body HMAC；事件头；Ping；基于官方 Webhook 规范的详细原生数据投影 | Issues、PR、评论、Push、Workflow Run 摘要；其余使用原文回退 |
+| Generic | HMAC-SHA256 或显式无认证；JSON/UTF-8 文本 | JSON 的 content/message/body 或文本载荷生成摘要；JSON 字段与文本请求头分别提供标题、优先级和链接 |
+| GitHub | 原始 JSON/表单 Body HMAC；事件头；Ping；基于官方 Webhook 规范的详细原生数据投影 | Issue/PR 正文或标题、评论、审核正文、最后一次提交消息、Workflow Run/Job 名称、Release 的 body/name、Discussion 的 body/title 生成摘要 |
 | Gitea | JSON 原文或表单解码后 JSON HMAC；原生事件/精确类型头；POST | Issue/PR/审核、Push、引用、Fork、Wiki、Release、Package、Commit Status、Workflow/Job 摘要与独立资源模型 |
-| App Store Connect | POST JSON 原文 HMAC-SHA256；`x-apple-signature` | App/Build/Beta/后台资源状态、反馈资源创建、替代分发可用性和资源关系；不隐式查询 API |
-| GitLab | 固定 Token 或 Standard Webhooks 签名；轮换签名；时间窗口 | MR/评论摘要；自定义模板保留并使用 JSON 回退 |
-| Stripe | 原始 Body + 时间戳签名；多个 v1 签名；独立 Snapshot/Thin 信封及 200 个生成资源分支 | 现有事件标题与原文正文；Thin 明确标记未获取详情，不联网补全；详细模型不等于已实现专属展示卡片 |
-| Slack | 原始 Body + 时间戳签名；Events API、Interaction、Slash Command、URL 验证 | 文本/命令摘要；交互保留 JSON；限流通知忽略 |
-| 飞书 | Verification Token；拼接 SHA256 签名；AES-256-CBC；URL 验证；v2/旧版信封 | 消息文本二次 JSON 解码与通用摘要 |
-| Telegram | 固定 Secret Token；Update 类型分流 | 文本、caption、按钮 data，非文本使用 JSON 回退 |
-| Shopify | Base64 HMAC；主题、API 版本、店铺、投递与事件 ID | title/name 摘要，裁剪字段使用 JSON 回退 |
+| App Store Connect | POST JSON 原文 HMAC-SHA256；`x-apple-signature` | 状态变化、替代分发可用性和地区摘要，提取关联资源链接；创建事件没有可用摘要时留空，不隐式查询 API |
+| GitLab | 固定 Token 或 Standard Webhooks 签名；轮换签名；时间窗口 | object_attributes 的 note/description/title，或自定义模板明确提供的 message/title 生成摘要；其余模板内容保留在 raw |
+| Stripe | 原始 Body + 时间戳签名；多个 v1 签名；独立 Snapshot/Thin 信封及 200 个生成资源分支 | Snapshot 从 PaymentIntent/Charge/Invoice/Customer 的 description 提取摘要，Customer 可回退 name；Thin 无可用摘要，不联网补全 |
+| Slack | 原始 Body + 时间戳签名；Events API、Interaction、Slash Command、URL 验证 | event.text 或顶层 text 生成摘要；其余交互数据保留在平台模型及 raw，限流通知忽略 |
+| 飞书 | Verification Token；拼接 SHA256 签名；AES-256-CBC；URL 验证；v2/旧版信封 | v2 文本消息的 content 二次 JSON 解码后提取 text，或使用旧版 event.content 生成摘要 |
+| Telegram | 固定 Secret Token；Update 类型分流 | 消息 text/caption、按钮 data、inline/chosen query 或 poll.question 生成摘要；无可用字段时留空 |
+| Shopify | Base64 HMAC；主题、API 版本、店铺、投递与事件 ID | title/name 生成摘要；裁剪字段没有可用文本时留空 |
+| Mailflare | 原始 JSON Body HMAC；收信、发信、发送失败及测试通知；Delivery 标识提取 | 按 error、subject、from、to 的优先级提取首个可用文本生成摘要；不拉取邮件正文或附件 |
 
-事件结构采用平台专属的 `XxxWebhook { header, payload }`。Stripe 根据 payload.object 区分 Snapshot/Thin，保留 `data.object` 和 `related_object.type` 原有位置；Slack 保留 Events API 的 `event` 层、交互的 `team/user` 对象及 Slash Command 原有参数；飞书保留 payload 内原生 `header/event/sender_id`，不再生成 `content_json`。**各平台的模型覆盖范围不同：GitHub 按固定快照官方 Webhook 规范、Stripe 按固定版本官方资源规范生成详细类型，其他平台的具体字段以各自模型定义为准；这些都是读取投影，不是覆盖所有上游事件及 API 版本的严格校验 Schema。** 未建模内容由 raw 完整保留，部分未知对象还提供原生对象回退；未知普通事件一般使用 raw 摘要。版本保留在元数据中，并不表示已验证所有 API 版本的字段兼容性。
+表中的摘要映射只使用对应平台模型的明确字段；未覆盖的事件或没有可用字段时，Core 返回空摘要，不输出整段 JSON 或合成事件描述。已建模字段可从平台模型读取，完整解码载荷保留在 raw。
+
+事件结构采用平台专属的 `XxxWebhook { header, payload }`。Stripe 根据 payload.object 区分 Snapshot/Thin，保留 `data.object` 和 `related_object.type` 原有位置；Slack 保留 Events API 的 `event` 层、交互的 `team/user` 对象及 Slash Command 原有参数；飞书保留 payload 内原生 `header/event/sender_id`，不再生成 `content_json`。**各平台的模型覆盖范围不同：GitHub 按固定快照官方 Webhook 规范、Stripe 按固定版本官方资源规范生成详细类型，其他平台的具体字段以各自模型定义为准；这些都是读取投影，不是覆盖所有上游事件及 API 版本的严格校验 Schema。** 未建模内容由 raw 完整保留，部分未知对象还提供原生对象回退；没有明确摘要字段时返回空摘要，不输出 raw 摘要。版本保留在元数据中，并不表示已验证所有 API 版本的字段兼容性。
 
 Telegram 模型依据 [Bot API Update](https://core.telegram.org/bots/api#update)（2026-11-10），不包括 Telegram Gateway：
 

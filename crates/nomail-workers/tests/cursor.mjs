@@ -56,7 +56,7 @@ export async function testMessageCursors(api, localSql, token) {
   const indexes = localSql("SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_messages_active_%';");
   assert.deepEqual(indexes.map(row => row.name).sort(), ['idx_messages_active_config_time_id', 'idx_messages_active_time_id']);
   for (const [operator, order] of [['<', 'DESC'], ['>', 'ASC']]) {
-    const rows = localSql(`EXPLAIN QUERY PLAN SELECT id,title,content FROM notify_messages WHERE deleted_at IS NULL AND webhook_config_id=${config.id} AND (created_at,id)${operator}('2040-01-01T00:00:00.123Z','${expected[4]}') ORDER BY created_at ${order},id ${order} LIMIT 3;`);
+    const rows = localSql(`EXPLAIN QUERY PLAN SELECT id,title,summary FROM notify_messages WHERE deleted_at IS NULL AND webhook_config_id=${config.id} AND (created_at,id)${operator}('2040-01-01T00:00:00.123Z','${expected[4]}') ORDER BY created_at ${order},id ${order} LIMIT 3;`);
     const plan = rows.map(row => row.detail).join('\n');
     assert.match(plan, /idx_messages_active_config_time_id/);
     assert.doesNotMatch(plan, /TEMP B-TREE/);

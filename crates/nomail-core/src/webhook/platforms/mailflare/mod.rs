@@ -89,31 +89,14 @@ impl MailflareWebhook {
         } else {
             subject.to_owned()
         };
-        let mut lines = Vec::new();
-        if let Some(data) = data {
-            for (label, field) in [
-                ("From", &data.from),
-                ("To", &data.to),
-                ("Cc", &data.cc),
-                ("Message ID", &data.message_id),
-                ("Error", &data.error),
-            ] {
-                if let Some(value) = field
-                    .value_deref()
-                    .map(str::trim)
-                    .filter(|value| !value.is_empty())
-                {
-                    lines.push(format!("{label}: {value}"));
-                }
-            }
-        }
-        if self.payload.test.value() == Some(&true) {
-            lines.push("Mailflare test delivery".into());
-        }
         message(
             title,
-            lines.join("\n"),
-            "mailflare".into(),
+            summary(&[
+                data.and_then(|v| v.error.value_deref()),
+                data.and_then(|v| v.subject.value_deref()),
+                data.and_then(|v| v.from.value_deref()),
+                data.and_then(|v| v.to.value_deref()),
+            ]),
             if metadata.event_type == "message.failed" {
                 "high"
             } else {

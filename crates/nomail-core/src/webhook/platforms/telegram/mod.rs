@@ -76,26 +76,38 @@ impl TelegramWebhook {
     pub fn to_message_content(
         &self,
         metadata: &EventMetadata,
-        raw: &EventContent,
+        _raw: &EventContent,
     ) -> MessageContent {
         let kind = &metadata.event_type;
-        let payload = raw.as_json().unwrap_or(&serde_json::Value::Null);
-        let update = payload.get(kind).unwrap_or(payload);
-        message(
-            format!("Telegram {kind}"),
-            first(&[
-                text(update, &["text"]),
-                text(update, &["caption"]),
-                text(update, &["data"]),
-                update.to_string(),
+        use super::JsonFieldExt;
+        let p = &self.payload;
+        let msg = match kind.as_str() {
+            "message" => p.message.value(),
+            "edited_message" => p.edited_message.value(),
+            "channel_post" => p.channel_post.value(),
+            "edited_channel_post" => p.edited_channel_post.value(),
+            "business_message" => p.business_message.value(),
+            "edited_business_message" => p.edited_business_message.value(),
+            "guest_message" => p.guest_message.value(),
+            _ => None,
+        };
+        let preview = match kind.as_str() {
+            "callback_query" => {
+                summary(&[p.callback_query.value().and_then(|v| v.data.value_deref())])
+            }
+            "inline_query" => {
+                summary(&[p.inline_query.value().and_then(|v| v.query.value_deref())])
+            }
+            "chosen_inline_result" => summary(&[p
+                .chosen_inline_result
+                .value()
+                .and_then(|v| v.query.value_deref())]),
+            "poll" => summary(&[p.poll.value().and_then(|v| v.question.value_deref())]),
+            _ => summary(&[
+                msg.and_then(|v| v.text.value_deref()),
+                msg.and_then(|v| v.caption.value_deref()),
             ]),
-            first(&[
-                text(update, &["chat", "title"]),
-                text(update, &["chat", "username"]),
-                "telegram".into(),
-            ]),
-            "normal",
-            String::new(),
-        )
+        };
+        message(format!("Telegram {kind}"), preview, "normal", String::new())
     }
 }

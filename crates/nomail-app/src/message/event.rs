@@ -8,7 +8,6 @@ use uuid::Uuid;
 pub struct MessageAccepted {
     pub id: Uuid,
     pub title: String,
-    pub source: String,
     pub level: MessageLevel,
     pub status: String,
     pub pinned: bool,
@@ -21,7 +20,6 @@ impl From<&Message> for MessageAccepted {
         Self {
             id: message.id,
             title: message.common.title.clone(),
-            source: message.common.source.clone().unwrap_or_default(),
             level: message.common.level,
             status: message.status.clone(),
             pinned: message.pinned,
