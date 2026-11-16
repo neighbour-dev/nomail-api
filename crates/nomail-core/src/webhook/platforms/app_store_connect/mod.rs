@@ -154,12 +154,18 @@ impl AppStoreConnectWebhookPayload {
                     .map(|v| if *v { "Available" } else { "Unavailable" })
                     .unwrap_or("");
                 let territories = attrs.territories.value_deref().unwrap_or_default();
-                let content = if territories.is_empty() {
-                    availability.into()
-                } else {
-                    format!("{availability}: {}", territories.join(", "))
+                let content = match (availability.is_empty(), territories.is_empty()) {
+                    (_, true) => availability.into(),
+                    (true, false) => territories.join(", "),
+                    (false, false) => format!("{availability}: {}", territories.join(", ")),
                 };
-                ("Alternative distribution availability updated", content)
+                let label =
+                    if metadata.event_type == "alternativeDistributionPackageAvailableUpdated" {
+                        "Alternative distribution package availability updated"
+                    } else {
+                        "Alternative distribution territory availability updated"
+                    };
+                (label, content)
             }
             _ => (metadata.event_type.as_str(), String::new()),
         };

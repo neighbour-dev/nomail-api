@@ -376,10 +376,7 @@ fn malformed_optional_fields_unknown_events_and_management_ping_are_not_control_
     let attrs = value.data.attributes.value().unwrap();
     assert!(attrs.new_state.is_none());
     assert_eq!(attrs.available.into_value(), Some(false));
-    assert_eq!(
-        attrs.territories.value().unwrap().as_slice(),
-        ["ZZZ", "DNK"]
-    );
+    assert!(attrs.territories.is_none());
     assert_eq!(attrs.app_id.value_deref(), Some("123"));
     assert_eq!(
         value
@@ -436,5 +433,148 @@ fn malformed_optional_fields_unknown_events_and_management_ping_are_not_control_
             ),
             Err(WebhookError::InvalidPayload(_))
         ));
+    }
+}
+
+#[test]
+fn every_documented_event_has_an_explicit_title_summary_and_link_mapping() {
+    // Order matches the independently maintained official-example fixture.
+    let expected = [
+        (
+            "App version state updated",
+            "PREPARE_FOR_SUBMISSION → READY_FOR_REVIEW",
+        ),
+        (
+            "External beta state updated",
+            "IN_BETA_REVIEW → BETA_APPROVED",
+        ),
+        ("TestFlight screenshot feedback created", ""),
+        ("TestFlight crash feedback created", ""),
+        ("Background asset state updated", "PROCESSING → FAILED"),
+        ("Background asset internal beta release created", ""),
+        (
+            "Background asset external beta state updated",
+            "IN_REVIEW → REJECTED",
+        ),
+        (
+            "Background asset external beta state updated",
+            "PROCESSING_FOR_TESTING → READY_FOR_TESTING",
+        ),
+        (
+            "Background asset App Store release state updated",
+            "IN_REVIEW → REJECTED",
+        ),
+        (
+            "Background asset App Store release state updated",
+            "PROCESSING_FOR_DISTRIBUTION → READY_FOR_DISTRIBUTION",
+        ),
+        ("Build upload state updated", "COMPLETE"),
+        ("Alternative distribution package version created", ""),
+        (
+            "Alternative distribution package availability updated",
+            "Available: DNK, IRL, NLD, SVK, SVN, LTU, HRV, PRT, MLT, CYP, AUT, SWE, HUN, ESP, EST, BEL, FIN, POL, BGR, LUX, CZE, FRA, DEU, LVA, ITA, GRC, ROU",
+        ),
+        (
+            "Alternative distribution territory availability updated",
+            "Available: DNK, IRL, NLD, SVK, SVN, LTU, HRV, PRT, MLT, CYP, AUT, SWE, HUN, ESP, EST, BEL, FIN, POL, BGR, LUX, CZE, FRA, DEU, LVA, ITA, GRC, ROU",
+        ),
+    ];
+    let examples = examples();
+    assert_eq!(examples.len(), expected.len());
+    for (payload, (label, content)) in examples.iter().zip(expected) {
+        let parsed = parse(payload);
+        let mapped = parsed.to_message_content();
+        assert_eq!(mapped.title, format!("App Store Connect: {label}"));
+        assert_eq!(mapped.summary, summarize(content));
+        assert_eq!(mapped.level, MessageLevel::Normal);
+        let relationships = &payload["data"]["relationships"];
+        let url = relationships["instance"]["links"]["self"]
+            .as_str()
+            .or_else(|| relationships["marketplaceApp"]["links"]["self"].as_str());
+        assert_eq!(mapped.url.as_deref(), url);
+        assert_eq!(
+            parse_raw(Provider::AppStoreConnect, &parsed.raw).ok(),
+            parsed.data
+        );
+    }
+}
+
+#[test]
+fn optional_fields_preserve_missing_null_empty_and_false_without_coercion() {
+    for attributes in [
+        json!({}),
+        json!({"timestamp":null,"newState":null,"available":null,"territories":null}),
+        json!({"timestamp":"","newState":"","available":false,"territories":[]}),
+        json!({"newState":"FUTURE_STATE","territories":["DNK","DNK",""]}),
+    ] {
+        let payload = json!({"data":{"type":"futureEvent","attributes":attributes}});
+        let parsed = parse(&payload);
+        assert_eq!(serde_json::to_value(model(&parsed)).unwrap(), payload);
+    }
+    for territories in [
+        json!(["DNK", false, "IRL"]),
+        json!(["DNK", null]),
+        json!("DNK"),
+    ] {
+        let payload = json!({"data":{"type":"alternativeDistributionPackageAvailableUpdated",
+            "attributes":{"available":false,"territories":territories,"appId":"123"}}});
+        let parsed = parse(&payload);
+        let attributes = model(&parsed).data.attributes.value().unwrap();
+        assert!(attributes.territories.is_none());
+        assert_eq!(attributes.available.into_value(), Some(false));
+        assert_eq!(attributes.app_id.value_deref(), Some("123"));
+        assert_eq!(parsed.to_message_content().summary, "Unavailable");
+    }
+}
+
+#[test]
+fn availability_without_a_flag_does_not_invent_availability_or_a_separator() {
+    for (attributes, expected) in [
+        (json!({"territories":["DNK","IRL"]}), "DNK, IRL"),
+        (json!({"available":false,"territories":[]}), "Unavailable"),
+        (json!({"available":true}), "Available"),
+        (json!({"available":null,"territories":[]}), ""),
+    ] {
+        let payload = json!({"data":{"type":"alternativeDistributionTerritoryAvailabilityUpdated",
+            "attributes":attributes}});
+        assert_eq!(parse(&payload).to_message_content().summary, expected);
+    }
+}
+
+#[test]
+fn blank_relationship_links_do_not_hide_nested_or_marketplace_links() {
+    for blank in ["", " \t"] {
+        let payload = json!({"data":{"type":"alternativeDistributionPackageVersionCreated",
+        "relationships":{
+            "instance":{"links":{"self":blank},"data":{"type":"packages","id":"package",
+                "links":{"self":"https://example.invalid/nested"}}},
+            "marketplaceApp":{"links":{"self":"https://example.invalid/marketplace"}}
+        }}});
+        assert_eq!(
+            parse(&payload).to_message_content().url.as_deref(),
+            Some("https://example.invalid/nested")
+        );
+        let mut without_nested = payload.clone();
+        without_nested["data"]["relationships"]["instance"]["data"]["links"]["self"] = json!(blank);
+        assert_eq!(
+            parse(&without_nested).to_message_content().url.as_deref(),
+            Some("https://example.invalid/marketplace")
+        );
+    }
+}
+
+#[test]
+fn state_transitions_accept_partial_and_future_states_without_cross_reading_keys() {
+    for (attributes, expected) in [
+        (json!({"newState":"FUTURE_STATE"}), "FUTURE_STATE"),
+        (json!({"oldState":"PROCESSING"}), "PROCESSING"),
+        (json!({"oldState":"","newState":"COMPLETE"}), "COMPLETE"),
+        (
+            json!({"oldState":null,"newState":null,"newValue":"WRONG_FIELD"}),
+            "",
+        ),
+    ] {
+        let payload = json!({"data":{"type":"buildUploadStateUpdated","attributes":attributes}});
+        assert_eq!(parse(&payload).to_message_content().summary, expected);
     }
 }

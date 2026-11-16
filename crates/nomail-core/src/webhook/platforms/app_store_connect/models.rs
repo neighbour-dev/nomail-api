@@ -127,7 +127,13 @@ impl crate::webhook::platforms::native::NativeValue for AppStoreConnectWebhookPa
 
 impl AppStoreConnectAttributes {
     fn from_value(value: &Value) -> Option<Self> {
-        <Self as crate::webhook::platforms::native::NativeValue>::read(value)
+        let mut attributes = <Self as crate::webhook::platforms::native::NativeValue>::read(value)?;
+        // A partial territory list could misrepresent where distribution is
+        // available. Preserve malformed arrays in raw, not a filtered projection.
+        attributes.territories = read_json_field(value, "territories", |value| {
+            value.as_array()?.iter().map(string).collect()
+        });
+        Some(attributes)
     }
 }
 
@@ -155,11 +161,13 @@ impl AppStoreConnectRelationship {
             .links
             .value()
             .and_then(|l| l.self_url.value().map(String::as_str))
+            .filter(|url| !url.trim().is_empty())
             .or_else(|| {
                 self.data
                     .value()
                     .and_then(|r| r.links.value())
                     .and_then(|l| l.self_url.value().map(String::as_str))
+                    .filter(|url| !url.trim().is_empty())
             })
     }
 }
