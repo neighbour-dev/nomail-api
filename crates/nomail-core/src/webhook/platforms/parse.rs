@@ -2,7 +2,7 @@
 //! authentication: signatures are not stored and delivery windows expire.
 use super::{
     PlatformData, app_store_connect, feishu, generic, gitea, github, gitlab, mailflare,
-    native::NativeValue, shopify, slack, stripe, telegram,
+    native::NativeValue, shopify, slack, stripe, telegram, uptime_kuma,
 };
 use crate::webhook::{EventContent, Provider, RawWebhook, WebhookError, WebhookRequest};
 
@@ -42,6 +42,13 @@ pub fn parse_raw(provider: Provider, raw: &RawWebhook) -> Result<PlatformData, W
         };
     }
     Ok(match provider {
+        Provider::UptimeKuma => restore!(
+            uptime_kuma,
+            UptimeKuma,
+            UptimeKumaWebhook,
+            UptimeKumaWebhookHeader,
+            UptimeKumaWebhookPayload
+        ),
         Provider::Mailflare => restore!(
             mailflare,
             Mailflare,

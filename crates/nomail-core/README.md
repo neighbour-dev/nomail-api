@@ -32,6 +32,7 @@ src/webhook/
     ├── gitlab/
     ├── gitea/             # 原生验签、独立资源模型、Gitea 事件映射与测试
     ├── mailflare/         # 原生通知验签、邮件元数据、Delivery 去重标识提取及测试
+    ├── uptime_kuma/       # 默认无认证 JSON Webhook、状态与监控投影
     ├── stripe/
     ├── slack/
     ├── feishu/
@@ -194,6 +195,7 @@ match receive(&config, &WebhookRequest { headers: &headers, body })? {
 | Telegram | 固定 Secret Token；Update 类型分流 | 消息 text/caption、按钮 data、inline/chosen query 或 poll.question 生成摘要；无可用字段时留空 |
 | Shopify | Base64 HMAC；主题、API 版本、店铺、投递与事件 ID | title/name 生成摘要；裁剪字段没有可用文本时留空 |
 | Mailflare | 原始 JSON Body HMAC；收信、发信、发送失败及测试通知；Delivery 标识提取 | 按 error、subject、from、to 的优先级提取首个可用文本生成摘要；不拉取邮件正文或附件 |
+| Uptime Kuma | 默认 POST JSON 不生成签名，也不要求认证；本适配器不校验自定义认证头；默认载荷无唯一事件或投递标识，无法可靠去重 | 监控名称与状态生成标题，msg/heartbeat.msg 生成摘要，使用 monitor.url；支持无 heartbeat/monitor 的普通通知 |
 
 表中的摘要映射只使用对应平台模型的明确字段；未覆盖的事件或没有可用字段时，Core 返回空摘要，不输出整段 JSON 或合成事件描述。已建模字段可从平台模型读取，完整解码载荷保留在 raw。
 
@@ -208,11 +210,13 @@ Telegram 模型依据 [Bot API Update](https://core.telegram.org/bots/api#update
 
 GitLab 自定义模板、Shopify 字段裁剪不要求完整资源。Stripe Thin 不会隐式补充查询；如果以后需要详情，应在适配层提供显式的异步补全步骤。交互请求只聚合为通知，不实现 Slack/Telegram 的完整交互机器人流程。
 
+Uptime Kuma 的配置步骤、固定上游来源和协议边界见 [Uptime Kuma 平台说明](src/webhook/platforms/uptime_kuma/README.md)。
+
 ## 配置与安全边界
 
 - `PlatformConfig` 用 `provider` + `credentials` 的带标签枚举自动反序列化，平台凭据位于 `platforms/<provider>/config.rs`。严格拒绝未知字段、跨平台凭据和位置数组；`validate()` 执行纯凭据校验，`receiving_config(now)` 同时推导 Provider 和 Authentication，避免调用方独立组合错误的平台与认证。
 - 秘密配置不实现 Debug；Serialize 仅用于调用方的加密存储，不能用于公开响应。`summary()` 返回无秘密的 `PlatformSummary`（provider、authentication）。密文存储格式、数据库和密钥管理仍由调用方负责。
-- `PlatformConfig` 只允许 Generic 显式 `credentials.type=none`；其他平台必须提供对应凭据。低层 `WebhookConfig` / `Authentication` 可供协议测试和独立调用方使用，不替代高层配置校验。
+- `PlatformConfig` 的 Generic 可显式使用 `credentials.type=none`；Uptime Kuma 使用空 `credentials` 对象，遵循其默认无认证 Webhook，不增加验签或 Token 要求；其他平台必须提供对应凭据。低层 `WebhookConfig` / `Authentication` 可供协议测试和独立调用方使用，不替代高层配置校验。
 - Provider 和认证方式必须来自可信端点配置，不能由请求头决定；认证失败不降级。
 - `Authentication::None` 是明确允许不认证的策略，不是“自动探测”。生产环境有 Secret 时应显式配置对应认证方式。
 - 同一端点只有一种预期认证策略。GitLab 新版签名缺失不回退旧 Token。

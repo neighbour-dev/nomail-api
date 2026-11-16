@@ -33,6 +33,7 @@ pub fn receive(
         return Err(support::invalid_auth());
     }
     match config.provider {
+        Provider::UptimeKuma => platforms::uptime_kuma::receive(config, request),
         Provider::Mailflare => platforms::mailflare::receive(config, request),
         Provider::Generic => platforms::generic::receive(config, request),
         Provider::Github => platforms::github::receive(config, request),

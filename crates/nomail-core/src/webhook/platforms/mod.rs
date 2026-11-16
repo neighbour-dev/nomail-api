@@ -47,6 +47,7 @@ pub mod shopify;
 pub mod slack;
 pub mod stripe;
 pub mod telegram;
+pub mod uptime_kuma;
 
 pub use app_store_connect::AppStoreConnectWebhook;
 pub use feishu::FeishuWebhook;
@@ -59,6 +60,7 @@ pub use shopify::ShopifyWebhook;
 pub use slack::SlackWebhook;
 pub use stripe::StripeWebhook;
 pub use telegram::TelegramWebhook;
+pub use uptime_kuma::UptimeKumaWebhook;
 
 use super::{EventContent, EventMetadata, MessageContent, Provider, RawWebhook, WebhookRequest};
 use serde::{Deserialize, Serialize};
@@ -67,6 +69,7 @@ use serde::{Deserialize, Serialize};
 #[serde(tag = "provider", content = "event", rename_all = "lowercase")]
 #[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
 pub enum PlatformData {
+    UptimeKuma(Box<UptimeKumaWebhook>),
     Mailflare(Box<MailflareWebhook>),
     Generic(Box<GenericWebhook>),
     Github(Box<GithubWebhook>),
@@ -134,6 +137,9 @@ impl PlatformEvent {
             );
         };
         let mut common = match data {
+            PlatformData::UptimeKuma(event) => {
+                event.to_message_content(&self.metadata, &self.raw.payload)
+            }
             PlatformData::Mailflare(event) => {
                 event.to_message_content(&self.metadata, &self.raw.payload)
             }

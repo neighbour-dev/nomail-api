@@ -5,7 +5,7 @@ pub use super::platforms::{
     github::config::GithubCredentials, gitlab::config::GitlabCredentials,
     mailflare::config::MailflareCredentials, shopify::config::ShopifyCredentials,
     slack::config::SlackCredentials, stripe::config::StripeCredentials,
-    telegram::config::TelegramCredentials,
+    telegram::config::TelegramCredentials, uptime_kuma::config::UptimeKumaCredentials,
 };
 use super::{Provider, WebhookConfig, WebhookError};
 use serde::{
@@ -25,6 +25,7 @@ use serde::{
 )]
 #[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
 pub enum PlatformConfig {
+    UptimeKuma(#[serde(deserialize_with = "object_only")] UptimeKumaCredentials),
     Mailflare(#[serde(deserialize_with = "object_only")] MailflareCredentials),
     Generic(#[serde(deserialize_with = "object_only")] GenericCredentials),
     Github(#[serde(deserialize_with = "object_only")] GithubCredentials),
@@ -115,6 +116,7 @@ pub(super) fn secret(value: &str) -> Result<(), WebhookError> {
 impl PlatformConfig {
     pub const fn provider(&self) -> Provider {
         match self {
+            Self::UptimeKuma(_) => Provider::UptimeKuma,
             Self::Mailflare(_) => Provider::Mailflare,
             Self::Generic(_) => Provider::Generic,
             Self::Github(_) => Provider::Github,
@@ -132,6 +134,7 @@ impl PlatformConfig {
     /// Pure validation; errors never echo credential values.
     pub fn validate(&self) -> Result<(), WebhookError> {
         match self {
+            Self::UptimeKuma(c) => c.validate(),
             Self::Mailflare(c) => c.validate(),
             Self::Generic(c) => c.validate(),
             Self::Github(c) => c.validate(),
@@ -148,6 +151,7 @@ impl PlatformConfig {
 
     pub fn summary(&self) -> PlatformSummary {
         let authentication = match self {
+            Self::UptimeKuma(c) => c.mode(),
             Self::Mailflare(c) => c.mode(),
             Self::Generic(c) => c.mode(),
             Self::Github(c) => c.mode(),
@@ -170,6 +174,7 @@ impl PlatformConfig {
     pub fn receiving_config(&self, now: i64) -> Result<WebhookConfig<'_>, WebhookError> {
         self.validate()?;
         let authentication = match self {
+            Self::UptimeKuma(c) => c.authentication(),
             Self::Mailflare(c) => c.authentication(),
             Self::Generic(c) => c.authentication(),
             Self::Github(c) => c.authentication(),
@@ -194,6 +199,7 @@ mod tests {
     #[test]
     fn all_platforms_round_trip_validate_and_redact() {
         for value in [
+            json!({"provider":"uptimekuma","credentials":{}}),
             json!({"provider":"mailflare","credentials":{"secret":"private"}}),
             json!({"provider":"generic","credentials":{"type":"none"}}),
             json!({"provider":"generic","credentials":{"type":"hmacSha256","secret":"private"}}),
@@ -227,6 +233,11 @@ mod tests {
     #[test]
     fn unknown_fields_types_modes_and_cross_platform_credentials_are_rejected() {
         for value in [
+            json!({"provider":"uptimekuma","credentials":{"secretToken":"private"}}),
+            json!({"provider":"uptimekuma","credentials":{"secret":"private"}}),
+            json!({"provider":"uptimekuma","credentials":{"secretToken":1}}),
+            json!({"provider":"uptimekuma","credentials":{"secretToken":"private","type":"none"}}),
+            json!({"provider":"uptimekuma","credentials":["private"]}),
             json!({"provider":"mailflare","credentials":{}}),
             json!({"provider":"mailflare","credentials":{"secret":1}}),
             json!({"provider":"mailflare","credentials":{"secret":"ok","type":"none"}}),

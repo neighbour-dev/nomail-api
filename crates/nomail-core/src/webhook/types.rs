@@ -7,6 +7,7 @@ use std::{fmt, str::FromStr};
 #[serde(rename_all = "lowercase")]
 #[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
 pub enum Provider {
+    UptimeKuma,
     Mailflare,
     Generic,
     Github,
@@ -23,6 +24,7 @@ pub enum Provider {
 impl Provider {
     pub const fn as_str(self) -> &'static str {
         match self {
+            Self::UptimeKuma => "uptimekuma",
             Self::Mailflare => "mailflare",
             Self::Generic => "generic",
             Self::Github => "github",
@@ -43,6 +45,7 @@ impl FromStr for Provider {
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         match value.trim().to_ascii_lowercase().as_str() {
+            "uptimekuma" => Ok(Self::UptimeKuma),
             "mailflare" => Ok(Self::Mailflare),
             "generic" => Ok(Self::Generic),
             "github" => Ok(Self::Github),

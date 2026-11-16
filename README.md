@@ -6,7 +6,7 @@ A single-user, self-hosted notification inbox API: receive webhooks and store no
 
 ## Features
 
-- Receive webhooks from Generic, GitHub, Gitea, App Store Connect, GitLab, Stripe, Slack, Feishu, Telegram, and Shopify, with platform-specific strongly typed configuration, source authentication, platform verification requests, and idempotent storage.
+- Receive webhooks from Generic, GitHub, Gitea, App Store Connect, GitLab, Stripe, Slack, Feishu, Telegram, Shopify, and Uptime Kuma, with platform-specific strongly typed configuration, source authentication, platform verification requests, and deduplication when reliable event IDs are available.
 - Preserve structured platform data and readable original content, with message search, read status, pinning, soft deletion, and batch operations.
 - Manage accounts, devices, and sessions, with SSE for live inbox updates.
 - Two deployment options share the same business logic and HTTP API:

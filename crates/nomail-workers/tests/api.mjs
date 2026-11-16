@@ -533,6 +533,7 @@ test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, a
       assert.ok(raw.header.every(h => h.name.toLowerCase() !== 'x-hub-signature-256'));
     }
     for (const platform of [
+      { provider: 'uptimekuma', credentials: {} },
       { provider: 'gitlab', credentials: { type: 'signingToken', signingToken: 'whsec_cGxhdGZvcm0tc2VjcmV0' } },
       { provider: 'mailflare', credentials: { secret: 'platform-secret' } },
       { provider: 'gitea', credentials: { secret: 'platform-secret' } },
@@ -550,6 +551,7 @@ test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, a
       assert.ok(!JSON.stringify(item).includes('platform-secret'));
       assert.deepEqual(await api('GET', path, undefined, token), item);
       const payloads = {
+        uptimekuma: { heartbeat: { monitorID: 42, status: 0, msg: 'Connection refused', ping: null, important: true }, monitor: { id: 42, name: 'Example API', url: 'https://example.invalid/health' }, msg: '[Example API] [Down] Connection refused' },
         mailflare: { type: 'message.inbound', data: { messageId: 'msg_matrix', from: 'sender@example.com', to: 'inbox@example.com', subject: 'Mailflare test', cc: null } },
         gitea: { action: 'assigned', issue: { number: 1, title: 'Test', is_locked: true, milestone: null, labels: [] }, sender: { id: -2, login: 'actions' } },
         appstoreconnect: { data: { type: 'appStoreVersionAppVersionStateUpdated', id: 'matrix', version: 1, attributes: { oldValue: 'PREPARE_FOR_SUBMISSION', newValue: 'READY_FOR_REVIEW', timestamp: null }, relationships: { instance: { data: { type: 'appStoreVersions', id: 'example-version' } } } }, future: { keep: true } },
@@ -564,6 +566,7 @@ test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, a
       const sign = (key, input, encoding = 'hex') => createHmac('sha256', key).update(input).digest(encoding);
       let headers;
       switch (platform.provider) {
+        case 'uptimekuma': headers = {}; break;
         case 'mailflare': headers = { 'X-Email-Platform-Event': 'message.inbound', 'X-Email-Platform-Delivery': 'whd_matrix', 'X-Email-Platform-Attempt': '1', 'X-Email-Platform-Signature': sign('platform-secret', raw) }; break;
         case 'gitea': headers = { 'X-Gitea-Event': 'issues', 'X-Gitea-Event-Type': 'issue_assign', 'X-Gitea-Delivery': 'matrix', 'X-Gitea-Signature': sign('platform-secret', raw) }; break;
         case 'appstoreconnect': headers = { 'X-Apple-Signature': 'hmacsha256=' + sign('platform-secret', raw) }; break;
@@ -591,6 +594,35 @@ test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, a
       if (platform.provider === 'appstoreconnect') delete expectedPayload.future;
       assert.deepEqual(detail.platformData.event.payload, expectedPayload);
       const captured = await inspectRaw(`/api/messages/${ack.data.messageId}`);
+      if (platform.provider === 'uptimekuma') {
+        assert.equal(item.platform.authentication, 'none');
+        assert.equal(detail.metadata.eventType, 'down');
+        assert.equal(detail.metadata.deduplicationKey, null);
+        const fixtures = JSON.parse(await readFile(new URL('../../nomail-core/src/webhook/platforms/uptime_kuma/fixtures/notifications.json', import.meta.url), 'utf8'));
+        for (const fixture of fixtures) {
+          const ids = [];
+          for (let i = 0; i < 2; i++) {
+            const response = await fetch(origin + item.url, {
+              method: 'POST', body: JSON.stringify(fixture.payload),
+              headers: { 'Content-Type': 'application/json' },
+            });
+            const received = await response.json();
+            assert.equal(response.status, 200, fixture.name);
+            validateResponse('POST', item.url, 200, received);
+            assert.equal(received.data.duplicate, false);
+            ids.push(received.data.messageId);
+          }
+          assert.notEqual(ids[0], ids[1]);
+          const path = `/api/messages/${ids[0]}`;
+          const sample = await api('GET', path, undefined, token);
+          assert.deepEqual(sample.platformData.event.payload, fixture.payload);
+          assert.equal(sample.metadata.eventType, fixture.name);
+          assert.equal(sample.platformDataError, null);
+          const original = await inspectRaw(path);
+          assert.deepEqual(JSON.parse(original.payload), fixture.payload);
+          assert.ok(!JSON.stringify(original.header).includes('platform-secret'));
+        }
+      }
       if (platform.provider === 'mailflare') {
         assert.ok(captured.header.every(h => h.name.toLowerCase() !== 'x-email-platform-signature'));
         assert.equal(detail.metadata.deduplicationKey.scope, 'mailflare:delivery');
@@ -786,7 +818,7 @@ test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, a
         const original = await inspectRaw(`/api/messages/${ack.data.messageId}`);
         assert.deepEqual(JSON.parse(original.payload), payloads.gitea);
       }
-      await api('POST', item.url, { title: 'unauthenticated' }, undefined, 401);
+      await api('POST', item.url, { title: 'unauthenticated' }, undefined, platform.provider === 'uptimekuma' ? 200 : 401);
       if (platform.provider === 'appstoreconnect') {
         const detail = await api('GET', `/api/messages/${ack.data.messageId}`, undefined, token);
         assert.equal(detail.platformData.provider, 'appstoreconnect');

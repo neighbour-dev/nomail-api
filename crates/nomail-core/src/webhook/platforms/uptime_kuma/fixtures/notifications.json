@@ -1,0 +1,51 @@
+[
+  {
+    "name": "down",
+    "payload": {
+      "heartbeat": {
+        "monitorID": 42, "status": 0, "time": "2026-11-16 01:02:03.456",
+        "msg": "connect ECONNREFUSED 192.0.2.10:443", "ping": null,
+        "important": true, "duration": 60, "retries": 3,
+        "timezone": "Asia/Shanghai", "timezoneOffset": "+08:00",
+        "localDateTime": "2026-11-16 09:02:03", "response": null
+      },
+      "monitor": {
+        "id": 42, "name": "Example API", "description": "Synthetic HTTP monitor",
+        "type": "http", "url": "https://example.invalid/health", "hostname": null,
+        "port": null, "method": "GET", "interval": 60, "retryInterval": 20,
+        "resendInterval": 10, "timeout": 48, "maxretries": 3,
+        "active": true, "upsideDown": false
+      },
+      "msg": "[Example API] [🔴 Down] connect ECONNREFUSED 192.0.2.10:443"
+    }
+  },
+  {
+    "name": "up",
+    "payload": {
+      "heartbeat": {
+        "monitorID": 42, "status": 1, "time": "2026-11-16 01:03:03.456",
+        "msg": "200 - OK", "ping": 12.5, "important": true,
+        "duration": 60.25, "retries": 0, "response": "{\"ok\":true}",
+        "lastDownTime": "2026-11-16 01:02:03.456"
+      },
+      "monitor": {
+        "id": 42, "name": "Example API", "type": "http",
+        "url": "https://example.invalid/health"
+      },
+      "msg": "[Example API] [✅ Up] 200 - OK"
+    }
+  },
+  {
+    "name": "notification",
+    "payload": {
+      "heartbeat": null, "monitor": null, "msg": "Testing NoMail notification"
+    }
+  },
+  {
+    "name": "notification",
+    "payload": {
+      "heartbeat": null, "monitor": null,
+      "msg": "[Example API][https://example.invalid] TLS certificate will expire in 7 days"
+    }
+  }
+]

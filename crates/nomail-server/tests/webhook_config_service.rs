@@ -306,6 +306,7 @@ async fn config_service_preserves_sparse_concurrent_updates_credentials_and_scop
     // Every exposed provider survives encrypted persistence and feeds the actual
     // receiving path. These are synthetic payloads and credentials only.
     for platform in [
+        json!({"provider":"uptimekuma","credentials":{}}),
         json!({"provider":"mailflare","credentials":{"secret":"platform-secret"}}),
         json!({"provider":"generic","credentials":{"type":"hmacSha256","secret":"platform-secret"}}),
         json!({"provider":"github","credentials":{"secret":"platform-secret"}}),
@@ -455,6 +456,56 @@ async fn config_service_preserves_sparse_concurrent_updates_credentials_and_scop
                 .collect::<Vec<_>>(),
             ["one", "two"]
         );
+        if provider == "uptimekuma" {
+            assert_eq!(created["platform"]["authentication"], "none");
+            assert!(detail["metadata"]["deduplicationKey"].is_null());
+            assert_eq!(detail["metadata"]["eventType"], "down");
+            let response = test::call_service(
+                &app,
+                test::TestRequest::post()
+                    .uri(receive_path)
+                    .set_payload(raw.clone())
+                    .to_request(),
+            )
+            .await;
+            assert_eq!(response.status(), StatusCode::OK);
+            let fixtures: Vec<Value> = serde_json::from_str(include_str!(
+                "../../nomail-core/src/webhook/platforms/uptime_kuma/fixtures/notifications.json"
+            ))
+            .unwrap();
+            for fixture in fixtures {
+                let mut ids = Vec::new();
+                for _ in 0..2 {
+                    let response = test::call_service(
+                        &app,
+                        test::TestRequest::post()
+                            .uri(receive_path)
+                            .set_json(&fixture["payload"])
+                            .to_request(),
+                    )
+                    .await;
+                    assert_eq!(response.status(), StatusCode::OK);
+                    let ack: Value = test::read_body_json(response).await;
+                    assert_eq!(ack["data"]["duplicate"], false);
+                    ids.push(ack["data"]["messageId"].as_str().unwrap().to_owned());
+                }
+                assert_ne!(ids[0], ids[1], "no stable upstream delivery ID");
+                let path = format!("/api/messages/{}", ids[0]);
+                let sample = api!(get, &path, json!({})).1;
+                assert_eq!(
+                    sample["platformData"]["event"]["payload"],
+                    fixture["payload"]
+                );
+                assert_eq!(sample["metadata"]["eventType"], fixture["name"]);
+                assert!(sample["platformDataError"].is_null());
+                let original = api!(get, &format!("{path}/raw"), json!({})).1;
+                assert_eq!(
+                    serde_json::from_str::<Value>(original["payload"].as_str().unwrap()).unwrap(),
+                    fixture["payload"]
+                );
+                assert!(!original["header"].to_string().contains("platform-secret"));
+            }
+        }
         if provider == "mailflare" {
             assert_eq!(
                 detail["metadata"]["deduplicationKey"]["scope"],
@@ -988,7 +1039,7 @@ async fn config_service_preserves_sparse_concurrent_updates_credentials_and_scop
                 serde_json::from_str::<Value>(&raw).unwrap()
             );
         }
-        // Missing authentication never falls back to a weaker mode.
+        // Authenticated platforms never downgrade; Kuma's native webhook is unsigned.
         let response = test::call_service(
             &app,
             test::TestRequest::post()
@@ -997,7 +1048,15 @@ async fn config_service_preserves_sparse_concurrent_updates_credentials_and_scop
                 .to_request(),
         )
         .await;
-        assert_eq!(response.status(), StatusCode::UNAUTHORIZED, "{provider}");
+        assert_eq!(
+            response.status(),
+            if provider == "uptimekuma" {
+                StatusCode::OK
+            } else {
+                StatusCode::UNAUTHORIZED
+            },
+            "{provider}"
+        );
         // A partial platform replacement cannot reuse credentials from storage.
         assert_eq!(
             api!(
@@ -1031,6 +1090,7 @@ async fn config_service_preserves_sparse_concurrent_updates_credentials_and_scop
 fn platform_delivery(provider: &str, platform: &Value) -> (String, Vec<(String, String)>) {
     let time = Utc::now().timestamp().to_string();
     let body = match provider {
+        "uptimekuma" => json!({"heartbeat":{"monitorID":42,"status":0,"msg":"Connection refused","ping":null,"important":true},"monitor":{"id":42,"name":"Example API","url":"https://example.invalid/health"},"msg":"[Example API] [Down] Connection refused"}),
         "mailflare" => json!({"type":"message.inbound","data":{"messageId":"msg_matrix","from":"sender@example.com","to":"inbox@example.com","subject":"Mailflare test","cc":null}}),
         "generic" => json!({"id":"matrix","title":"Test","source":null,"content":""}),
         "github" => json!({"action":"opened","issue":{"title":"Test","assignee":null,"labels":[],"locked":false}}),
@@ -1050,6 +1110,7 @@ fn platform_delivery(provider: &str, platform: &Value) -> (String, Vec<(String, 
         mac.finalize().into_bytes()
     };
     let mut headers = match provider {
+        "uptimekuma" => vec![],
         "mailflare" => vec![
             ("X-Email-Platform-Event", "message.inbound".into()),
             ("X-Email-Platform-Delivery", "whd_matrix".into()),
