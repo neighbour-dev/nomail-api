@@ -1,18 +1,32 @@
 //! Workers request/response adaptation; no endpoint names or business dispatch.
-use crate::{db::Store, error::Result, realtime, services::WorkersEnvironment};
+use crate::{db::Store, error::Result, push, realtime, services::WorkersEnvironment};
 use futures_util::StreamExt;
 use nomail_app::{
     auth::RequestMeta,
     http::{self, ApiFailure, HttpReply, HttpResult, RequestHead},
 };
-use worker::{Env, Request, Response};
+use worker::{Context, Env, Request, Response};
 
-pub async fn handle(req: Request, env: Env) -> Result<Response> {
+pub async fn handle(req: Request, env: Env, ctx: Context) -> Result<Response> {
     let mut request = WorkersRequest::new(req)?;
     // Keep binding failures deferred until the shared executor has matched a
     // route, so unknown paths still return 404 even with broken configuration.
     let db = env.d1("DB").map(Store);
-    let outcome = http::execute(&mut request, &WorkersEnvironment { db: &db, env: &env }).await?;
+    let relay = push::config(&env).ok().flatten();
+    let outcome = http::execute(
+        &mut request,
+        &WorkersEnvironment {
+            db: &db,
+            env: &env,
+            push: relay.is_some(),
+        },
+    )
+    .await?;
+    if !outcome.events.is_empty()
+        && let Some(config) = relay
+    {
+        ctx.wait_until(push::run(env.clone(), config, 4));
+    }
     for effect in outcome.events {
         if let Err(_error) = realtime::publish(&env, effect.user_id, effect.event).await {
             // A failed best-effort broadcast must not fail an already durable ACK.

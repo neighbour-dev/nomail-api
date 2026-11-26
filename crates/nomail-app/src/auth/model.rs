@@ -66,6 +66,7 @@ pub struct AuthContext {
     pub user_id: i64,
     pub session_id: i64,
     pub device_id: i64,
+    pub logged_in_at: DateTime<Utc>,
     pub expires_at: DateTime<Utc>,
 }
 

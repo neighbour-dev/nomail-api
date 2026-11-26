@@ -10,6 +10,7 @@ Cloudflare 官方 [workers-rs](https://github.com/cloudflare/workers-rs) 的 `wo
 - 开发环境与完整检查：[贡献指南](../../CONTRIBUTING.md#tests-and-checks)。
 - 共享业务、raw 存储与 HTTP 执行：[App 架构](../nomail-app/README.md)。
 - 不兼容变更与升级前置要求：[更新日志](../../CHANGELOG.md#升级说明)。
+- 可选 APNs／FCM 中转与 Cron：[系统推送配置](../../docs/push.md)。
 
 ## 测试
 

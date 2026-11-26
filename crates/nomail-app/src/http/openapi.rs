@@ -79,6 +79,9 @@ pub fn document() -> Value {
         for status in [400, 401, 404, 409, 413, 500] {
             responses.insert(status.to_string(),json!({"description":format!("HTTP {status}"),"content":{"application/json":{"schema":error_schema}}}));
         }
+        if route.operation == Operation::RegisterPush {
+            responses.insert("503".into(), json!({"description":"此实例未配置推送中转","content":{"application/json":{"schema":error_schema}}}));
+        }
         if route.response == ResponseKind::Sse {
             responses.insert("429".into(),json!({"description":"容量或请求限流（由部署环境执行）","headers":{"Retry-After":{"schema":{"type":"string"}}},"content":{"application/json":{"schema":error_schema}}}));
         }

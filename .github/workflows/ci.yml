@@ -141,7 +141,7 @@ jobs:
       - name: Build Worker bundle
         run: worker-build --release
 
-      # npm test applies D1 migrations and starts Wrangler with --local and an
-      # isolated --persist-to directory. No Cloudflare credentials are needed.
+      # npm test applies D1 migrations and starts Wrangler locally with isolated
+      # persistence and a mocked push relay. No Cloudflare credentials are needed.
       - name: Test Workers with local D1 and Durable Objects
         run: npm test

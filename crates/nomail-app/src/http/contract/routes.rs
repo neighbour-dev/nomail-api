@@ -9,6 +9,7 @@ use serde::{Serialize, de::DeserializeOwned};
 pub enum Method {
     Get,
     Post,
+    Put,
     Patch,
     Delete,
 }
@@ -17,6 +18,7 @@ impl Method {
         match self {
             Self::Get => "GET",
             Self::Post => "POST",
+            Self::Put => "PUT",
             Self::Patch => "PATCH",
             Self::Delete => "DELETE",
         }
@@ -114,6 +116,8 @@ endpoints! {
     GetAccount => ("getAccount",Get,"/api/auth/account",Bearer,None,Json,false,None,(),(),AccountResponse,"Auth","获取账号"),
     UpdateAccount => ("updateAccount",Patch,"/api/auth/account",Bearer,Json,Json,false,None,AccountUpdateRequest,(),AccountResponse,"Auth","修改账号"),
     ListDevices => ("listDevices",Get,"/api/auth/devices",Bearer,None,Json,false,None,(),(),Vec<DeviceResponse>,"Auth","设备列表"),
+    RegisterPush => ("registerPushToken",Put,"/api/auth/device/push-token",Bearer,Json,Json,false,None,RegisterPushRequest,(),(),"Auth","上报或更新当前登录设备的推送 Token"),
+    RemovePush => ("removePushToken",Delete,"/api/auth/device/push-token",Bearer,None,Json,false,None,(),(),(),"Auth","删除当前登录设备的推送 Token"),
     KickDevice => ("kickDevice",Delete,"/api/auth/devices/{deviceId}/session",Bearer,None,Json,false,DeviceId,(),(),(),"Auth","撤销设备会话"),
     DeleteDevice => ("deleteDevice",Delete,"/api/auth/devices/{deviceId}",Bearer,None,Json,false,DeviceId,(),(),(),"Auth","删除设备"),
     ListConfigs => ("listWebhookConfigs",Get,"/api/webhook/configs",Bearer,None,Json,true,None,(),PaginationQuery,Page<ConfigResponse>,"Webhook Configs","接收配置列表"),

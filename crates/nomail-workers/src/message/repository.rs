@@ -330,14 +330,30 @@ impl IngestionStore for Store<'_> {
                 })
             }).transpose()
     }
-    async fn insert_once(&self, m: &Message) -> MessageResult<InsertOutcome> {
+    async fn insert_once(&self, m: &Message, push: bool) -> MessageResult<InsertOutcome> {
         let key = m.metadata.deduplication_key.as_ref();
         let data = serde_json::to_string(&m.raw_headers).map_err(|e| invalid(e.to_string()))?;
-        let rows=self.0.rows("INSERT INTO notify_messages (id,webhook_config_id,provider,event_type,event_version,deduplication_scope,deduplication_key,raw_headers,title,summary,level,url,raw_payload,content_type,created_at,updated_at,expire_at,status,pinned,read_at,deleted_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(webhook_config_id,deduplication_scope,deduplication_key) DO NOTHING RETURNING id",
+        let insert=self.0.statement("INSERT INTO notify_messages (id,webhook_config_id,provider,event_type,event_version,deduplication_scope,deduplication_key,raw_headers,title,summary,level,url,raw_payload,content_type,created_at,updated_at,expire_at,status,pinned,read_at,deleted_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(webhook_config_id,deduplication_scope,deduplication_key) DO NOTHING RETURNING id",
             vec![json!(m.id),json!(m.webhook_config_id),json!(m.provider),json!(m.metadata.event_type),json!(m.metadata.version),
                  json!(key.map(|k|&k.scope)),json!(key.map(|k|&k.value)),json!(data),json!(m.common.title),json!(m.common.summary),
                  json!(m.common.level),json!(m.common.url),json!(m.raw_payload),json!(m.content_type),
-                json!(date(m.received_at)),json!(date(m.updated_at)),json!(m.expires_at.map(date)),json!(m.status),json!(m.pinned),json!(m.read_at.map(date)),json!(m.deleted_at.map(date))]).await.map_err(storage)?;
+                 json!(date(m.received_at)),json!(date(m.updated_at)),json!(m.expires_at.map(date)),json!(m.status),json!(m.pinned),json!(m.read_at.map(date)),json!(m.deleted_at.map(date))]).map_err(storage)?;
+        let rows = if push {
+            let enqueue = crate::push::enqueue(self.0, m).map_err(storage)?;
+            let results = self.0.0.batch(vec![insert, enqueue]).await.map_err(d1)?;
+            results
+                .first()
+                .ok_or_else(|| invalid("missing insert result"))?
+                .results::<Value>()
+                .map_err(d1)?
+        } else {
+            insert
+                .all()
+                .await
+                .map_err(d1)?
+                .results::<Value>()
+                .map_err(d1)?
+        };
         if !rows.is_empty() {
             return Ok(InsertOutcome::Created(m.id));
         }

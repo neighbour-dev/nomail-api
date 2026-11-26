@@ -15,14 +15,20 @@ async fn handle(
     req: HttpRequest,
     payload: web::Payload,
 ) -> HttpResponse {
-    match execute(&state, req, payload).await {
+    let push = req.app_data::<crate::push::Enabled>().is_some();
+    match execute(&state, req, payload, push).await {
         Ok(response) => response,
         Err(error) => error.error_response(),
     }
 }
-async fn execute(state: &AppState, req: HttpRequest, payload: web::Payload) -> ApiResult {
+async fn execute(
+    state: &AppState,
+    req: HttpRequest,
+    payload: web::Payload,
+    push: bool,
+) -> ApiResult {
     let mut request = ActixRequest::new(req, payload);
-    let outcome = http::execute(&mut request, &NativeEnvironment(state)).await?;
+    let outcome = http::execute(&mut request, &NativeEnvironment(state, push)).await?;
     for effect in outcome.events {
         state.realtime.publish(
             effect.user_id,

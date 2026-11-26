@@ -24,7 +24,9 @@ pub trait IngestionStore {
     /// Atomically insert the supplied record once. No state/TTL/default decisions.
     /// Deduplication includes configuration, scope and full key, survives soft
     /// deletion, and treats absent keys as independent deliveries.
-    async fn insert_once(&self, message: &Message) -> MessageResult<InsertOutcome>;
+    /// When enabled, persist the push jobs for the newly inserted message in the
+    /// same commit. Duplicates must never produce jobs.
+    async fn insert_once(&self, message: &Message, push: bool) -> MessageResult<InsertOutcome>;
 }
 pub trait IngestionRuntime {
     fn now(&self) -> DateTime<Utc>;
@@ -50,6 +52,7 @@ impl<S: IngestionStore, R: IngestionRuntime> IngestionService<S, R> {
         &self,
         key: &str,
         request: &WebhookRequest<'_>,
+        push: bool,
     ) -> IngestionResult<IngestionOutcome> {
         let config = self
             .store
@@ -74,7 +77,7 @@ impl<S: IngestionStore, R: IngestionRuntime> IngestionService<S, R> {
                     self.runtime.message_id(now)?,
                     now,
                 )?;
-                let outcome = self.store.insert_once(&message).await?;
+                let outcome = self.store.insert_once(&message, push).await?;
                 let created_event = match outcome {
                     InsertOutcome::Duplicate(_) => None,
                     InsertOutcome::Created(id) if id == message.id => {

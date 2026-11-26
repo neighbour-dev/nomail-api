@@ -106,6 +106,16 @@ async fn core_inventory_controls_routes_authentication_parameters_and_response_d
         "Authorization",
         format!("Bearer {}", login.data.access_token),
     );
+    let unconfigured = test::call_service(
+        &app,
+        test::TestRequest::put()
+            .uri(api::Operation::RegisterPush.route().path)
+            .insert_header(authorization.clone())
+            .set_json(json!({"channel":"apns","deviceToken":"ab12"}))
+            .to_request(),
+    )
+    .await;
+    assert_eq!(unconfigured.status(), StatusCode::SERVICE_UNAVAILABLE);
     let response = test::call_service(
         &app,
         test::TestRequest::post()

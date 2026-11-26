@@ -6,6 +6,7 @@ use super::{
 };
 use crate::{
     auth::{AuthContext, AuthRuntime},
+    push::{self, DeviceStore},
     webhook::{HeaderLookup, WebhookRequest},
 };
 
@@ -107,6 +108,35 @@ pub async fn execute(
                 .map(Into::into)
                 .collect(),
         ),
+        Operation::RegisterPush => {
+            if !environment.push_enabled() {
+                return Err(ApiFailure::new(503, "push is not configured").into());
+            }
+            let input = input!(e::RegisterPush);
+            let target = push::Registration::new(input.channel.into(), input.device_token)?;
+            services
+                .auth
+                .store
+                .set_target(
+                    actor(&context)?,
+                    Some(&target),
+                    AuthRuntime::now(&services.auth.runtime),
+                )
+                .await?;
+            json::<e::RegisterPush>(())
+        }
+        Operation::RemovePush => {
+            services
+                .auth
+                .store
+                .set_target(
+                    actor(&context)?,
+                    None,
+                    AuthRuntime::now(&services.auth.runtime),
+                )
+                .await?;
+            json::<e::RemovePush>(())
+        }
         Operation::KickDevice => {
             services
                 .auth
@@ -183,6 +213,7 @@ pub async fn execute(
                         headers: head,
                         body: &body,
                     },
+                    environment.push_enabled(),
                 )
                 .await?;
             match WebhookReply::from(outcome) {

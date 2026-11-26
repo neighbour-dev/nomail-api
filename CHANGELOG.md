@@ -8,6 +8,7 @@
 
 ### 新增
 
+- Server 和 Workers 支持可选的 iOS（APNs）和 Android（FCM）系统推送：两种渠道共用同一个 `nomail-push` 实例 Token，设备通过 `/api/auth/device/push-token` 上报 `channel` 和 `deviceToken`。推送使用持久待发任务，不影响原有 SSE。
 - 新增 Uptime Kuma 平台（`uptimekuma`），支持接收默认 JSON Webhook，Server 和 Workers 均可配置。
 
 ### 修复

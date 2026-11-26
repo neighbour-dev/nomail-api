@@ -7,6 +7,7 @@ pub mod entity;
 pub mod error;
 pub mod message;
 pub mod migration;
+pub mod push;
 pub mod realtime;
 mod runtime;
 mod services;

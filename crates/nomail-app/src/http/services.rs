@@ -55,7 +55,7 @@ pub enum HealthCheck {
 }
 #[allow(async_fn_in_trait)]
 pub trait Environment {
-    type AuthStore: AuthStore;
+    type AuthStore: AuthStore + crate::push::DeviceStore;
     type MessageStore: MessageStore;
     type ConfigStore: WebhookConfigStore;
     type IngestionStore: IngestionStore;
@@ -63,6 +63,9 @@ pub trait Environment {
 
     /// Lazy: called only for known non-health routes, not during registration.
     fn services(&self) -> HttpResult<EnvironmentServices<Self>>;
+    fn push_enabled(&self) -> bool {
+        false
+    }
     /// Deployment-specific health I/O; HTTP formatting stays shared.
     async fn health(&self, request: &RequestHead) -> HttpResult<HealthCheck>;
 }

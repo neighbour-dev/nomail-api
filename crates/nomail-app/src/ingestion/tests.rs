@@ -43,7 +43,7 @@ impl IngestionStore for Store {
             encrypted_platform: self.secret.clone().unwrap(),
         }))
     }
-    async fn insert_once(&self, message: &Message) -> MessageResult<InsertOutcome> {
+    async fn insert_once(&self, message: &Message, _: bool) -> MessageResult<InsertOutcome> {
         if self.fail_write {
             return Err(MessageError::Internal("write failed".into()));
         }
@@ -123,6 +123,7 @@ async fn receive_json(
                     headers: &headers,
                     body: &body,
                 },
+                false,
             )
             .await
             .unwrap(),
@@ -172,7 +173,7 @@ async fn authenticated_unmodeled_deliveries_are_stored_before_acknowledgement() 
         body: &body,
     };
     for _ in 0..2 {
-        let received = accepted(service.receive("enabled", &request).await.unwrap());
+        let received = accepted(service.receive("enabled", &request, false).await.unwrap());
         assert!(!received.outcome.duplicate());
         assert!(received.created_event.is_some());
         let rows = service.store.rows.borrow();
@@ -186,7 +187,7 @@ async fn authenticated_unmodeled_deliveries_are_stored_before_acknowledgement() 
     }
     assert_eq!(service.store.rows.borrow().len(), 2);
     service.store.fail_write = true;
-    assert!(service.receive("enabled", &request).await.is_err());
+    assert!(service.receive("enabled", &request, false).await.is_err());
     assert_eq!(service.store.rows.borrow().len(), 2);
     let wrong = vec![("X-Telegram-Bot-Api-Secret-Token".into(), "wrong".into())];
     assert!(
@@ -196,7 +197,8 @@ async fn authenticated_unmodeled_deliveries_are_stored_before_acknowledgement() 
                 &WebhookRequest {
                     headers: &wrong,
                     body: &body
-                }
+                },
+                false,
             )
             .await
             .is_err()
@@ -269,6 +271,7 @@ async fn deduplication_keeps_configuration_scopes_full_keys_and_null_key_indepen
                     headers: &headers,
                     body: br#"{"action":"opened","issue":{"title":"Issue"}}"#,
                 },
+                false,
             )
             .await
             .unwrap(),
@@ -309,7 +312,8 @@ async fn controls_are_authenticated_without_creating_identity_or_writing() {
         headers: &headers,
         body: br#"{"type":"url_verification","token":"verification-token","challenge":"hello"}"#,
     };
-    let IngestionOutcome::Control(response) = service.receive("enabled", &request).await.unwrap()
+    let IngestionOutcome::Control(response) =
+        service.receive("enabled", &request, false).await.unwrap()
     else {
         panic!()
     };
@@ -325,7 +329,7 @@ async fn controls_are_authenticated_without_creating_identity_or_writing() {
         body: br#"{"type":"url_verification","token":"wrong","challenge":"hello"}"#,
     };
     assert!(matches!(
-        service.receive("enabled", &bad).await,
+        service.receive("enabled", &bad, false).await,
         Err(IngestionError::Protocol(_))
     ));
     let unsigned_event = WebhookRequest {
@@ -333,7 +337,7 @@ async fn controls_are_authenticated_without_creating_identity_or_writing() {
         body: br#"{"type":"event","token":"verification-token","event":{}}"#,
     };
     assert!(matches!(
-        service.receive("enabled", &unsigned_event).await,
+        service.receive("enabled", &unsigned_event, false).await,
         Err(IngestionError::Protocol(_))
     ));
     assert_eq!(service.runtime.0.get(), 0);
@@ -348,23 +352,23 @@ async fn missing_invalid_credentials_and_failed_writes_never_acknowledge() {
         body: br#"{"id":"one","title":"Alert"}"#,
     };
     assert!(matches!(
-        service.receive("disabled", &request).await,
+        service.receive("disabled", &request, false).await,
         Err(IngestionError::ConfigNotFound)
     ));
     assert!(matches!(
-        service.receive("enabled", &request).await,
+        service.receive("enabled", &request, false).await,
         Err(IngestionError::Protocol(_))
     ));
     assert_eq!(service.runtime.0.get(), 0);
     service.store.secret = Some("invalid ciphertext".into());
     assert!(matches!(
-        service.receive("enabled", &request).await,
+        service.receive("enabled", &request, false).await,
         Err(IngestionError::Internal(_))
     ));
     service.store.secret = Some(encrypted(Provider::Generic, None));
     service.store.fail_write = true;
     assert!(matches!(
-        service.receive("enabled", &request).await,
+        service.receive("enabled", &request, false).await,
         Err(IngestionError::Message(_))
     ));
     assert!(service.store.rows.borrow().is_empty());
@@ -379,7 +383,7 @@ async fn inconsistent_created_id_never_produces_an_acknowledgement() {
         headers: &headers,
         body: br#"{"id":"one","title":"Alert"}"#,
     };
-    assert!(matches!(service.receive("enabled", &request).await,
+    assert!(matches!(service.receive("enabled", &request, false).await,
         Err(IngestionError::Message(MessageError::Internal(message)))
             if message == "insert returned an inconsistent message id"));
 }

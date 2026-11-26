@@ -1,40 +1,63 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawn, spawnSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHmac, createHash, createCipheriv } from 'node:crypto';
+import { EventEmitter, once } from 'node:events';
+import { unstable_startWorker } from 'wrangler';
 import { validateResponse, validateSse, protectedRoutes } from './contract.mjs';
 import { testMessageCursors } from './cursor.mjs';
 import { testRawStorageUpgrade, testSummaryStorageUpgrade } from './raw-storage.mjs';
 
 test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, async () => {
   const state = await mkdtemp(join(tmpdir(), 'nomail-worker-test-'));
-  let child;
-  let stopped;
+  let worker;
   let logs = '';
   const origin = 'http://127.0.0.1:8791';
+  const relayToken = 'a'.repeat(64);
+  const relayCalls = [];
+  const relay = new EventEmitter();
+  async function mockOutbound(request) {
+    const url = new URL(request.url);
+    // No request is forwarded to a real upstream, including on unexpected paths.
+    if (url.origin !== 'https://push.nomail.sg' ||
+        url.pathname !== '/v1/caller/deliveries' || request.method !== 'POST') {
+      return new Response(null, { status: 404 });
+    }
+    const command = await request.json();
+    relayCalls.push({
+      method: request.method, path: url.pathname,
+      authorization: request.headers.get('Authorization'), command,
+    });
+    relay.emit('delivery');
+    return Response.json({ code: 0, data: {
+      deliveryId: command.deliveryId, status: 'queued',
+    } }, { status: 202 });
+  }
   try {
     await testRawStorageUpgrade(state);
     await testSummaryStorageUpgrade(state);
     const migration = spawnSync('wrangler', ['d1', 'migrations', 'apply', 'DB', '--local', '--persist-to', state], { encoding: 'utf8', env: { ...process.env, CI: 'true' } });
     assert.equal(migration.status, 0, migration.stdout + migration.stderr);
-    child = spawn('wrangler', ['dev', '--local', '--ip', '127.0.0.1', '--port', '8791', '--persist-to', state,
-      '--var', 'JWT_SECRET:local-test-secret-never-use-in-production',
-      '--var', `SECRET_ENCRYPTION_KEY:${Buffer.alloc(32, 7).toString('base64')}`], { env: { ...process.env, CI: 'true' }, stdio: ['ignore', 'pipe', 'pipe'] });
-    stopped = new Promise(resolve => child.once('exit', resolve));
-    await new Promise((resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error(`Worker startup timed out\n${logs}`)), 120_000);
-      const onData = data => {
-        logs += data;
-        if (logs.includes('Ready on http://127.0.0.1:8791')) { clearTimeout(timer); resolve(); }
-      };
-      child.stdout.on('data', onData);
-      child.stderr.on('data', onData);
-      child.once('error', error => { clearTimeout(timer); reject(error); });
-      child.once('exit', code => { clearTimeout(timer); reject(new Error(`Worker exited ${code}\n${logs}`)); });
+    worker = await unstable_startWorker({
+      config: 'wrangler.toml',
+      bindings: {
+        JWT_SECRET: { type: 'secret_text', value: 'local-test-secret-never-use-in-production' },
+        SECRET_ENCRYPTION_KEY: { type: 'secret_text', value: Buffer.alloc(32, 7).toString('base64') },
+        NOMAIL_PUSH_TOKEN: { type: 'secret_text', value: relayToken },
+      },
+      dev: {
+        remote: false,
+        persist: state,
+        watch: false,
+        server: { hostname: '127.0.0.1', port: 8791 },
+        structuredLogsHandler: log => { logs += JSON.stringify(log) + '\n'; },
+        outboundService: mockOutbound,
+      },
     });
+    await worker.ready;
     async function api(method, path, body, token, expected = 200) {
       const response = await fetch(origin + path, { method, headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
       const data = await response.json();
@@ -213,8 +236,44 @@ test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, a
       validateResponse('POST', config.url, response.status, result);
       return result.data;
     }
-    const created = await receive({ id: 'event-1', title: 'Disk', content: 'hello\n 世界', level: 'urgent' });
+    const registration = '/api/auth/device/push-token';
+    await api('PUT', registration, { deviceToken: 'ABCDEF' }, token, 400);
+    await api('PUT', registration, { channel: 'apns', token: 'ABCDEF' }, token, 400);
+    await api('PUT', registration, { channel: 'ios', deviceToken: 'ABCDEF' }, token, 400);
+    await api('PUT', registration, { channel: 'apns', deviceToken: 'abc' }, token, 400);
+    await api('PUT', registration, { channel: 'fcm', deviceToken: 'bad token' }, token, 400);
+    await api('PUT', registration, { channel: 'apns', deviceToken: 'ABCDEF' }, token);
+    const [oldTarget] = localSql('SELECT channel, token, version FROM push_targets;');
+    assert.equal(oldTarget.channel, 'apns');
+    assert.equal(oldTarget.token, 'abcdef');
+    await api('PUT', registration, { channel: 'fcm', deviceToken: oldTarget.token }, token);
+    const [newTarget] = localSql('SELECT channel, token, version FROM push_targets;');
+    assert.equal(newTarget.channel, 'fcm');
+    assert.equal(newTarget.token, oldTarget.token);
+    assert.notEqual(newTarget.version, oldTarget.version);
+    await api('PUT', registration, { channel: 'fcm', deviceToken: 'AbCd:XYZ_-012' }, token);
+    const delivered = once(relay, 'delivery', { signal: AbortSignal.timeout(12_000) });
+    const [created] = await Promise.all([
+      receive({ id: 'event-1', title: 'Disk', content: 'hello\n 世界', level: 'urgent' }),
+      delivered,
+    ]);
     assert.equal(created.duplicate, false);
+    assert.deepEqual(relayCalls, [{
+      method: 'POST',
+      path: '/v1/caller/deliveries',
+      authorization: `Bearer ${relayToken}`,
+      command: {
+        deliveryId: relayCalls[0].command.deliveryId, messageId: created.messageId,
+        notification: { title: 'NoMail', body: '你有一条新消息' },
+        target: { channel: 'fcm', token: 'AbCd:XYZ_-012' },
+      },
+    }]);
+    assert.match(relayCalls[0].command.deliveryId, /^[0-9a-f-]{36}$/);
+    const pushJobs = localSql('SELECT delivery_id, message_id FROM push_jobs;');
+    assert.deepEqual(pushJobs, [{ delivery_id: relayCalls[0].command.deliveryId.replaceAll('-', ''), message_id: created.messageId }]);
+    assert.equal((await receive({ id: 'event-1', title: 'Replay' })).duplicate, true);
+    assert.deepEqual(localSql('SELECT delivery_id, message_id FROM push_jobs;'), pushJobs);
+    await api('DELETE', registration, undefined, token);
     assert.match(created.messageId, /^[0-9a-f]{8}-[0-9a-f]{4}-7/);
     const createdEvent = decoder.decode((await reader.read()).value);
     assert.match(createdEvent, /event: message.created/);
@@ -909,7 +968,7 @@ test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, a
     await api('POST', '/api/auth/setup', { username: 'replacement', password: 'password456' }, undefined, 409);
     assert.deepEqual(localSql('SELECT * FROM users ORDER BY id;'), deletedAccounts);
   } finally {
-    if (child?.exitCode === null) { child.kill('SIGTERM'); await stopped; }
+    if (worker) await worker.dispose();
     await rm(state, { recursive: true, force: true });
   }
 });

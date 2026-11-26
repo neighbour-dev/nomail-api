@@ -4,13 +4,17 @@ use nomail_app::http::{
     Environment, EnvironmentServices, HealthCheck, HttpResult, RequestHead, Services,
 };
 
-pub(crate) struct NativeEnvironment<'a>(pub &'a AppState);
+pub(crate) struct NativeEnvironment<'a>(pub &'a AppState, pub bool);
 impl<'a> Environment for NativeEnvironment<'a> {
     type AuthStore = auth::repository::Store<'a>;
     type MessageStore = message::repository::Store<'a>;
     type ConfigStore = webhook::configs::repository::Store<'a>;
     type IngestionStore = message::repository::Store<'a>;
     type Runtime = Runtime;
+
+    fn push_enabled(&self) -> bool {
+        self.1
+    }
 
     fn services(&self) -> HttpResult<EnvironmentServices<Self>> {
         let state = self.0;

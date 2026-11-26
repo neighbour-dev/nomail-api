@@ -159,6 +159,7 @@ impl<S: AuthStore, R: AuthRuntime> AuthService<S, R> {
             user_id: claims.user_id,
             session_id: claims.session_id,
             device_id: state.device.id,
+            logged_in_at: state.session.logged_in_at,
             expires_at,
         })
     }

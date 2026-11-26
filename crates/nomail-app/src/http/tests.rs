@@ -279,6 +279,20 @@ fn authentication_and_non_json_contracts_are_declared_once() {
 #[test]
 fn static_routes_win_and_unknown_methods_are_not_authenticated_or_reinterpreted() {
     assert_eq!(
+        resolve("DELETE", "/api/auth/device/push-token")
+            .unwrap()
+            .route
+            .operation,
+        Operation::RemovePush
+    );
+    assert_eq!(
+        resolve("DELETE", "/api/auth/devices/push-token")
+            .unwrap()
+            .route
+            .operation,
+        Operation::DeleteDevice
+    );
+    assert_eq!(
         resolve("GET", "/api/messages/cursor")
             .unwrap()
             .route
@@ -314,6 +328,7 @@ fn static_routes_win_and_unknown_methods_are_not_authenticated_or_reinterpreted(
         ("GET", "/api//messages"),
         ("GET", "/api/unknown"),
         ("POST", "/api/push/devices"),
+        ("PUT", "/api/auth/devices/current/push"),
     ] {
         assert_eq!(
             resolve(method, path).err().unwrap().status,

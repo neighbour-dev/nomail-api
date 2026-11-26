@@ -19,6 +19,7 @@ use worker::Env;
 pub(crate) struct WorkersEnvironment<'a> {
     pub db: &'a worker::Result<Store>,
     pub env: &'a Env,
+    pub push: bool,
 }
 fn config_failure(error: ConfigLoadError) -> ApiFailure {
     // Preserve the public configuration failure contract at the HTTP boundary,
@@ -42,6 +43,10 @@ impl<'a> Environment for WorkersEnvironment<'a> {
     type ConfigStore = webhook::configs::repository::Store<'a>;
     type IngestionStore = message::repository::Store<'a>;
     type Runtime = Runtime;
+
+    fn push_enabled(&self) -> bool {
+        self.push
+    }
 
     fn services(&self) -> HttpResult<EnvironmentServices<Self>> {
         let db = self.db.as_ref().map_err(|_| ApiFailure::internal())?;

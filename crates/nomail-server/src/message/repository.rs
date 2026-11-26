@@ -345,7 +345,7 @@ impl IngestionStore for Store<'_> {
             })
             .transpose()
     }
-    async fn insert_once(&self, m: &Message) -> MessageResult<InsertOutcome> {
+    async fn insert_once(&self, m: &Message, push: bool) -> MessageResult<InsertOutcome> {
         let key = m.metadata.deduplication_key.as_ref();
         let record = message::ActiveModel {
             id: Set(m.id),
@@ -370,19 +370,31 @@ impl IngestionStore for Store<'_> {
             read_at: Set(m.read_at),
             expire_at: Set(m.expires_at),
         };
-        let affected = message::Entity::insert(record)
-            .on_conflict(
-                OnConflict::columns([
-                    message::Column::WebhookConfigId,
-                    message::Column::DeduplicationScope,
-                    message::Column::DeduplicationKey,
-                ])
-                .do_nothing()
-                .to_owned(),
-            )
-            .exec_without_returning(self.0)
-            .await
-            .map_err(storage)?;
+        let insert = message::Entity::insert(record).on_conflict(
+            OnConflict::columns([
+                message::Column::WebhookConfigId,
+                message::Column::DeduplicationScope,
+                message::Column::DeduplicationKey,
+            ])
+            .do_nothing()
+            .to_owned(),
+        );
+        let affected = if push {
+            let tx = self.0.begin().await.map_err(storage)?;
+            let affected = insert.exec_without_returning(&tx).await.map_err(storage)?;
+            if affected != 0 {
+                crate::push::enqueue(&tx, m)
+                    .await
+                    .map_err(|_| MessageError::Internal("failed to enqueue push".into()))?;
+            }
+            tx.commit().await.map_err(storage)?;
+            affected
+        } else {
+            insert
+                .exec_without_returning(self.0)
+                .await
+                .map_err(storage)?
+        };
         if affected != 0 {
             return Ok(InsertOutcome::Created(m.id));
         }
