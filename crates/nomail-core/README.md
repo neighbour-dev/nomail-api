@@ -131,6 +131,8 @@ Gitea 使用独立模型，依据上游 v28.3.0 固定 commit 的实际派发入
 
 测试将官方 `webhook-events` 的 14 个示例（12 类事件）固化为脱敏 JSON fixture，并逐字段检查类型和值；CI 不依赖外部样本、Apple 账号或联网下载。
 
+完整事件清单、逐事件内容映射、两种资源关系形状、链接回退和安全边界见 [App Store Connect 平台说明](src/webhook/platforms/app_store_connect/README.md)。地区数组存在类型异常时整体省略类型化字段，不静默裁剪；完整解码内容仍保留在 raw。
+
 ### Stripe
 
 Snapshot 与 Thin 使用独立信封类型，序列化保持原生 JSON 层级，不增加分支包装；这不表示响应字段集合与旧模型完全相同。Snapshot 的 `created` 是 Unix 秒整数，Thin 是时间字符串；Thin 模型包含 `reason.request`、`related_object` 和 `snapshot_event` 等可选字段，只投影实际收到的内容，不调用 Stripe API 补全详情。

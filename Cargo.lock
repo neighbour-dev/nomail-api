@@ -1899,7 +1899,7 @@ checksum = "e94e1e6445d314f972ff7395df2de295fe51b71821694f0b0e1e79c4f12c8577"
 
 [[package]]
 name = "nomail-app"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "aes-gcm",
  "base64 0.22.1",
@@ -1923,7 +1923,7 @@ dependencies = [
 
 [[package]]
 name = "nomail-core"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "aes",
  "base64 0.22.1",
@@ -1941,7 +1941,7 @@ dependencies = [
 
 [[package]]
 name = "nomail-server"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "actix-web",
  "async-stream",
@@ -1972,7 +1972,7 @@ dependencies = [
 
 [[package]]
 name = "nomail-workers"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "chrono",
  "futures-channel",

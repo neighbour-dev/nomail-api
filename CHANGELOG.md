@@ -6,19 +6,26 @@
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-26
+
 ### 新增
 
-- Server 和 Workers 支持可选的 iOS（APNs）和 Android（FCM）系统推送：两种渠道共用同一个 `nomail-push` 实例 Token，设备通过 `/api/device/push/token` 上报 `channel` 和 `deviceToken`。推送使用持久待发任务，不影响原有 SSE。
+- Server 和 Workers 支持通过官方中转 `https://push.nomail.sg` 发送 iOS（APNs）和 Android（FCM）系统推送，两种渠道共用一个实例 Token。通知标题为 `NoMail: <消息标题>`，正文使用消息摘要。投递任务与新消息一同持久化。
+- `PUT`／`DELETE /api/device/push/token` 登记或删除当前设备的推送 Token；`GET`／`PUT /api/device/push/preferences` 管理当前设备的总开关及 `low`、`normal`、`high`、`urgent` 四个等级开关。总开关默认关闭，各等级默认开启；同账号的设备独立设置，收件箱和 SSE 不受推送开关影响。
 - 新增 Uptime Kuma 平台（`uptimekuma`），支持接收默认 JSON Webhook，Server 和 Workers 均可配置。
 
 ### 修复
 
-- 细化 App Store Connect 通知映射，区分替代分发包与地区可用性事件标题；缺少可用性标记时不生成多余分隔符，空资源链接不再阻断嵌套或商城资源链接回退。类型异常的地区数组整体省略类型化投影，不再静默过滤元素；raw 保留完整内容。补充全部 12 类事件的映射及字段兼容性测试，不调用 Apple API 补全详情。
+- 完善 App Store Connect 通知展示，区分替代分发包与地区可用性事件标题，修复缺少可用性信息时的多余分隔符，以及空资源链接导致有效跳转链接缺失的问题。地区列表包含异常类型时，不再返回部分解析结果，而是省略该字段；完整内容仍可从原始通知中查看。
 
 ### 变更
 
-- 系统推送标题改为 `NoMail: <消息标题>`，正文使用消息摘要。`GET`／`PUT /api/device/push/preferences` 管理当前设备的推送总开关和四个等级开关；总开关默认关闭，各等级默认开启。
 - **设备 API 路径不兼容变更：**设备列表改为 `GET /api/device`，删除设备和撤销会话分别改为 `DELETE /api/device/{deviceId}` 和 `DELETE /api/device/{deviceId}/session`。旧 `/api/auth/devices` 路径不再提供。登录、退出和刷新令牌接口不变。
+
+### 升级说明
+
+- 从 `0.5.0` 升级可保留现有数据。Server 启动时自动创建推送相关表；Workers 部署新代码前需应用 D1 的 `0005_push.sql`。
+- 客户端需同步更新设备接口路径。启用手机推送时，部署者需配置 `NOMAIL_PUSH_TOKEN`，App 需在获得系统通知权限后上报设备 Token 并开启该设备的推送。见[系统推送配置](docs/push.md)。
 
 ## [0.5.0] - 2026-11-14
 
