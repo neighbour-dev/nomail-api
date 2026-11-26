@@ -129,7 +129,7 @@ async fn all_api_contracts() {
     let (_, body) = api!(get, "/api/auth/account", json!({}), Some(&token));
     assert_eq!(body["data"]["username"], "admin");
     assert_eq!(body["data"], login["data"]["user"]);
-    let (_, body) = api!(get, "/api/auth/devices", json!({}), Some(&token));
+    let (_, body) = api!(get, "/api/device", json!({}), Some(&token));
     assert_eq!(body["data"][0]["deviceId"], "a");
     assert_eq!(body["data"][0]["loggedIn"], true);
     assert!(body["data"][0].get("pushEnabled").is_none());
@@ -491,7 +491,7 @@ async fn all_api_contracts() {
     };
     let valid: Value = test::read_body_json(valid).await;
     assert_eq!(valid["data"]["user"], login["data"]["user"]);
-    let (_, devices) = api!(get, "/api/auth/devices", json!({}), Some(&token));
+    let (_, devices) = api!(get, "/api/device", json!({}), Some(&token));
     let device = devices["data"]
         .as_array()
         .unwrap()
@@ -526,16 +526,11 @@ async fn all_api_contracts() {
     let (status, _) = api!(get, "/api/auth/account", json!({}), Some(&tokens[0]));
     assert_eq!(status, StatusCode::UNAUTHORIZED);
     let token = &tokens[3];
-    let (status, _) = api!(
-        delete,
-        "/api/auth/devices/b/session",
-        json!({}),
-        Some(token)
-    );
+    let (status, _) = api!(delete, "/api/device/b/session", json!({}), Some(token));
     assert_eq!(status, StatusCode::OK);
     let (status, _) = api!(get, "/api/auth/account", json!({}), Some(&tokens[1]));
     assert_eq!(status, StatusCode::UNAUTHORIZED);
-    let (status, _) = api!(delete, "/api/auth/devices/b", json!({}), Some(token));
+    let (status, _) = api!(delete, "/api/device/b", json!({}), Some(token));
     assert_eq!(status, StatusCode::OK);
     let (status, body) = api!(
         patch,

@@ -236,7 +236,7 @@ test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, a
       validateResponse('POST', config.url, response.status, result);
       return result.data;
     }
-    const registration = '/api/auth/device/push-token';
+    const registration = '/api/device/push/token';
     await api('PUT', registration, { deviceToken: 'ABCDEF' }, token, 400);
     await api('PUT', registration, { channel: 'apns', token: 'ABCDEF' }, token, 400);
     await api('PUT', registration, { channel: 'ios', deviceToken: 'ABCDEF' }, token, 400);
@@ -937,20 +937,23 @@ test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, a
     } finally {
       await Promise.all(subscriptions.map(response => response.body.cancel()));
     }
-    const devices = await api('GET', '/api/auth/devices', undefined, token);
+    const devices = await api('GET', '/api/device', undefined, token);
     assert.equal(Object.hasOwn(devices[0], 'pushEnabled'), false);
     assert.equal(devices.find(device => device.deviceId === 'a').userAgent, 'nomail-refresh-agent');
     const rejectedRefresh = await fetch(origin + '/api/auth/refresh-token', { method: 'POST', headers: { 'Content-Type': 'application/json', 'User-Agent': 'must-not-update-device' }, body: JSON.stringify({ refreshToken: login.refreshToken }) });
     assert.equal(rejectedRefresh.status, 401);
-    assert.equal((await api('GET', '/api/auth/devices', undefined, token)).find(device => device.deviceId === 'a').userAgent, 'nomail-refresh-agent');
+    assert.equal((await api('GET', '/api/device', undefined, token)).find(device => device.deviceId === 'a').userAgent, 'nomail-refresh-agent');
     // D1 batch transactions serialize device-limit decisions across requests.
     const extraLogins = await Promise.all(['b', 'c', 'd', 'e'].map(id => api('POST', '/api/auth/login', loginBody(id))));
     const newest = await api('POST', '/api/auth/login', loginBody('last'));
     token = newest.accessToken;
-    const activeDevices = await api('GET', '/api/auth/devices', undefined, token);
+    const activeDevices = await api('GET', '/api/device', undefined, token);
     assert.equal(activeDevices.filter(device => device.loggedIn).length, 3);
     const accessStatuses = await Promise.all(extraLogins.map(login => fetch(origin + '/api/auth/account', { headers: { Authorization: `Bearer ${login.accessToken}` } }).then(r => r.status)));
     assert.equal(accessStatuses.filter(status => status === 200).length, 2);
+    await api('DELETE', '/api/device/b', undefined, token);
+    assert.ok(!(await api('GET', '/api/device', undefined, token)).some(device => device.deviceId === 'b'));
+    await api('GET', '/api/auth/devices', undefined, token, 404);
     await api('POST', '/api/push/devices', {}, token, 404);
     await api('PATCH', '/api/push/devices/a', {}, token, 404);
     await api('DELETE', '/api/push/devices/a', undefined, token, 404);
@@ -958,7 +961,7 @@ test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, a
     await api('GET', '/api/messages', undefined, token, 401);
     const again = await api('POST', '/api/auth/login', { ...loginBody('a'), password: 'newpassword123' });
     token = again.accessToken;
-    await api('DELETE', '/api/auth/devices/a/session', undefined, token);
+    await api('DELETE', '/api/device/a/session', undefined, token);
     await api('GET', '/api/messages', undefined, token, 401);
     // The scope-isolation fixture also creates an account: hide ALL accounts so
     // this verifies that soft deletion alone never reopens setup.

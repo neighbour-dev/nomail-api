@@ -17,8 +17,8 @@ API 后台提交任务和查询状态时均发送 `Authorization: Bearer <实例
 
 用当前登录设备的 API access token 调用：
 
-- `PUT /api/auth/device/push-token` 上报或更新设备 Token。iOS 发送 `{"channel":"apns","deviceToken":"<APNs 设备 Token>"}`，Android 发送 `{"channel":"fcm","deviceToken":"<FCM 注册 Token>"}`。两字段均必填，设备由登录会话识别。API 未配置中转时返回 HTTP 503；能否投递由中转的实际渠道配置决定。
-- `DELETE /api/auth/device/push-token` 删除当前登录设备的推送 Token。关闭提醒或撤回系统权限时调用。退出、踢下线或重新登录会清除旧登记；正常刷新登录令牌不会。登录后和设备 Token 更新时须重新同步。
+- `PUT /api/device/push/token` 上报或更新设备 Token。iOS 发送 `{"channel":"apns","deviceToken":"<APNs 设备 Token>"}`，Android 发送 `{"channel":"fcm","deviceToken":"<FCM 注册 Token>"}`。两字段均必填，设备由登录会话识别。API 未配置中转时返回 HTTP 503；能否投递由中转的实际渠道配置决定。
+- `DELETE /api/device/push/token` 删除当前登录设备的推送 Token。关闭提醒或撤回系统权限时调用。退出、踢下线或重新登录会清除旧登记；正常刷新登录令牌不会。登录后和设备 Token 更新时须重新同步。
 
 API 保存渠道与设备 Token 并交给中转；注意保护实例数据库和备份。中转还会收到消息/投递 ID 和固定文案「NoMail：你有一条新消息」，不接收 Webhook 正文、标题或摘要。App 点开通知后可用 `messageId` 向原 API 实例读取 `GET /api/messages/{id}`；App 自身仍需实现设备注册、通知展示与跳转。
 

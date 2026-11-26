@@ -161,33 +161,4 @@ impl AuthStore for Store<'_> {
             vec![json!(date(now)),json!(date(now)),json!(id),json!(date(before))]).await.map_err(storage)?;
         Ok(())
     }
-    async fn devices(&self, uid: i64) -> AuthResult<Vec<DeviceSession>> {
-        let rows=self.0.rows("SELECT d.*,s.id AS auth_session_id,s.device_id AS auth_session_device_id,s.expires_at AS auth_session_expires_at,s.logged_in_at AS auth_session_logged_in_at,s.revoked_at AS auth_session_revoked_at,s.deleted_at AS auth_session_deleted_at FROM devices d LEFT JOIN sessions s ON s.device_id=d.id WHERE d.user_id=?",vec![json!(uid)]).await.map_err(storage)?;
-        rows.into_iter().map(|row|{
-            let session=if row["auth_session_id"].is_null(){None}else{Some(decode(json!({"id":row["auth_session_id"],"device_id":row["auth_session_device_id"],"expires_at":row["auth_session_expires_at"],"logged_in_at":row["auth_session_logged_in_at"],"revoked_at":row["auth_session_revoked_at"],"deleted_at":row["auth_session_deleted_at"]}))?)};
-            Ok(DeviceSession{device:decode(row)?,session})
-        }).collect()
-    }
-    async fn revoke_device_session(
-        &self,
-        uid: i64,
-        identifier: &str,
-        now: DateTime<Utc>,
-    ) -> AuthResult<()> {
-        let result=self.0.0.batch(vec![
-            self.0.statement("SELECT id FROM devices WHERE user_id=? AND device_id=? AND deleted_at IS NULL",vec![json!(uid),json!(identifier)]).map_err(storage)?,
-            self.0.statement("UPDATE sessions SET revoked_at=?,updated_at=? WHERE device_id IN (SELECT id FROM devices WHERE user_id=? AND device_id=? AND deleted_at IS NULL) AND revoked_at IS NULL AND deleted_at IS NULL",vec![json!(date(now)),json!(date(now)),json!(uid),json!(identifier)]).map_err(storage)?,
-        ]).await.map_err(d1)?;
-        if result[0].results::<Value>().map_err(d1)?.is_empty() {
-            Err(AuthError::NotFound("device not found"))
-        } else {
-            Ok(())
-        }
-    }
-    async fn delete_device(&self, uid: i64, identifier: &str) -> AuthResult<()> {
-        // D1 FK cascade deletes the session in the same statement.
-        if self.0.rows("DELETE FROM devices WHERE user_id=? AND device_id=? AND deleted_at IS NULL RETURNING id",vec![json!(uid),json!(identifier)]).await.map_err(storage)?.is_empty() {
-            Err(AuthError::NotFound("device not found"))
-        } else {Ok(())}
-    }
 }

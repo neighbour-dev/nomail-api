@@ -1,9 +1,7 @@
-//! Device registration and the durable handoff to the optional push relay.
+//! Durable handoff to the optional push relay.
 mod relay;
 pub use relay::*;
 
-use crate::auth::{AuthContext, AuthError, AuthResult};
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -12,18 +10,6 @@ pub const BODY: &str = "你有一条新消息";
 pub const SUBMIT_WINDOW: i64 = 10 * 60;
 const STATUS_WINDOW: i64 = 24 * 60 * 60;
 const LEASE: i64 = 60;
-
-#[allow(async_fn_in_trait)]
-pub trait DeviceStore {
-    /// Atomically recheck the active session and update only its own target.
-    /// None removes the registration. Reposting the same channel and token preserves its version.
-    async fn set_target(
-        &self,
-        actor: &AuthContext,
-        target: Option<&Registration>,
-        now: DateTime<Utc>,
-    ) -> AuthResult<()>;
-}
 
 #[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -50,38 +36,6 @@ impl std::str::FromStr for Channel {
             "fcm" => Ok(Self::Fcm),
             _ => Err(StoreError),
         }
-    }
-}
-
-pub struct Registration {
-    pub channel: Channel,
-    pub token: String,
-}
-
-impl Registration {
-    pub fn new(channel: Channel, token: String) -> AuthResult<Self> {
-        let token = match channel {
-            Channel::Apns => {
-                if !(2..=512).contains(&token.len())
-                    || !token.len().is_multiple_of(2)
-                    || !token.bytes().all(|b| b.is_ascii_hexdigit())
-                {
-                    return Err(AuthError::InvalidInput("invalid APNs device token".into()));
-                }
-                token.to_ascii_lowercase()
-            }
-            Channel::Fcm => {
-                if !(1..=4096).contains(&token.len())
-                    || !token.bytes().all(|b| b.is_ascii_graphic())
-                {
-                    return Err(AuthError::InvalidInput(
-                        "invalid FCM registration token".into(),
-                    ));
-                }
-                token
-            }
-        };
-        Ok(Self { channel, token })
     }
 }
 

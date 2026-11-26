@@ -1,4 +1,4 @@
-use super::DeviceInput;
+use crate::device::{DeviceInput, validate_id};
 
 pub fn check_length(value: &str, name: &str, max: usize, required: bool) -> Result<(), String> {
     if (required && value.is_empty()) || value.chars().count() > max {
@@ -32,7 +32,7 @@ impl Login {
         check_length(&self.username, "username", 64, true)?;
         check_length(&self.password, "password", usize::MAX, true)?;
         let device = &self.device;
-        check_length(&device.device_id, "deviceId", 128, true)?;
+        validate_id(&device.device_id)?;
         if ![
             "ios", "android", "macos", "windows", "linux", "web", "unknown",
         ]

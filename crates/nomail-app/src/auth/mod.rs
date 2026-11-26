@@ -17,7 +17,7 @@ pub use model::*;
 pub use repository::*;
 pub use runtime::AuthRuntime;
 pub use service::AuthService;
-pub use view::{AccountInfo, DeviceInfo, SessionTokens};
+pub use view::{AccountInfo, SessionTokens};
 
 pub const ACCESS_TTL: i64 = 2 * 60 * 60;
 pub const REFRESH_DAYS: i64 = 7;

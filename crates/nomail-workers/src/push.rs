@@ -1,17 +1,12 @@
 //! D1 and Fetch adapters for the push outbox.
 use crate::{db, time};
-use chrono::{DateTime, Utc};
 use futures_util::{
     StreamExt,
     future::{Either, select},
 };
 use nomail_app::{
-    auth::{AuthContext, AuthError, AuthResult},
     message::Message,
-    push::{
-        self, DeviceStore, Finish, Job, Outbox, Registration, RelayConfig, RelayRequest, Reply,
-        StoreError, Transport,
-    },
+    push::{self, Finish, Job, Outbox, RelayConfig, RelayRequest, Reply, StoreError, Transport},
 };
 use serde_json::json;
 use worker::{
@@ -20,7 +15,7 @@ use worker::{
 };
 
 #[path = "../../push-sql/queries.rs"]
-mod sql;
+pub(crate) mod sql;
 
 pub fn config(env: &Env) -> Result<Option<RelayConfig>, &'static str> {
     RelayConfig::from_token(
@@ -45,39 +40,6 @@ pub(crate) fn enqueue(
             json!(now + push::SUBMIT_WINDOW),
         ],
     )
-}
-
-impl DeviceStore for crate::auth::repository::Store<'_> {
-    async fn set_target(
-        &self,
-        actor: &AuthContext,
-        target: Option<&Registration>,
-        now: DateTime<Utc>,
-    ) -> AuthResult<()> {
-        let mut values = vec![
-            json!(actor.device_id),
-            json!(actor.user_id),
-            json!(actor.session_id),
-            json!(time::format(actor.logged_in_at.timestamp_millis())),
-            json!(now.timestamp()),
-        ];
-        let err = |_| AuthError::Internal("push registration storage failed".into());
-        if let Some(target) = target {
-            values.extend([json!(target.token), json!(target.channel.as_str())]);
-            if self
-                .0
-                .rows(sql::SET_TARGET, values)
-                .await
-                .map_err(err)?
-                .is_empty()
-            {
-                return Err(AuthError::Unauthorized);
-            }
-        } else {
-            self.0.run(sql::DROP_TARGET, values).await.map_err(err)?;
-        }
-        Ok(())
-    }
 }
 
 impl Outbox for db::Store {

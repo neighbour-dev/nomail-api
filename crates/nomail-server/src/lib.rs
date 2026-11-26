@@ -3,6 +3,7 @@ pub mod auth;
 mod client_ip;
 pub mod config;
 pub mod db;
+mod device;
 pub mod entity;
 pub mod error;
 pub mod message;

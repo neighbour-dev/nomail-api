@@ -1,13 +1,14 @@
 //! SQLite atomic operations. Authentication policy and HTTP live elsewhere.
 use crate::{
     db,
+    device::from_model as device,
     entity::{device, session, user},
 };
 use chrono::{DateTime, Utc};
 use nomail_app::auth::*;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseConnection, DbErr, EntityTrait,
-    PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, Set, TransactionTrait, sea_query::Expr,
+    ActiveModelTrait, ColumnTrait, DatabaseConnection, DbErr, EntityTrait, PaginatorTrait,
+    QueryFilter, QueryOrder, QuerySelect, Set, TransactionTrait, sea_query::Expr,
 };
 
 pub struct Store<'a>(pub &'a DatabaseConnection);
@@ -34,7 +35,7 @@ fn account(m: user::Model) -> Account {
         deleted_at: m.deleted_at,
     }
 }
-fn session(m: session::Model) -> Session {
+pub(crate) fn session(m: session::Model) -> Session {
     Session {
         id: m.id,
         device_id: m.device_id,
@@ -43,39 +44,6 @@ fn session(m: session::Model) -> Session {
         revoked_at: m.revoked_at,
         deleted_at: m.deleted_at,
     }
-}
-fn device(m: device::Model) -> Device {
-    Device {
-        id: m.id,
-        user_id: m.user_id,
-        device_id: m.device_id,
-        name: m.name,
-        platform: m.platform,
-        device_type: m.device_type,
-        manufacturer: m.manufacturer,
-        model: m.model,
-        os_version: m.os_version,
-        app_version: m.app_version,
-        app_build: m.app_build,
-        locale: m.locale,
-        time_zone: m.time_zone,
-        ip_address: m.ip_address,
-        user_agent: m.user_agent,
-        last_seen_at: m.last_seen_at,
-        created_at: m.created_at,
-        updated_at: m.updated_at,
-        deleted_at: m.deleted_at,
-    }
-}
-async fn owned(db: &impl ConnectionTrait, uid: i64, identifier: &str) -> AuthResult<device::Model> {
-    device::Entity::find()
-        .filter(device::Column::UserId.eq(uid))
-        .filter(device::Column::DeviceId.eq(identifier))
-        .filter(device::Column::DeletedAt.is_null())
-        .one(db)
-        .await
-        .map_err(storage)?
-        .ok_or(AuthError::NotFound("device not found"))
 }
 
 impl AuthStore for Store<'_> {
@@ -372,64 +340,5 @@ impl AuthStore for Store<'_> {
             .await
             .map_err(storage)?;
         Ok(())
-    }
-    async fn devices(&self, uid: i64) -> AuthResult<Vec<DeviceSession>> {
-        let tx = self.0.begin().await.map_err(storage)?;
-        let devices = device::Entity::find()
-            .filter(device::Column::UserId.eq(uid))
-            .all(&tx)
-            .await
-            .map_err(storage)?;
-        let ids: Vec<i64> = devices.iter().map(|d| d.id).collect();
-        let sessions = session::Entity::find()
-            .filter(session::Column::DeviceId.is_in(ids))
-            .all(&tx)
-            .await
-            .map_err(storage)?;
-        let mut sessions: std::collections::HashMap<i64, Session> = sessions
-            .into_iter()
-            .map(|s| (s.device_id, session(s)))
-            .collect();
-        tx.commit().await.map_err(storage)?;
-        Ok(devices
-            .into_iter()
-            .map(|d| DeviceSession {
-                session: sessions.remove(&d.id),
-                device: device(d),
-            })
-            .collect())
-    }
-    async fn revoke_device_session(
-        &self,
-        uid: i64,
-        identifier: &str,
-        now: DateTime<Utc>,
-    ) -> AuthResult<()> {
-        let tx = db::write_transaction(self.0).await.map_err(storage)?;
-        let d = owned(&tx, uid, identifier).await?;
-        session::Entity::update_many()
-            .col_expr(session::Column::RevokedAt, Expr::value(now))
-            .col_expr(session::Column::UpdatedAt, Expr::value(now))
-            .filter(session::Column::DeviceId.eq(d.id))
-            .filter(session::Column::RevokedAt.is_null())
-            .filter(session::Column::DeletedAt.is_null())
-            .exec(&tx)
-            .await
-            .map_err(storage)?;
-        tx.commit().await.map_err(storage)
-    }
-    async fn delete_device(&self, uid: i64, identifier: &str) -> AuthResult<()> {
-        let tx = db::write_transaction(self.0).await.map_err(storage)?;
-        let d = owned(&tx, uid, identifier).await?;
-        session::Entity::delete_many()
-            .filter(session::Column::DeviceId.eq(d.id))
-            .exec(&tx)
-            .await
-            .map_err(storage)?;
-        device::Entity::delete_by_id(d.id)
-            .exec(&tx)
-            .await
-            .map_err(storage)?;
-        tx.commit().await.map_err(storage)
     }
 }

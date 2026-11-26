@@ -2,7 +2,7 @@
 use super::ApiResponse;
 use crate::error::Diagnostic;
 use crate::error::{
-    AuthError, ConfigError, DomainError, ErrorKind, INTERNAL_MESSAGE, MessageError,
+    AuthError, ConfigError, DeviceError, DomainError, ErrorKind, INTERNAL_MESSAGE, MessageError,
     UNAUTHORIZED_MESSAGE, WebhookError,
 };
 use crate::ingestion::IngestionError;
@@ -43,6 +43,7 @@ macro_rules! execution_errors {
 }
 execution_errors!(
     AuthError,
+    DeviceError,
     MessageError,
     ConfigError,
     WebhookError,

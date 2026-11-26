@@ -1,5 +1,5 @@
 //! Native service composition. No endpoint binding lives here.
-use crate::{AppState, auth, message, runtime::Runtime, webhook};
+use crate::{AppState, auth, device, message, runtime::Runtime, webhook};
 use nomail_app::http::{
     Environment, EnvironmentServices, HealthCheck, HttpResult, RequestHead, Services,
 };
@@ -7,6 +7,7 @@ use nomail_app::http::{
 pub(crate) struct NativeEnvironment<'a>(pub &'a AppState, pub bool);
 impl<'a> Environment for NativeEnvironment<'a> {
     type AuthStore = auth::repository::Store<'a>;
+    type DeviceStore = device::Store<'a>;
     type MessageStore = message::repository::Store<'a>;
     type ConfigStore = webhook::configs::repository::Store<'a>;
     type IngestionStore = message::repository::Store<'a>;
@@ -20,6 +21,7 @@ impl<'a> Environment for NativeEnvironment<'a> {
         let state = self.0;
         Ok(Services::new(
             auth::repository::Store(&state.db),
+            device::Store(&state.db),
             message::repository::Store(&state.db),
             webhook::configs::repository::Store(&state.db),
             message::repository::Store(&state.db),

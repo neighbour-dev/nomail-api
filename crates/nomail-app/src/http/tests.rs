@@ -90,7 +90,7 @@ fn auth_conversion_groups_registration_and_keeps_wire_defaults_at_the_boundary()
     assert!(update.username.is_empty() && update.new_password.is_empty());
 
     let now = chrono::DateTime::from_timestamp(1000, 0).unwrap();
-    let device: crate::auth::Device = serde_json::from_value(json!({
+    let device: crate::device::Device = serde_json::from_value(json!({
         "id":1, "user_id":2, "device_id":"phone", "platform":"ios", "device_type":"phone",
         "created_at":now, "updated_at":now
     }))
@@ -110,7 +110,7 @@ fn auth_conversion_groups_registration_and_keeps_wire_defaults_at_the_boundary()
             .as_ref()
             .map(|_| json!(now))
             .unwrap_or(serde_json::Value::Null);
-        let response = DeviceResponse::from(crate::auth::DeviceInfo {
+        let response = DeviceResponse::from(crate::device::DeviceInfo {
             device: device.clone(),
             session,
             logged_in: false,
@@ -279,14 +279,14 @@ fn authentication_and_non_json_contracts_are_declared_once() {
 #[test]
 fn static_routes_win_and_unknown_methods_are_not_authenticated_or_reinterpreted() {
     assert_eq!(
-        resolve("DELETE", "/api/auth/device/push-token")
+        resolve("DELETE", "/api/device/push/token")
             .unwrap()
             .route
             .operation,
         Operation::RemovePush
     );
     assert_eq!(
-        resolve("DELETE", "/api/auth/devices/push-token")
+        resolve("DELETE", "/api/device/push")
             .unwrap()
             .route
             .operation,
@@ -329,6 +329,10 @@ fn static_routes_win_and_unknown_methods_are_not_authenticated_or_reinterpreted(
         ("GET", "/api/unknown"),
         ("POST", "/api/push/devices"),
         ("PUT", "/api/auth/devices/current/push"),
+        ("PUT", "/api/auth/device/push-token"),
+        ("GET", "/api/auth/devices"),
+        ("DELETE", "/api/auth/devices/push"),
+        ("DELETE", "/api/auth/devices/push/session"),
     ] {
         assert_eq!(
             resolve(method, path).err().unwrap().status,
@@ -346,13 +350,13 @@ fn parameters_decode_once_and_url_generation_uses_the_receive_route() {
     assert_eq!(matched.route.operation, Operation::ReceiveWebhook);
     assert_eq!(matched.parameter().unwrap(), key);
     assert_eq!(
-        resolve("DELETE", "/api/auth/devices/a%252Fb")
+        resolve("DELETE", "/api/device/a%252Fb")
             .unwrap()
             .parameter()
             .unwrap(),
         "a%2Fb"
     );
-    for path in ["/api/auth/devices/%ZZ", "/api/auth/devices/%FF"] {
+    for path in ["/api/device/%ZZ", "/api/device/%FF"] {
         assert_eq!(resolve("DELETE", path).err().unwrap().status, 400);
     }
     assert_eq!(

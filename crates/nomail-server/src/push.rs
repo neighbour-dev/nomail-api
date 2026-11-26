@@ -1,12 +1,8 @@
 //! Native SQLite and HTTPS adapters for the push outbox.
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use nomail_app::{
-    auth::{AuthContext, AuthError, AuthResult},
     message::Message,
-    push::{
-        self, DeviceStore, Finish, Job, Outbox, Registration, RelayConfig, RelayRequest, Reply,
-        StoreError, Transport,
-    },
+    push::{self, Finish, Job, Outbox, RelayConfig, RelayRequest, Reply, StoreError, Transport},
 };
 use sea_orm::{
     ConnectionTrait, DatabaseConnection, DatabaseTransaction, DbBackend, DbErr, Statement,
@@ -14,9 +10,9 @@ use sea_orm::{
 };
 
 #[path = "../../push-sql/queries.rs"]
-mod sql;
+pub(crate) mod sql;
 
-fn statement(sql: &str, values: impl IntoIterator<Item = Value>) -> Statement {
+pub(crate) fn statement(sql: &str, values: impl IntoIterator<Item = Value>) -> Statement {
     Statement::from_sql_and_values(DbBackend::Sqlite, sql, values)
 }
 
@@ -34,41 +30,6 @@ pub(crate) async fn enqueue(tx: &DatabaseTransaction, m: &Message) -> Result<(),
     ))
     .await?;
     Ok(())
-}
-
-impl DeviceStore for crate::auth::repository::Store<'_> {
-    async fn set_target(
-        &self,
-        actor: &AuthContext,
-        target: Option<&Registration>,
-        now: DateTime<Utc>,
-    ) -> AuthResult<()> {
-        let mut values = vec![
-            actor.device_id.into(),
-            actor.user_id.into(),
-            actor.session_id.into(),
-            actor.logged_in_at.to_rfc3339().into(),
-            now.timestamp().into(),
-        ];
-        let err = |_| AuthError::Internal("push registration storage failed".into());
-        if let Some(target) = target {
-            values.extend([target.token.as_str().into(), target.channel.as_str().into()]);
-            let row = self
-                .0
-                .query_one(statement(sql::SET_TARGET, values))
-                .await
-                .map_err(err)?;
-            if row.is_none() {
-                return Err(AuthError::Unauthorized);
-            }
-        } else {
-            self.0
-                .execute(statement(sql::DROP_TARGET, values))
-                .await
-                .map_err(err)?;
-        }
-        Ok(())
-    }
 }
 
 pub struct Store<'a>(pub &'a DatabaseConnection);

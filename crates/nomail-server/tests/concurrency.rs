@@ -35,7 +35,7 @@ async fn concurrent_logins_and_webhook_deliveries_preserve_limits_and_uniqueness
     let response = test::call_service(
         &app,
         test::TestRequest::get()
-            .uri("/api/auth/devices")
+            .uri("/api/device")
             .insert_header(authorization.clone())
             .to_request(),
     )

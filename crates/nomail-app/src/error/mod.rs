@@ -5,6 +5,7 @@ mod webhook;
 pub use crate::ingestion::{IngestionError, IngestionResult};
 pub use crate::{
     auth::{AuthError, AuthResult},
+    device::{DeviceError, DeviceResult},
     message::{MessageError, MessageResult},
     webhook::{
         WebhookError,

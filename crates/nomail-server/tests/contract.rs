@@ -186,7 +186,7 @@ async fn core_inventory_controls_routes_authentication_parameters_and_response_d
     let response = test::call_service(
         &app,
         test::TestRequest::delete()
-            .uri("/api/auth/devices/phone%2F%E4%B8%AD%E6%96%87")
+            .uri("/api/device/phone%2F%E4%B8%AD%E6%96%87")
             .insert_header(authorization)
             .to_request(),
     )

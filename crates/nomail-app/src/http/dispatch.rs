@@ -6,7 +6,6 @@ use super::{
 };
 use crate::{
     auth::{AuthContext, AuthRuntime},
-    push::{self, DeviceStore},
     webhook::{HeaderLookup, WebhookRequest},
 };
 
@@ -101,8 +100,8 @@ pub async fn execute(
         ),
         Operation::ListDevices => json::<e::ListDevices>(
             services
-                .auth
-                .devices(user!())
+                .devices
+                .list(user!(), AuthRuntime::now(&services.auth.runtime))
                 .await?
                 .into_iter()
                 .map(Into::into)
@@ -113,13 +112,12 @@ pub async fn execute(
                 return Err(ApiFailure::new(503, "push is not configured").into());
             }
             let input = input!(e::RegisterPush);
-            let target = push::Registration::new(input.channel.into(), input.device_token)?;
             services
-                .auth
-                .store
-                .set_target(
+                .devices
+                .register_push(
                     actor(&context)?,
-                    Some(&target),
+                    input.channel.into(),
+                    input.device_token,
                     AuthRuntime::now(&services.auth.runtime),
                 )
                 .await?;
@@ -127,27 +125,26 @@ pub async fn execute(
         }
         Operation::RemovePush => {
             services
-                .auth
-                .store
-                .set_target(
-                    actor(&context)?,
-                    None,
-                    AuthRuntime::now(&services.auth.runtime),
-                )
+                .devices
+                .remove_push(actor(&context)?, AuthRuntime::now(&services.auth.runtime))
                 .await?;
             json::<e::RemovePush>(())
         }
         Operation::KickDevice => {
             services
-                .auth
-                .kick_device(user!(), matched.parameter()?)
+                .devices
+                .revoke_session(
+                    user!(),
+                    matched.parameter()?,
+                    AuthRuntime::now(&services.auth.runtime),
+                )
                 .await?;
             json::<e::KickDevice>(())
         }
         Operation::DeleteDevice => {
             services
-                .auth
-                .delete_device(user!(), matched.parameter()?)
+                .devices
+                .delete(user!(), matched.parameter()?)
                 .await?;
             json::<e::DeleteDevice>(())
         }

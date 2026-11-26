@@ -1,4 +1,8 @@
 use super::*;
+use crate::device::{
+    Device, DeviceError, DeviceInput, DeviceResult, DeviceService, DeviceSession, DeviceStore,
+    PushRegistration,
+};
 use chrono::{DateTime, Duration, Utc};
 use std::cell::{Cell, RefCell};
 
@@ -221,7 +225,9 @@ impl AuthStore for Store {
         }
         Ok(())
     }
-    async fn devices(&self, uid: i64) -> AuthResult<Vec<DeviceSession>> {
+}
+impl DeviceStore for &Store {
+    async fn devices(&self, uid: i64) -> DeviceResult<Vec<DeviceSession>> {
         let s = self.state.borrow();
         Ok(s.device
             .as_ref()
@@ -239,32 +245,41 @@ impl AuthStore for Store {
         uid: i64,
         identifier: &str,
         now: DateTime<Utc>,
-    ) -> AuthResult<()> {
+    ) -> DeviceResult<()> {
         let mut s = self.state.borrow_mut();
         if !s
             .device
             .as_ref()
             .is_some_and(|d| d.user_id == uid && d.device_id == identifier)
         {
-            return Err(AuthError::NotFound("device not found"));
+            return Err(DeviceError::NotFound);
         }
         if let Some(session) = &mut s.session {
             session.revoked_at = Some(now);
         }
         Ok(())
     }
-    async fn delete_device(&self, uid: i64, identifier: &str) -> AuthResult<()> {
+    async fn delete_device(&self, uid: i64, identifier: &str) -> DeviceResult<()> {
         let mut s = self.state.borrow_mut();
         if !s
             .device
             .as_ref()
             .is_some_and(|d| d.user_id == uid && d.device_id == identifier)
         {
-            return Err(AuthError::NotFound("device not found"));
+            return Err(DeviceError::NotFound);
         }
         s.device = None;
         s.session = None;
         Ok(())
+    }
+
+    async fn set_target(
+        &self,
+        _: &AuthContext,
+        _: Option<&PushRegistration>,
+        _: DateTime<Utc>,
+    ) -> DeviceResult<()> {
+        unreachable!("this fixture only exercises session management")
     }
 }
 
@@ -321,7 +336,13 @@ async fn shared_flow_uses_one_clock_token_policy_metadata_and_revocation_policy(
             .await,
         Err(AuthError::Unauthorized)
     ));
-    let devices = service.devices(11).await.unwrap();
+    let device_service = DeviceService {
+        store: &service.store,
+    };
+    let devices = device_service
+        .list(11, service.runtime.now())
+        .await
+        .unwrap();
     assert!(devices[0].logged_in);
     assert_eq!(devices[0].device.ip_address.as_deref(), Some("ip-after"));
     assert_eq!(
@@ -353,7 +374,10 @@ async fn shared_flow_uses_one_clock_token_policy_metadata_and_revocation_policy(
         .login(request("admin", "newpassword123"), RequestMeta::default())
         .await
         .unwrap();
-    service.kick_device(11, "phone").await.unwrap();
+    device_service
+        .revoke_session(11, "phone", service.runtime.now())
+        .await
+        .unwrap();
     assert!(matches!(
         service.authenticate(&login.access_token).await,
         Err(AuthError::Unauthorized)
@@ -369,7 +393,7 @@ async fn shared_flow_uses_one_clock_token_policy_metadata_and_revocation_policy(
         )
         .await
         .unwrap();
-    service.delete_device(11, "phone").await.unwrap();
+    device_service.delete(11, "phone").await.unwrap();
     assert!(matches!(
         service.authenticate(&login.access_token).await,
         Err(AuthError::Unauthorized)

@@ -3,7 +3,7 @@ use crate::{
     auth,
     config::{Config, ConfigLoadError},
     db::Store,
-    message,
+    device, message,
     runtime::Runtime,
     webhook,
 };
@@ -39,6 +39,7 @@ impl WorkersEnvironment<'_> {
 }
 impl<'a> Environment for WorkersEnvironment<'a> {
     type AuthStore = auth::repository::Store<'a>;
+    type DeviceStore = device::Store<'a>;
     type MessageStore = message::repository::Store<'a>;
     type ConfigStore = webhook::configs::repository::Store<'a>;
     type IngestionStore = message::repository::Store<'a>;
@@ -53,6 +54,7 @@ impl<'a> Environment for WorkersEnvironment<'a> {
         let config = Config::load(self.env).map_err(config_failure)?;
         Ok(Services::new(
             auth::repository::Store(db),
+            device::Store(db),
             message::repository::Store(db),
             webhook::configs::repository::Store(db),
             message::repository::Store(db),

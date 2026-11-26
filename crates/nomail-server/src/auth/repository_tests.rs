@@ -1,5 +1,6 @@
 use super::*;
 use crate::config::Config;
+use nomail_app::device::{DeviceError, DeviceInput, DeviceStore};
 
 fn config(dir: &tempfile::TempDir) -> Config {
     Config {
@@ -55,7 +56,13 @@ async fn stale_verified_credentials_cannot_create_a_device_or_change_the_account
         })
         .await;
     assert!(matches!(result, Err(AuthError::Unauthorized)));
-    assert!(service.store.devices(1).await.unwrap().is_empty());
+    assert!(
+        crate::device::Store(&db)
+            .devices(1)
+            .await
+            .unwrap()
+            .is_empty()
+    );
     assert!(matches!(
         service
             .store
@@ -112,15 +119,14 @@ async fn password_change_revokes_expired_sessions_too_and_device_actions_are_own
         .await
         .unwrap();
     assert!(matches!(
-        service.store.delete_device(999, "active").await,
-        Err(AuthError::NotFound(_))
+        crate::device::Store(&db).delete_device(999, "active").await,
+        Err(DeviceError::NotFound)
     ));
     assert!(matches!(
-        service
-            .store
+        crate::device::Store(&db)
             .revoke_device_session(999, "active", Utc::now())
             .await,
-        Err(AuthError::NotFound(_))
+        Err(DeviceError::NotFound)
     ));
     service.authenticate(&login.access_token).await.unwrap();
     service

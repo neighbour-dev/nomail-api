@@ -120,6 +120,7 @@ mod tests {
         // These are only type witnesses: this environment never constructs a
         // database or any use case, and always fails configuration if called.
         type AuthStore = crate::auth::repository::Store<'static>;
+        type DeviceStore = crate::device::Store<'static>;
         type MessageStore = crate::message::repository::Store<'static>;
         type ConfigStore = crate::webhook::configs::repository::Store<'static>;
         type IngestionStore = crate::message::repository::Store<'static>;

@@ -115,11 +115,11 @@ endpoints! {
     Logout => ("logout",Post,"/api/auth/logout",Public,Json,Json,false,None,RefreshRequest,(),(),"Auth","退出登录"),
     GetAccount => ("getAccount",Get,"/api/auth/account",Bearer,None,Json,false,None,(),(),AccountResponse,"Auth","获取账号"),
     UpdateAccount => ("updateAccount",Patch,"/api/auth/account",Bearer,Json,Json,false,None,AccountUpdateRequest,(),AccountResponse,"Auth","修改账号"),
-    ListDevices => ("listDevices",Get,"/api/auth/devices",Bearer,None,Json,false,None,(),(),Vec<DeviceResponse>,"Auth","设备列表"),
-    RegisterPush => ("registerPushToken",Put,"/api/auth/device/push-token",Bearer,Json,Json,false,None,RegisterPushRequest,(),(),"Auth","上报或更新当前登录设备的推送 Token"),
-    RemovePush => ("removePushToken",Delete,"/api/auth/device/push-token",Bearer,None,Json,false,None,(),(),(),"Auth","删除当前登录设备的推送 Token"),
-    KickDevice => ("kickDevice",Delete,"/api/auth/devices/{deviceId}/session",Bearer,None,Json,false,DeviceId,(),(),(),"Auth","撤销设备会话"),
-    DeleteDevice => ("deleteDevice",Delete,"/api/auth/devices/{deviceId}",Bearer,None,Json,false,DeviceId,(),(),(),"Auth","删除设备"),
+    ListDevices => ("listDevices",Get,"/api/device",Bearer,None,Json,false,None,(),(),Vec<DeviceResponse>,"Device","设备列表"),
+    RegisterPush => ("registerPushToken",Put,"/api/device/push/token",Bearer,Json,Json,false,None,RegisterPushRequest,(),(),"Device","上报或更新当前登录设备的推送 Token"),
+    RemovePush => ("removePushToken",Delete,"/api/device/push/token",Bearer,None,Json,false,None,(),(),(),"Device","删除当前登录设备的推送 Token"),
+    KickDevice => ("kickDevice",Delete,"/api/device/{deviceId}/session",Bearer,None,Json,false,DeviceId,(),(),(),"Device","撤销设备会话"),
+    DeleteDevice => ("deleteDevice",Delete,"/api/device/{deviceId}",Bearer,None,Json,false,DeviceId,(),(),(),"Device","删除设备"),
     ListConfigs => ("listWebhookConfigs",Get,"/api/webhook/configs",Bearer,None,Json,true,None,(),PaginationQuery,Page<ConfigResponse>,"Webhook Configs","接收配置列表"),
     CreateConfig => ("createWebhookConfig",Post,"/api/webhook/configs",Bearer,Json,Json,false,None,CreateConfigRequest,(),ConfigResponse,"Webhook Configs","创建接收配置"),
     GetConfig => ("getWebhookConfig",Get,"/api/webhook/configs/{id}",Bearer,None,Json,false,ConfigId,(),(),ConfigResponse,"Webhook Configs","配置详情"),
@@ -168,9 +168,7 @@ impl RouteMatch {
     pub fn parameter(&self) -> Result<&str, ApiFailure> {
         let value = self.raw_parameter()?;
         match self.route.path_kind {
-            PathKind::DeviceId => {
-                crate::auth::check_length(value, "deviceId", 128, true).map_err(ApiFailure::bad)?
-            }
+            PathKind::DeviceId => crate::device::validate_id(value).map_err(ApiFailure::bad)?,
             PathKind::ConfigId => {
                 self.config_id()?;
             }

@@ -8,12 +8,16 @@
 
 ### 新增
 
-- Server 和 Workers 支持可选的 iOS（APNs）和 Android（FCM）系统推送：两种渠道共用同一个 `nomail-push` 实例 Token，设备通过 `/api/auth/device/push-token` 上报 `channel` 和 `deviceToken`。推送使用持久待发任务，不影响原有 SSE。
+- Server 和 Workers 支持可选的 iOS（APNs）和 Android（FCM）系统推送：两种渠道共用同一个 `nomail-push` 实例 Token，设备通过 `/api/device/push/token` 上报 `channel` 和 `deviceToken`。推送使用持久待发任务，不影响原有 SSE。
 - 新增 Uptime Kuma 平台（`uptimekuma`），支持接收默认 JSON Webhook，Server 和 Workers 均可配置。
 
 ### 修复
 
 - 细化 App Store Connect 通知映射，区分替代分发包与地区可用性事件标题；缺少可用性标记时不生成多余分隔符，空资源链接不再阻断嵌套或商城资源链接回退。类型异常的地区数组整体省略类型化投影，不再静默过滤元素；raw 保留完整内容。补充全部 12 类事件的映射及字段兼容性测试，不调用 Apple API 补全详情。
+
+### 变更
+
+- **设备 API 路径不兼容变更：**设备列表改为 `GET /api/device`，删除设备和撤销会话分别改为 `DELETE /api/device/{deviceId}` 和 `DELETE /api/device/{deviceId}/session`。旧 `/api/auth/devices` 路径不再提供。登录、退出和刷新令牌接口不变。
 
 ## [0.5.0] - 2026-11-14
 

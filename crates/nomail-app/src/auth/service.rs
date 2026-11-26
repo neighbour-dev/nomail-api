@@ -226,37 +226,4 @@ impl<S: AuthStore, R: AuthRuntime> AuthService<S, R> {
             .await?;
         Ok(())
     }
-    pub async fn devices(&self, user_id: i64) -> AuthResult<Vec<DeviceInfo>> {
-        let now = self.runtime.now();
-        let mut items = Vec::new();
-        for row in self.store.devices(user_id).await? {
-            let d = row.device;
-            if d.deleted_at.is_some() {
-                continue;
-            }
-            let session = row.session.filter(|s| s.deleted_at.is_none());
-            items.push(DeviceInfo {
-                logged_in: session.as_ref().is_some_and(|s| s.active(now)),
-                device: d,
-                session,
-            });
-        }
-        items.sort_by(|a, b| {
-            b.logged_in
-                .cmp(&a.logged_in)
-                .then(b.device.updated_at.cmp(&a.device.updated_at))
-                .then(a.device.device_id.cmp(&b.device.device_id))
-        });
-        Ok(items)
-    }
-    pub async fn kick_device(&self, user_id: i64, identifier: &str) -> AuthResult<()> {
-        check_length(identifier, "deviceId", 128, true).map_err(AuthError::InvalidInput)?;
-        self.store
-            .revoke_device_session(user_id, identifier, self.runtime.now())
-            .await
-    }
-    pub async fn delete_device(&self, user_id: i64, identifier: &str) -> AuthResult<()> {
-        check_length(identifier, "deviceId", 128, true).map_err(AuthError::InvalidInput)?;
-        self.store.delete_device(user_id, identifier).await
-    }
 }

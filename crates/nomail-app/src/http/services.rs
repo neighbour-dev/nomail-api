@@ -2,27 +2,31 @@
 use super::{HttpResult, RequestHead};
 use crate::{
     auth::{AuthConfig, AuthRuntime, AuthService, AuthStore},
+    device::{DeviceService, DeviceStore},
     ingestion::{IngestionRuntime, IngestionService, IngestionStore},
     message::{MessageService, MessageStore},
     webhook::config::{WebhookConfigRuntime, WebhookConfigService, WebhookConfigStore},
 };
 
-pub struct Services<A, M, C, I, R> {
+pub struct Services<A, D, M, C, I, R> {
     pub auth: AuthService<A, R>,
+    pub devices: DeviceService<D>,
     pub messages: MessageService<M>,
     pub configs: WebhookConfigService<C, R>,
     pub ingestion: IngestionService<I, R>,
 }
 pub type EnvironmentServices<E> = Services<
     <E as Environment>::AuthStore,
+    <E as Environment>::DeviceStore,
     <E as Environment>::MessageStore,
     <E as Environment>::ConfigStore,
     <E as Environment>::IngestionStore,
     <E as Environment>::Runtime,
 >;
-impl<A, M, C, I, R: Clone> Services<A, M, C, I, R> {
+impl<A, D, M, C, I, R: Clone> Services<A, D, M, C, I, R> {
     pub fn new(
         auth_store: A,
+        device_store: D,
         message_store: M,
         config_store: C,
         ingestion_store: I,
@@ -34,6 +38,9 @@ impl<A, M, C, I, R: Clone> Services<A, M, C, I, R> {
                 store: auth_store,
                 runtime: runtime.clone(),
                 config: auth_config,
+            },
+            devices: DeviceService {
+                store: device_store,
             },
             messages: MessageService {
                 store: message_store,
@@ -55,7 +62,8 @@ pub enum HealthCheck {
 }
 #[allow(async_fn_in_trait)]
 pub trait Environment {
-    type AuthStore: AuthStore + crate::push::DeviceStore;
+    type AuthStore: AuthStore;
+    type DeviceStore: DeviceStore;
     type MessageStore: MessageStore;
     type ConfigStore: WebhookConfigStore;
     type IngestionStore: IngestionStore;

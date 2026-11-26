@@ -1,4 +1,3 @@
-use super::{Device, Session};
 use chrono::{DateTime, Utc};
 
 pub struct AccountInfo {
@@ -12,9 +11,4 @@ pub struct SessionTokens {
     pub refresh_token: String,
     pub refresh_token_expires_at: DateTime<Utc>,
     pub user: AccountInfo,
-}
-pub struct DeviceInfo {
-    pub device: Device,
-    pub session: Option<Session>,
-    pub logged_in: bool,
 }

@@ -3,6 +3,7 @@ mod auth;
 mod config;
 mod crypto;
 mod db;
+mod device;
 mod error;
 mod message;
 mod push;

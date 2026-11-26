@@ -8,7 +8,7 @@ use std::{net::TcpListener, sync::Mutex};
 
 mod common;
 
-const REGISTRATION: &str = "/api/auth/device/push-token";
+const REGISTRATION: &str = "/api/device/push/token";
 const DELIVERIES: &str = "/v1/caller/deliveries";
 
 #[actix_web::test]

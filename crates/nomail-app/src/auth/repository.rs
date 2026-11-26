@@ -1,6 +1,5 @@
-use super::{
-    Account, AuthResult, AuthState, DeviceInput, DeviceSession, RequestMeta, SessionGrant,
-};
+use super::{Account, AuthResult, AuthState, RequestMeta, SessionGrant};
+use crate::device::DeviceInput;
 use chrono::{DateTime, Utc};
 
 pub struct InitialAccountWrite {
@@ -62,12 +61,4 @@ pub trait AuthStore {
         before: DateTime<Utc>,
         now: DateTime<Utc>,
     ) -> AuthResult<()>;
-    async fn devices(&self, user_id: i64) -> AuthResult<Vec<DeviceSession>>;
-    async fn revoke_device_session(
-        &self,
-        user_id: i64,
-        identifier: &str,
-        now: DateTime<Utc>,
-    ) -> AuthResult<()>;
-    async fn delete_device(&self, user_id: i64, identifier: &str) -> AuthResult<()>;
 }

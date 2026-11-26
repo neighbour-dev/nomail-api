@@ -72,7 +72,7 @@ fn business_modules_do_not_depend_on_http() {
         }
     }
     let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
-    for module in ["auth", "message", "webhook", "ingestion", "push"] {
+    for module in ["auth", "device", "message", "webhook", "ingestion", "push"] {
         check(&src.join(module));
     }
     let pagination = std::fs::read_to_string(src.join("pagination.rs")).unwrap();
