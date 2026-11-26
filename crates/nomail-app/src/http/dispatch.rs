@@ -6,6 +6,7 @@ use super::{
 };
 use crate::{
     auth::{AuthContext, AuthRuntime},
+    push::PreferenceStore,
     webhook::{HeaderLookup, WebhookRequest},
 };
 
@@ -129,6 +130,22 @@ pub async fn execute(
                 .remove_push(actor(&context)?, AuthRuntime::now(&services.auth.runtime))
                 .await?;
             json::<e::RemovePush>(())
+        }
+        Operation::GetPushPreferences => json::<e::GetPushPreferences>(
+            services
+                .push_preferences
+                .preferences(user!())
+                .await
+                .map_err(|_| ApiFailure::internal())?
+                .into(),
+        ),
+        Operation::SetPushPreferences => {
+            services
+                .push_preferences
+                .set_preferences(user!(), input!(e::SetPushPreferences).into())
+                .await
+                .map_err(|_| ApiFailure::internal())?;
+            json::<e::SetPushPreferences>(())
         }
         Operation::KickDevice => {
             services

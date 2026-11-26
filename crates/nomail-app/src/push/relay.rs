@@ -213,8 +213,8 @@ mod tests {
             message_id: Uuid::from_u128(2),
             channel: Channel::Apns,
             token: "abcdef".into(),
-            title: crate::push::TITLE.into(),
-            body: crate::push::BODY.into(),
+            title: "NoMail: Example".into(),
+            body: "Example summary".into(),
             accepted,
             attempt: 1,
             lease: 1,
@@ -249,6 +249,19 @@ mod tests {
                 job(true).delivery_id
             )
         );
+    }
+
+    #[test]
+    fn notification_title_respects_the_relay_byte_limit() {
+        let content = crate::message::MessageContent {
+            title: "中".repeat(255),
+            summary: String::new(),
+            level: crate::webhook::MessageLevel::Normal,
+            url: None,
+        };
+        let title = crate::push::notification_title(&content);
+        assert_eq!(title, format!("NoMail: {}", "中".repeat(82)));
+        assert!(title.len() <= 256);
     }
 
     #[test]

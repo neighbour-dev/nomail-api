@@ -237,6 +237,13 @@ test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, a
       return result.data;
     }
     const registration = '/api/device/push/token';
+    const pushPreferences = '/api/push/preferences';
+    assert.deepEqual(await api('GET', pushPreferences, undefined, token),
+      { low: true, normal: true, high: true, urgent: true });
+    await api('PUT', pushPreferences, { low: false }, token, 400);
+    const preferences = { low: false, normal: true, high: true, urgent: true };
+    await api('PUT', pushPreferences, preferences, token);
+    assert.deepEqual(await api('GET', pushPreferences, undefined, token), preferences);
     await api('PUT', registration, { deviceToken: 'ABCDEF' }, token, 400);
     await api('PUT', registration, { channel: 'apns', token: 'ABCDEF' }, token, 400);
     await api('PUT', registration, { channel: 'ios', deviceToken: 'ABCDEF' }, token, 400);
@@ -264,7 +271,7 @@ test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, a
       authorization: `Bearer ${relayToken}`,
       command: {
         deliveryId: relayCalls[0].command.deliveryId, messageId: created.messageId,
-        notification: { title: 'NoMail', body: '你有一条新消息' },
+        notification: { title: 'NoMail: Disk', body: 'hello 世界' },
         target: { channel: 'fcm', token: 'AbCd:XYZ_-012' },
       },
     }]);
@@ -954,6 +961,11 @@ test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, a
     await api('DELETE', '/api/device/b', undefined, token);
     assert.ok(!(await api('GET', '/api/device', undefined, token)).some(device => device.deviceId === 'b'));
     await api('GET', '/api/auth/devices', undefined, token, 404);
+    await api('PUT', registration, { channel: 'fcm', deviceToken: 'MutedDeviceToken' }, token);
+    const muted = await receive({ id: 'muted-event', title: 'Muted', level: 'low' });
+    assert.equal((await api('GET', `/api/messages/${muted.messageId}`, undefined, token)).level, 'low');
+    assert.deepEqual(localSql(`SELECT delivery_id FROM push_jobs WHERE message_id='${muted.messageId}';`), []);
+    await api('DELETE', registration, undefined, token);
     await api('POST', '/api/push/devices', {}, token, 404);
     await api('PATCH', '/api/push/devices/a', {}, token, 404);
     await api('DELETE', '/api/push/devices/a', undefined, token, 404);

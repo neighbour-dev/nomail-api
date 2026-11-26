@@ -102,8 +102,11 @@ fn openapi_covers_the_core_contract_and_valid_local_references() {
             .as_object()
             .unwrap()
             .keys()
-            .any(|path| path.starts_with("/api/push"))
+            .any(|path| path.starts_with("/api/push/devices"))
     );
+    let preferences = &document["paths"]["/api/push/preferences"];
+    assert_eq!(preferences["get"]["operationId"], "getPushPreferences");
+    assert_eq!(preferences["put"]["operationId"], "setPushPreferences");
     fn references(value: &serde_json::Value, root: &serde_json::Value) {
         match value {
             serde_json::Value::Object(object) => {

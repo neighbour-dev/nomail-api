@@ -20,7 +20,17 @@ API 后台提交任务和查询状态时均发送 `Authorization: Bearer <实例
 - `PUT /api/device/push/token` 上报或更新设备 Token。iOS 发送 `{"channel":"apns","deviceToken":"<APNs 设备 Token>"}`，Android 发送 `{"channel":"fcm","deviceToken":"<FCM 注册 Token>"}`。两字段均必填，设备由登录会话识别。API 未配置中转时返回 HTTP 503；能否投递由中转的实际渠道配置决定。
 - `DELETE /api/device/push/token` 删除当前登录设备的推送 Token。关闭提醒或撤回系统权限时调用。退出、踢下线或重新登录会清除旧登记；正常刷新登录令牌不会。登录后和设备 Token 更新时须重新同步。
 
-API 保存渠道与设备 Token 并交给中转；注意保护实例数据库和备份。中转还会收到消息/投递 ID 和固定文案「NoMail：你有一条新消息」，不接收 Webhook 正文、标题或摘要。App 点开通知后可用 `messageId` 向原 API 实例读取 `GET /api/messages/{id}`；App 自身仍需实现设备注册、通知展示与跳转。
+API 将设备 Token、渠道、消息与投递 ID，以及通知文案交给中转。标题为 `NoMail: <消息标题>`（超长时按 UTF-8 字符边界截断），正文使用收件箱里的消息摘要。消息标题和摘要会经过官方中转及 APNs／FCM，可能出现在锁屏上；原始 Webhook 和请求头不会发送。App 点开通知后可用 `messageId` 向原 API 实例读取 `GET /api/messages/{id}`；App 自身仍需实现设备注册、通知展示与跳转。
+
+## 通知等级
+
+`GET /api/push/preferences` 读取账号的通知开关，`PUT /api/push/preferences` 一次保存四个布尔值。两个接口均要求 API access token；设置对该账号所有设备生效。
+
+```json
+{"low":false,"normal":true,"high":true,"urgent":true}
+```
+
+默认四个等级都开启。关闭的等级仍会进入收件箱并产生 SSE，但不创建推送任务。后台领取尚未交接的任务时也会检查当前开关；在任务期限内重新开启，已有待发任务仍可能发送。已交接给中转的任务无法撤回。重新开启不会补推关闭期间入库的消息。
 
 ## 投递与排查
 

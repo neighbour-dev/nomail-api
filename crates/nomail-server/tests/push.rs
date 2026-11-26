@@ -9,6 +9,7 @@ use std::{net::TcpListener, sync::Mutex};
 mod common;
 
 const REGISTRATION: &str = "/api/device/push/token";
+const PREFERENCES: &str = "/api/push/preferences";
 const DELIVERIES: &str = "/v1/caller/deliveries";
 
 #[actix_web::test]
@@ -80,6 +81,26 @@ async fn commits_once_and_retries_same_command_after_losing_relay_ack() {
         .set_json(json!({"id":id,"title":"private webhook title","content":"private webhook body"}))
         .to_request()
         };
+    let preferences = |normal| {
+        test::TestRequest::put()
+            .uri(PREFERENCES)
+            .insert_header(auth.clone())
+            .set_json(json!({"low":true,"normal":normal,"high":true,"urgent":true}))
+            .to_request()
+    };
+    let outbox = native::Store(&db);
+    assert_eq!(
+        test::call_service(&api, preferences(false)).await.status(),
+        StatusCode::OK
+    );
+    let muted: Value = test::call_and_read_body_json(&api, receive("muted-event")).await;
+    assert_eq!(muted["data"]["duplicate"], false);
+    let now = Utc::now().timestamp();
+    assert!(outbox.claim(now, now + 60).await.unwrap().is_none());
+    assert_eq!(
+        test::call_service(&api, preferences(true)).await.status(),
+        StatusCode::OK
+    );
 
     db.execute_unprepared("CREATE TRIGGER fail_push BEFORE INSERT ON push_jobs BEGIN SELECT RAISE(ABORT, 'failed test enqueue'); END;")
         .await.unwrap();
@@ -96,6 +117,16 @@ async fn commits_once_and_retries_same_command_after_losing_relay_ack() {
     assert_eq!(first["data"]["duplicate"], false);
     assert_eq!(duplicate["data"]["duplicate"], true);
     assert_eq!(duplicate["data"]["messageId"], message_id);
+    assert_eq!(
+        test::call_service(&api, preferences(false)).await.status(),
+        StatusCode::OK
+    );
+    let now = Utc::now().timestamp();
+    assert!(outbox.claim(now, now + 60).await.unwrap().is_none());
+    assert_eq!(
+        test::call_service(&api, preferences(true)).await.status(),
+        StatusCode::OK
+    );
     assert_eq!(
         test::call_service(&api, registration("apns", "ab12"))
             .await
@@ -155,7 +186,7 @@ async fn commits_once_and_retries_same_command_after_losing_relay_ack() {
             requests[0],
             json!({
                 "deliveryId":delivery_id, "messageId":message_id,
-                "notification":{"title":push::TITLE,"body":push::BODY},
+                "notification":{"title":"NoMail: private webhook title","body":"private webhook body"},
                 "target":{"channel":"apns","token":"ab12"}
             })
         );

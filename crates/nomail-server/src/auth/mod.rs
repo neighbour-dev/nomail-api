@@ -2,14 +2,9 @@
 pub(crate) mod account;
 pub(crate) mod repository;
 
-use crate::config::Config;
-#[cfg(test)]
-use crate::runtime::Runtime;
+use crate::{config::Config, runtime::Runtime};
 pub use account::reset_account;
-use nomail_app::auth::AuthConfig;
-#[cfg(test)]
-use nomail_app::auth::AuthService;
-#[cfg(test)]
+use nomail_app::auth::{AuthConfig, AuthService};
 use sea_orm::DatabaseConnection;
 
 pub(crate) fn auth_config(config: &Config) -> AuthConfig {
@@ -18,7 +13,6 @@ pub(crate) fn auth_config(config: &Config) -> AuthConfig {
         jwt_issuer: config.jwt_issuer.clone(),
     }
 }
-#[cfg(test)]
 pub(crate) fn service<'a>(
     db: &'a DatabaseConnection,
     config: &Config,

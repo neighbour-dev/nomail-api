@@ -21,6 +21,11 @@ DELETE FROM push_targets WHERE device_id=?1 AND EXISTS (
       AND p.session_id=?3 AND p.logged_in_at=?4 AND p.session_expiry>?5
 )";
 
+pub const GET_PREFERENCES: &str = "SELECT levels FROM push_preferences WHERE user_id=?1";
+pub const SET_PREFERENCES: &str = "
+INSERT INTO push_preferences(user_id, levels) VALUES (?1, ?2)
+ON CONFLICT(user_id) DO UPDATE SET levels=excluded.levels";
+
 // In D1 this runs directly after the message INSERT in the same atomic batch.
 // `changes()` binds the enqueue to the winning insert (not a duplicate).
 pub const ENQUEUE: &str = "
@@ -30,7 +35,9 @@ SELECT lower(hex(randomblob(6)) || '4' || substr(hex(randomblob(2)), 2)
        m.id, p.device_id, p.version, ?2, ?3, ?4, ?5
 FROM notify_messages m JOIN webhook_configs w ON w.id=m.webhook_config_id
 JOIN active_push_targets p ON p.user_id=w.user_id
-WHERE changes()=1 AND m.id=?1 AND p.session_expiry>?4";
+LEFT JOIN push_preferences pref ON pref.user_id=p.user_id
+WHERE changes()=1 AND m.id=?1 AND p.session_expiry>?4
+  AND COALESCE(json_extract(pref.levels, '$.' || m.level), 1)=1";
 
 pub const EXPIRE: &str = "DELETE FROM push_jobs WHERE deadline<=?1";
 
@@ -42,9 +49,11 @@ WHERE delivery_id=(
     SELECT j.delivery_id FROM push_jobs j
     JOIN active_push_targets p ON p.device_id=j.device_id AND p.version=j.target_version
     JOIN notify_messages m ON m.id=j.message_id
+    LEFT JOIN push_preferences pref ON pref.user_id=p.user_id
     WHERE j.next_at<=?1 AND j.deadline>?1 AND p.session_expiry>?1
       AND (j.accepted=1 OR
           (m.deleted_at IS NULL AND m.status='unread'
+           AND COALESCE(json_extract(pref.levels, '$.' || m.level), 1)=1
            AND (m.expire_at IS NULL OR unixepoch(m.expire_at)>?1)))
     ORDER BY j.next_at, j.delivery_id LIMIT 1
 )

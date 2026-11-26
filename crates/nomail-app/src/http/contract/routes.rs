@@ -118,6 +118,8 @@ endpoints! {
     ListDevices => ("listDevices",Get,"/api/device",Bearer,None,Json,false,None,(),(),Vec<DeviceResponse>,"Device","设备列表"),
     RegisterPush => ("registerPushToken",Put,"/api/device/push/token",Bearer,Json,Json,false,None,RegisterPushRequest,(),(),"Device","上报或更新当前登录设备的推送 Token"),
     RemovePush => ("removePushToken",Delete,"/api/device/push/token",Bearer,None,Json,false,None,(),(),(),"Device","删除当前登录设备的推送 Token"),
+    GetPushPreferences => ("getPushPreferences",Get,"/api/push/preferences",Bearer,None,Json,false,None,(),(),PushPreferences,"Push","读取账号的消息等级推送开关"),
+    SetPushPreferences => ("setPushPreferences",Put,"/api/push/preferences",Bearer,Json,Json,false,None,PushPreferences,(),(),"Push","设置账号的四个消息等级推送开关"),
     KickDevice => ("kickDevice",Delete,"/api/device/{deviceId}/session",Bearer,None,Json,false,DeviceId,(),(),(),"Device","撤销设备会话"),
     DeleteDevice => ("deleteDevice",Delete,"/api/device/{deviceId}",Bearer,None,Json,false,DeviceId,(),(),(),"Device","删除设备"),
     ListConfigs => ("listWebhookConfigs",Get,"/api/webhook/configs",Bearer,None,Json,true,None,(),PaginationQuery,Page<ConfigResponse>,"Webhook Configs","接收配置列表"),

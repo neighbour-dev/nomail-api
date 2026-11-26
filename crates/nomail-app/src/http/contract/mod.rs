@@ -7,6 +7,7 @@ mod device;
 pub mod events;
 mod message;
 mod message_response;
+mod push;
 mod routes;
 
 pub use auth::*;
@@ -16,6 +17,7 @@ pub use cursor::*;
 pub use device::*;
 pub use message::*;
 pub use message_response::*;
+pub use push::*;
 pub use routes::*;
 
 pub type EndpointResponse<E> = ApiResponse<<E as Endpoint>::Response>;

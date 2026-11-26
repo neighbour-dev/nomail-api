@@ -8,7 +8,7 @@ use crate::{
     webhook,
 };
 use nomail_app::{
-    auth::AuthConfig,
+    auth::{AuthConfig, AuthService},
     http::{
         ApiFailure, Environment, EnvironmentServices, HealthCheck, HttpResult, RequestHead,
         Services,
@@ -43,6 +43,7 @@ impl<'a> Environment for WorkersEnvironment<'a> {
     type MessageStore = message::repository::Store<'a>;
     type ConfigStore = webhook::configs::repository::Store<'a>;
     type IngestionStore = message::repository::Store<'a>;
+    type PreferenceStore = &'a Store;
     type Runtime = Runtime;
 
     fn push_enabled(&self) -> bool {
@@ -53,18 +54,21 @@ impl<'a> Environment for WorkersEnvironment<'a> {
         let db = self.db.as_ref().map_err(|_| ApiFailure::internal())?;
         let config = Config::load(self.env).map_err(config_failure)?;
         Ok(Services::new(
-            auth::repository::Store(db),
+            AuthService {
+                store: auth::repository::Store(db),
+                runtime: Runtime {
+                    encryption_key: config.encryption_key,
+                },
+                config: AuthConfig {
+                    jwt_secret: config.jwt_secret,
+                    jwt_issuer: config.jwt_issuer,
+                },
+            },
             device::Store(db),
             message::repository::Store(db),
             webhook::configs::repository::Store(db),
             message::repository::Store(db),
-            Runtime {
-                encryption_key: config.encryption_key,
-            },
-            AuthConfig {
-                jwt_secret: config.jwt_secret,
-                jwt_issuer: config.jwt_issuer,
-            },
+            db,
         ))
     }
     async fn health(&self, _request: &RequestHead) -> HttpResult<HealthCheck> {

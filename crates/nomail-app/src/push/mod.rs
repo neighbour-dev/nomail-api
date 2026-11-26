@@ -5,8 +5,43 @@ pub use relay::*;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-pub const TITLE: &str = "NoMail";
-pub const BODY: &str = "你有一条新消息";
+use crate::message::MessageContent;
+
+pub fn notification_title(content: &MessageContent) -> String {
+    const PREFIX: &str = "NoMail: ";
+    // nomail-push limits the whole title to 256 UTF-8 bytes.
+    let end = content.title.floor_char_boundary(256 - PREFIX.len());
+    format!("{PREFIX}{}", &content.title[..end])
+}
+
+#[derive(Clone, Copy, Deserialize, Serialize)]
+pub struct Preferences {
+    pub low: bool,
+    pub normal: bool,
+    pub high: bool,
+    pub urgent: bool,
+}
+
+impl Default for Preferences {
+    fn default() -> Self {
+        Self {
+            low: true,
+            normal: true,
+            high: true,
+            urgent: true,
+        }
+    }
+}
+
+#[allow(async_fn_in_trait)]
+pub trait PreferenceStore {
+    async fn preferences(&self, user_id: i64) -> Result<Preferences, StoreError>;
+    async fn set_preferences(
+        &self,
+        user_id: i64,
+        preferences: Preferences,
+    ) -> Result<(), StoreError>;
+}
 pub const SUBMIT_WINDOW: i64 = 10 * 60;
 const STATUS_WINDOW: i64 = 24 * 60 * 60;
 const LEASE: i64 = 60;

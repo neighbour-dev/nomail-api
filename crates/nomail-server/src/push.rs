@@ -2,7 +2,10 @@
 use chrono::Utc;
 use nomail_app::{
     message::Message,
-    push::{self, Finish, Job, Outbox, RelayConfig, RelayRequest, Reply, StoreError, Transport},
+    push::{
+        self, Finish, Job, Outbox, PreferenceStore, Preferences, RelayConfig, RelayRequest, Reply,
+        StoreError, Transport,
+    },
 };
 use sea_orm::{
     ConnectionTrait, DatabaseConnection, DatabaseTransaction, DbBackend, DbErr, Statement,
@@ -22,8 +25,8 @@ pub(crate) async fn enqueue(tx: &DatabaseTransaction, m: &Message) -> Result<(),
         sql::ENQUEUE,
         [
             m.id.into(),
-            push::TITLE.into(),
-            push::BODY.into(),
+            push::notification_title(&m.common).into(),
+            m.common.summary.as_str().into(),
             now.into(),
             (now + push::SUBMIT_WINDOW).into(),
         ],
@@ -33,6 +36,38 @@ pub(crate) async fn enqueue(tx: &DatabaseTransaction, m: &Message) -> Result<(),
 }
 
 pub struct Store<'a>(pub &'a DatabaseConnection);
+
+impl PreferenceStore for Store<'_> {
+    async fn preferences(&self, user_id: i64) -> Result<Preferences, StoreError> {
+        let row = self
+            .0
+            .query_one(statement(sql::GET_PREFERENCES, [user_id.into()]))
+            .await
+            .map_err(|_| StoreError)?;
+        row.map(|row| {
+            let levels: String = row.try_get("", "levels").map_err(|_| StoreError)?;
+            serde_json::from_str(&levels).map_err(|_| StoreError)
+        })
+        .transpose()
+        .map(Option::unwrap_or_default)
+    }
+
+    async fn set_preferences(
+        &self,
+        user_id: i64,
+        preferences: Preferences,
+    ) -> Result<(), StoreError> {
+        let levels = serde_json::to_string(&preferences).map_err(|_| StoreError)?;
+        self.0
+            .execute(statement(
+                sql::SET_PREFERENCES,
+                [user_id.into(), levels.into()],
+            ))
+            .await
+            .map_err(|_| StoreError)?;
+        Ok(())
+    }
+}
 impl Outbox for Store<'_> {
     async fn claim(&self, now: i64, lease_until: i64) -> Result<Option<Job>, StoreError> {
         self.0
