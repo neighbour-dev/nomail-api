@@ -9,7 +9,7 @@ use std::{net::TcpListener, sync::Mutex};
 mod common;
 
 const REGISTRATION: &str = "/api/device/push/token";
-const PREFERENCES: &str = "/api/push/preferences";
+const PREFERENCES: &str = "/api/device/push/preferences";
 const DELIVERIES: &str = "/v1/caller/deliveries";
 
 #[actix_web::test]
@@ -70,6 +70,30 @@ async fn commits_once_and_retries_same_command_after_losing_relay_ack() {
             .status(),
         StatusCode::OK
     );
+    let second_login: Value = test::call_and_read_body_json(&api, test::TestRequest::post()
+        .uri("/api/auth/login")
+        .set_json(json!({"username":"admin","password":"password123","deviceId":"second-phone","platform":"ios","deviceType":"phone"}))
+        .to_request()).await;
+    let second_auth = (
+        "Authorization",
+        format!(
+            "Bearer {}",
+            second_login["data"]["accessToken"].as_str().unwrap()
+        ),
+    );
+    assert_eq!(
+        test::call_service(
+            &api,
+            test::TestRequest::put()
+                .uri(REGISTRATION)
+                .insert_header(second_auth.clone())
+                .set_json(json!({"channel":"apns","deviceToken":"cd34"}))
+                .to_request()
+        )
+        .await
+        .status(),
+        StatusCode::OK
+    );
     let source: Value = test::call_and_read_body_json(&api, test::TestRequest::post()
         .uri("/api/webhook/configs").insert_header(auth.clone())
         .set_json(json!({"name":"source","platform":{"provider":"generic","credentials":{"type":"none"}}}))
@@ -85,7 +109,7 @@ async fn commits_once_and_retries_same_command_after_losing_relay_ack() {
         test::TestRequest::put()
             .uri(PREFERENCES)
             .insert_header(auth.clone())
-            .set_json(json!({"low":true,"normal":normal,"high":true,"urgent":true}))
+            .set_json(json!({"enabled":true,"low":true,"normal":normal,"high":true,"urgent":true}))
             .to_request()
     };
     let outbox = native::Store(&db);
@@ -112,6 +136,18 @@ async fn commits_once_and_retries_same_command_after_losing_relay_ack() {
         .await
         .unwrap();
     let first: Value = test::call_and_read_body_json(&api, receive("event-1")).await;
+    let second_settings: Value = test::call_and_read_body_json(
+        &api,
+        test::TestRequest::get()
+            .uri(PREFERENCES)
+            .insert_header(second_auth)
+            .to_request(),
+    )
+    .await;
+    assert_eq!(
+        second_settings["data"],
+        json!({"enabled":false,"low":true,"normal":true,"high":true,"urgent":true})
+    );
     let duplicate: Value = test::call_and_read_body_json(&api, receive("event-1")).await;
     let message_id = first["data"]["messageId"].clone();
     assert_eq!(first["data"]["duplicate"], false);
@@ -194,12 +230,12 @@ async fn commits_once_and_retries_same_command_after_losing_relay_ack() {
     let target_sql = || {
         sea_orm::Statement::from_string(
             sea_orm::DbBackend::Sqlite,
-            "SELECT token FROM push_targets",
+            "SELECT token FROM push_targets WHERE device_id=1",
         )
     };
     assert!(db.query_one(target_sql()).await.unwrap().is_some());
     // A token refresh racing an old in-flight check must not be invalidated.
-    db.execute_unprepared("UPDATE push_targets SET token='ab34', version='new'")
+    db.execute_unprepared("UPDATE push_targets SET token='ab34', version='new' WHERE device_id=1")
         .await
         .unwrap();
     assert_eq!(client.request(poll.request()).await.unwrap().status, 200);

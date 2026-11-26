@@ -43,7 +43,6 @@ impl<'a> Environment for WorkersEnvironment<'a> {
     type MessageStore = message::repository::Store<'a>;
     type ConfigStore = webhook::configs::repository::Store<'a>;
     type IngestionStore = message::repository::Store<'a>;
-    type PreferenceStore = &'a Store;
     type Runtime = Runtime;
 
     fn push_enabled(&self) -> bool {
@@ -68,7 +67,6 @@ impl<'a> Environment for WorkersEnvironment<'a> {
             message::repository::Store(db),
             webhook::configs::repository::Store(db),
             message::repository::Store(db),
-            db,
         ))
     }
     async fn health(&self, _request: &RequestHead) -> HttpResult<HealthCheck> {

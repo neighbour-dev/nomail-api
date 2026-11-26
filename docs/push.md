@@ -24,13 +24,15 @@ API 将设备 Token、渠道、消息与投递 ID，以及通知文案交给中�
 
 ## 通知等级
 
-`GET /api/push/preferences` 读取账号的通知开关，`PUT /api/push/preferences` 一次保存四个布尔值。两个接口均要求 API access token；设置对该账号所有设备生效。
+`GET /api/device/push/preferences` 读取当前登录设备的通知设置，`PUT /api/device/push/preferences` 一次保存总开关和四个等级开关。两个接口均要求 API access token，设备由登录会话识别；同账号的其他设备不受影响。
 
 ```json
-{"low":false,"normal":true,"high":true,"urgent":true}
+{"enabled":true,"low":false,"normal":true,"high":true,"urgent":true}
 ```
 
-默认四个等级都开启。关闭的等级仍会进入收件箱并产生 SSE，但不创建推送任务。后台领取尚未交接的任务时也会检查当前开关；在任务期限内重新开启，已有待发任务仍可能发送。已交接给中转的任务无法撤回。重新开启不会补推关闭期间入库的消息。
+总开关默认关闭，四个等级默认开启。App 获得系统通知权限后才能登记设备 Token 并开启推送；权限被撤回时，应删除设备 Token。后端只为会话有效、已登记 Token 且总开关与消息等级都开启的设备创建推送任务。关闭推送不影响收件箱和 SSE。
+
+设备设置在退出后保留；重新登录需要重新同步 Token。后台领取尚未交接的任务时也会检查当前开关；在任务期限内重新开启，已有待发任务仍可能发送。已交接给中转的任务无法撤回。重新开启不会补推关闭期间入库的消息。
 
 ## 投递与排查
 

@@ -3,7 +3,9 @@ use crate::{db, push::sql, time};
 use chrono::{DateTime, Utc};
 use nomail_app::{
     auth::AuthContext,
-    device::{DeviceError, DeviceResult, DeviceSession, DeviceStore, PushRegistration},
+    device::{
+        DeviceError, DeviceResult, DeviceSession, DeviceStore, PushPreferences, PushRegistration,
+    },
 };
 use serde_json::{Value, json};
 
@@ -17,6 +19,44 @@ fn storage(error: db::StorageError) -> DeviceError {
 }
 
 impl DeviceStore for Store<'_> {
+    async fn push_preferences(&self, device_id: i64) -> DeviceResult<PushPreferences> {
+        let rows = self
+            .0
+            .rows(sql::GET_PREFERENCES, vec![json!(device_id)])
+            .await
+            .map_err(storage)?;
+        let Some(row) = rows.first() else {
+            return Ok(PushPreferences::default());
+        };
+        let settings = row["settings"].as_str().ok_or(DeviceError::Internal)?;
+        serde_json::from_str(settings).map_err(|_| DeviceError::Internal)
+    }
+
+    async fn set_push_preferences(
+        &self,
+        actor: &AuthContext,
+        preferences: PushPreferences,
+        now: DateTime<Utc>,
+    ) -> DeviceResult<()> {
+        let settings = serde_json::to_string(&preferences).map_err(|_| DeviceError::Internal)?;
+        let rows = self
+            .0
+            .rows(
+                sql::SET_PREFERENCES,
+                vec![
+                    json!(actor.device_id),
+                    json!(actor.user_id),
+                    json!(actor.session_id),
+                    json!(time::format(actor.logged_in_at.timestamp_millis())),
+                    json!(now.timestamp()),
+                    json!(settings),
+                ],
+            )
+            .await
+            .map_err(storage)?;
+        rows.first().map(|_| ()).ok_or(DeviceError::Unauthorized)
+    }
+
     async fn devices(&self, uid: i64) -> DeviceResult<Vec<DeviceSession>> {
         let rows = self
             .0

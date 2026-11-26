@@ -7,6 +7,28 @@ pub use model::{Device, DeviceInfo, DeviceInput, DeviceSession};
 
 use crate::{auth::AuthContext, push::Channel};
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Copy, Deserialize, Serialize)]
+pub struct PushPreferences {
+    pub enabled: bool,
+    pub low: bool,
+    pub normal: bool,
+    pub high: bool,
+    pub urgent: bool,
+}
+
+impl Default for PushPreferences {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            low: true,
+            normal: true,
+            high: true,
+            urgent: true,
+        }
+    }
+}
 
 pub struct PushRegistration {
     pub channel: Channel,
@@ -44,6 +66,13 @@ impl PushRegistration {
 
 #[allow(async_fn_in_trait)]
 pub trait DeviceStore {
+    async fn push_preferences(&self, device_id: i64) -> DeviceResult<PushPreferences>;
+    async fn set_push_preferences(
+        &self,
+        actor: &AuthContext,
+        preferences: PushPreferences,
+        now: DateTime<Utc>,
+    ) -> DeviceResult<()>;
     async fn devices(&self, user_id: i64) -> DeviceResult<Vec<DeviceSession>>;
     async fn revoke_device_session(
         &self,

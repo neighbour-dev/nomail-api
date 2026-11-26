@@ -6,7 +6,7 @@ use super::{
 };
 use crate::{
     auth::{AuthContext, AuthRuntime},
-    push::PreferenceStore,
+    device::DeviceStore,
     webhook::{HeaderLookup, WebhookRequest},
 };
 
@@ -133,18 +133,22 @@ pub async fn execute(
         }
         Operation::GetPushPreferences => json::<e::GetPushPreferences>(
             services
-                .push_preferences
-                .preferences(user!())
-                .await
-                .map_err(|_| ApiFailure::internal())?
+                .devices
+                .store
+                .push_preferences(actor(&context)?.device_id)
+                .await?
                 .into(),
         ),
         Operation::SetPushPreferences => {
             services
-                .push_preferences
-                .set_preferences(user!(), input!(e::SetPushPreferences).into())
-                .await
-                .map_err(|_| ApiFailure::internal())?;
+                .devices
+                .store
+                .set_push_preferences(
+                    actor(&context)?,
+                    input!(e::SetPushPreferences).into(),
+                    AuthRuntime::now(&services.auth.runtime),
+                )
+                .await?;
             json::<e::SetPushPreferences>(())
         }
         Operation::KickDevice => {

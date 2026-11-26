@@ -1,7 +1,7 @@
 use super::*;
 use crate::device::{
     Device, DeviceError, DeviceInput, DeviceResult, DeviceService, DeviceSession, DeviceStore,
-    PushRegistration,
+    PushPreferences, PushRegistration,
 };
 use chrono::{DateTime, Duration, Utc};
 use std::cell::{Cell, RefCell};
@@ -227,6 +227,17 @@ impl AuthStore for Store {
     }
 }
 impl DeviceStore for &Store {
+    async fn push_preferences(&self, _: i64) -> DeviceResult<PushPreferences> {
+        unreachable!("this fixture only exercises session management")
+    }
+    async fn set_push_preferences(
+        &self,
+        _: &AuthContext,
+        _: PushPreferences,
+        _: DateTime<Utc>,
+    ) -> DeviceResult<()> {
+        unreachable!("this fixture only exercises session management")
+    }
     async fn devices(&self, uid: i64) -> DeviceResult<Vec<DeviceSession>> {
         let s = self.state.borrow();
         Ok(s.device

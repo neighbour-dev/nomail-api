@@ -17,7 +17,7 @@
 
 ### 变更
 
-- 系统推送标题改为 `NoMail: <消息标题>`，正文使用消息摘要。新增 `GET`／`PUT /api/push/preferences`，按账号设置 `low`、`normal`、`high`、`urgent` 四个等级的推送开关，默认全部开启。
+- 系统推送标题改为 `NoMail: <消息标题>`，正文使用消息摘要。`GET`／`PUT /api/device/push/preferences` 管理当前设备的推送总开关和四个等级开关；总开关默认关闭，各等级默认开启。
 - **设备 API 路径不兼容变更：**设备列表改为 `GET /api/device`，删除设备和撤销会话分别改为 `DELETE /api/device/{deviceId}` 和 `DELETE /api/device/{deviceId}/session`。旧 `/api/auth/devices` 路径不再提供。登录、退出和刷新令牌接口不变。
 
 ## [0.5.0] - 2026-11-14

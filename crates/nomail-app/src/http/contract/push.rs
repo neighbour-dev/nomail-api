@@ -1,10 +1,11 @@
-use crate::push::Preferences;
+use crate::device::PushPreferences as Preferences;
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
 pub struct PushPreferences {
+    pub enabled: bool,
     pub low: bool,
     pub normal: bool,
     pub high: bool,
@@ -14,6 +15,7 @@ pub struct PushPreferences {
 impl From<Preferences> for PushPreferences {
     fn from(p: Preferences) -> Self {
         Self {
+            enabled: p.enabled,
             low: p.low,
             normal: p.normal,
             high: p.high,
@@ -25,6 +27,7 @@ impl From<Preferences> for PushPreferences {
 impl From<PushPreferences> for Preferences {
     fn from(p: PushPreferences) -> Self {
         Self {
+            enabled: p.enabled,
             low: p.low,
             normal: p.normal,
             high: p.high,

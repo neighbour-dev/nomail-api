@@ -49,6 +49,7 @@ CREATE INDEX push_jobs_deadline ON push_jobs(deadline);
 CREATE INDEX push_jobs_target ON push_jobs(device_id, target_version);
 
 CREATE TABLE push_preferences (
-    user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    device_id INTEGER PRIMARY KEY REFERENCES devices(id) ON DELETE CASCADE,
+    enabled INTEGER NOT NULL DEFAULT 0 CHECK (enabled IN (0, 1)),
     levels TEXT NOT NULL CHECK (json_valid(levels))
 );

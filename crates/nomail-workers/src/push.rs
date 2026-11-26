@@ -6,10 +6,7 @@ use futures_util::{
 };
 use nomail_app::{
     message::Message,
-    push::{
-        self, Finish, Job, Outbox, PreferenceStore, Preferences, RelayConfig, RelayRequest, Reply,
-        StoreError, Transport,
-    },
+    push::{self, Finish, Job, Outbox, RelayConfig, RelayRequest, Reply, StoreError, Transport},
 };
 use serde_json::json;
 use worker::{
@@ -43,33 +40,6 @@ pub(crate) fn enqueue(
             json!(now + push::SUBMIT_WINDOW),
         ],
     )
-}
-
-impl PreferenceStore for &db::Store {
-    async fn preferences(&self, user_id: i64) -> Result<Preferences, StoreError> {
-        self.rows(sql::GET_PREFERENCES, vec![json!(user_id)])
-            .await
-            .map_err(|_| StoreError)?
-            .first()
-            .map(|row| {
-                let levels = row["levels"].as_str().ok_or(StoreError)?;
-                serde_json::from_str(levels).map_err(|_| StoreError)
-            })
-            .transpose()
-            .map(Option::unwrap_or_default)
-    }
-
-    async fn set_preferences(
-        &self,
-        user_id: i64,
-        preferences: Preferences,
-    ) -> Result<(), StoreError> {
-        let levels = serde_json::to_string(&preferences).map_err(|_| StoreError)?;
-        self.run(sql::SET_PREFERENCES, vec![json!(user_id), json!(levels)])
-            .await
-            .map_err(|_| StoreError)?;
-        Ok(())
-    }
 }
 
 impl Outbox for db::Store {

@@ -8,7 +8,10 @@ use crate::{
 use chrono::{DateTime, Utc};
 use nomail_app::{
     auth::{AuthContext, Session},
-    device::{Device, DeviceError, DeviceResult, DeviceSession, DeviceStore, PushRegistration},
+    device::{
+        Device, DeviceError, DeviceResult, DeviceSession, DeviceStore, PushPreferences,
+        PushRegistration,
+    },
 };
 use sea_orm::{
     ColumnTrait, ConnectionTrait, DatabaseConnection, DbErr, EntityTrait, QueryFilter,
@@ -64,6 +67,44 @@ async fn owned(
 }
 
 impl DeviceStore for Store<'_> {
+    async fn push_preferences(&self, device_id: i64) -> DeviceResult<PushPreferences> {
+        let row = self
+            .0
+            .query_one(statement(sql::GET_PREFERENCES, [device_id.into()]))
+            .await
+            .map_err(storage)?;
+        let Some(row) = row else {
+            return Ok(PushPreferences::default());
+        };
+        let settings: String = row.try_get("", "settings").map_err(storage)?;
+        serde_json::from_str(&settings).map_err(|_| DeviceError::Internal)
+    }
+
+    async fn set_push_preferences(
+        &self,
+        actor: &AuthContext,
+        preferences: PushPreferences,
+        now: DateTime<Utc>,
+    ) -> DeviceResult<()> {
+        let settings = serde_json::to_string(&preferences).map_err(|_| DeviceError::Internal)?;
+        let row = self
+            .0
+            .query_one(statement(
+                sql::SET_PREFERENCES,
+                [
+                    actor.device_id.into(),
+                    actor.user_id.into(),
+                    actor.session_id.into(),
+                    actor.logged_in_at.to_rfc3339().into(),
+                    now.timestamp().into(),
+                    settings.into(),
+                ],
+            ))
+            .await
+            .map_err(storage)?;
+        row.map(|_| ()).ok_or(DeviceError::Unauthorized)
+    }
+
     async fn devices(&self, uid: i64) -> DeviceResult<Vec<DeviceSession>> {
         let tx = self.0.begin().await.map_err(storage)?;
         let devices = device::Entity::find()

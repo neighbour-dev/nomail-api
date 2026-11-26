@@ -1,5 +1,5 @@
 //! Native service composition. No endpoint binding lives here.
-use crate::{AppState, auth, device, message, push, runtime::Runtime, webhook};
+use crate::{AppState, auth, device, message, runtime::Runtime, webhook};
 use nomail_app::http::{
     Environment, EnvironmentServices, HealthCheck, HttpResult, RequestHead, Services,
 };
@@ -11,7 +11,6 @@ impl<'a> Environment for NativeEnvironment<'a> {
     type MessageStore = message::repository::Store<'a>;
     type ConfigStore = webhook::configs::repository::Store<'a>;
     type IngestionStore = message::repository::Store<'a>;
-    type PreferenceStore = push::Store<'a>;
     type Runtime = Runtime;
 
     fn push_enabled(&self) -> bool {
@@ -26,7 +25,6 @@ impl<'a> Environment for NativeEnvironment<'a> {
             message::repository::Store(&state.db),
             webhook::configs::repository::Store(&state.db),
             message::repository::Store(&state.db),
-            push::Store(&state.db),
         ))
     }
     async fn health(&self, _: &RequestHead) -> HttpResult<HealthCheck> {

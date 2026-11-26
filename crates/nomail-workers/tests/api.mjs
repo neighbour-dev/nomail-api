@@ -237,11 +237,11 @@ test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, a
       return result.data;
     }
     const registration = '/api/device/push/token';
-    const pushPreferences = '/api/push/preferences';
+    const pushPreferences = '/api/device/push/preferences';
     assert.deepEqual(await api('GET', pushPreferences, undefined, token),
-      { low: true, normal: true, high: true, urgent: true });
+      { enabled: false, low: true, normal: true, high: true, urgent: true });
     await api('PUT', pushPreferences, { low: false }, token, 400);
-    const preferences = { low: false, normal: true, high: true, urgent: true };
+    const preferences = { enabled: true, low: false, normal: true, high: true, urgent: true };
     await api('PUT', pushPreferences, preferences, token);
     assert.deepEqual(await api('GET', pushPreferences, undefined, token), preferences);
     await api('PUT', registration, { deviceToken: 'ABCDEF' }, token, 400);
@@ -961,6 +961,9 @@ test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, a
     await api('DELETE', '/api/device/b', undefined, token);
     assert.ok(!(await api('GET', '/api/device', undefined, token)).some(device => device.deviceId === 'b'));
     await api('GET', '/api/auth/devices', undefined, token, 404);
+    assert.deepEqual(await api('GET', pushPreferences, undefined, token),
+      { enabled: false, low: true, normal: true, high: true, urgent: true });
+    await api('PUT', pushPreferences, preferences, token);
     await api('PUT', registration, { channel: 'fcm', deviceToken: 'MutedDeviceToken' }, token);
     const muted = await receive({ id: 'muted-event', title: 'Muted', level: 'low' });
     assert.equal((await api('GET', `/api/messages/${muted.messageId}`, undefined, token)).level, 'low');
