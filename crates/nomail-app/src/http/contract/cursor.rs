@@ -1,3 +1,4 @@
+use super::common::default_page_size;
 use super::{MessageFilterQuery, MessageListItem};
 use crate::message::{
     MessageCursorPage, MessageCursorQuery, MessageError, MessagePosition, MessageWindow,
@@ -9,7 +10,7 @@ use uuid::Uuid;
 
 /// Receipt-order pagination, not a change log. Latest/before are descending;
 /// after is ascending. Keep filters unchanged when continuing a query.
-#[derive(Default, Deserialize, Serialize)]
+#[derive(Deserialize, Serialize)]
 #[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct CursorMessagesQuery {
@@ -18,11 +19,9 @@ pub struct CursorMessagesQuery {
     /// Exclusive newer boundary. Cannot be combined with before.
     pub after: Option<String>,
     /// Default 20, range 1..=100. No page/pageSize or total count.
-    #[cfg_attr(
-        feature = "openapi",
-        schemars(with = "Option<u64>", range(min = 1, max = 100))
-    )]
-    pub limit: Option<String>,
+    #[serde(default = "default_page_size")]
+    #[cfg_attr(feature = "openapi", schemars(range(min = 1, max = crate::pagination::MAX_PAGE_SIZE)))]
+    pub limit: u64,
     #[serde(flatten)]
     pub filters: MessageFilterQuery,
 }
@@ -73,13 +72,7 @@ impl TryFrom<CursorMessagesQuery> for MessageCursorQuery {
             (None, Some(value)) => MessageWindow::After(decode(&value)?),
             (None, None) => MessageWindow::Latest,
         };
-        let limit = q
-            .limit
-            .as_deref()
-            .unwrap_or("20")
-            .parse::<u64>()
-            .map_err(|_| MessageError::InvalidInput("invalid limit".into()))?;
-        Self::new(q.filters.try_into()?, window, limit)
+        Self::new(q.filters.try_into()?, window, q.limit)
     }
 }
 
@@ -144,10 +137,19 @@ mod tests {
             "limit=",
             "limit=-1",
         ] {
-            let q: CursorMessagesQuery = serde_urlencoded::from_str(query).unwrap();
-            assert!(MessageCursorQuery::try_from(q).is_err(), "{query}");
+            assert!(
+                crate::http::parse_query::<crate::http::endpoints::CursorMessages>(query)
+                    .and_then(
+                        |q| MessageCursorQuery::try_from(q).map_err(crate::http::ApiFailure::from)
+                    )
+                    .is_err(),
+                "{query}"
+            );
         }
-        let q = MessageCursorQuery::try_from(CursorMessagesQuery::default()).unwrap();
+        let q = MessageCursorQuery::try_from(
+            serde_urlencoded::from_str::<CursorMessagesQuery>("").unwrap(),
+        )
+        .unwrap();
         assert_eq!(q.fetch_limit(), 21);
         assert_eq!(q.window(), MessageWindow::Latest);
     }

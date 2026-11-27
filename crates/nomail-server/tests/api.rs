@@ -157,13 +157,13 @@ async fn all_api_contracts() {
     let config_id = created["data"]["id"].as_i64().unwrap();
     let config_path = format!("/api/webhook/configs/{config_id}");
     let receive_path = created["data"]["url"].as_str().unwrap();
-    let (_, body) = api!(
+    let (status, _) = api!(
         get,
         "/api/webhook/configs?pageSize=999",
         json!({}),
         Some(&token)
     );
-    assert_eq!(body["data"]["pageSize"], 100);
+    assert_eq!(status, StatusCode::BAD_REQUEST);
     let (_, body) = api!(get, &config_path, json!({}), Some(&token));
     assert_eq!(body["data"]["name"], "Monitor");
     let (_, body) = api!(patch, &config_path, json!({"name":"Updated"}), Some(&token));

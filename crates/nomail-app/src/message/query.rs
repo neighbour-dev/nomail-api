@@ -1,6 +1,7 @@
 use super::{MessageError, MessageResult};
 use crate::webhook::MessageLevel;
 use chrono::{DateTime, Utc};
+use garde::Validate;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ReadStatus {
@@ -25,15 +26,29 @@ impl ReadStatus {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Validate)]
 pub struct MessageFilters {
+    #[garde(skip)]
     pub text: Option<String>,
+    #[garde(skip)]
     pub status: Option<ReadStatus>,
+    #[garde(skip)]
     pub level: Option<MessageLevel>,
+    #[garde(range(min = 1))]
     pub webhook_config_id: Option<i64>,
+    #[garde(skip)]
     pub pinned: Option<bool>,
+    #[garde(inner(custom(|from, _| validate_from(from, self.to))))]
     pub from: Option<DateTime<Utc>>,
+    #[garde(skip)]
     pub to: Option<DateTime<Utc>>,
+}
+
+fn validate_from(from: &DateTime<Utc>, to: Option<DateTime<Utc>>) -> garde::Result {
+    if to.is_some_and(|to| *from > to) {
+        return Err(garde::Error::new("from must not be after to"));
+    }
+    Ok(())
 }
 
 /// Validated, read-only query. Storage sees types, not HTTP strings or syntax.
@@ -46,18 +61,14 @@ pub struct MessageQuery {
 }
 impl MessageQuery {
     pub fn new(mut filters: MessageFilters, page: u64, page_size: u64) -> MessageResult<Self> {
-        if filters.webhook_config_id.is_some_and(|id| id <= 0) {
-            return Err(MessageError::InvalidInput("invalid webhookConfigId".into()));
-        }
-        if filters
-            .from
-            .zip(filters.to)
-            .is_some_and(|(from, to)| from > to)
-        {
-            return Err(MessageError::InvalidInput(
-                "from must not be after to".into(),
-            ));
-        }
+        filters.validate().map_err(|report| {
+            let message = if garde::select!(report, webhook_config_id).next().is_some() {
+                "invalid webhookConfigId"
+            } else {
+                "from must not be after to"
+            };
+            MessageError::InvalidInput(message.into())
+        })?;
         let offset = crate::pagination::checked_offset(page, page_size)
             .map_err(|message| MessageError::InvalidInput(message.into()))?;
         filters.text = filters.text.and_then(|text| {

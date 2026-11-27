@@ -48,14 +48,24 @@ impl<T, U: From<T>> From<crate::pagination::Page<T>> for Page<U> {
         }
     }
 }
-#[derive(Default, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
 #[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct PaginationQuery {
-    #[cfg_attr(feature = "openapi", schemars(with = "Option<u64>"))]
-    pub page: Option<String>,
-    #[cfg_attr(feature = "openapi", schemars(with = "Option<u64>"))]
-    pub page_size: Option<String>,
+    #[serde(default = "default_page")]
+    #[cfg_attr(feature = "openapi", schemars(range(min = 1)))]
+    pub page: u64,
+    #[serde(default = "default_page_size")]
+    #[cfg_attr(feature = "openapi", schemars(range(min = 1, max = crate::pagination::MAX_PAGE_SIZE)))]
+    pub page_size: u64,
+}
+
+pub(super) fn default_page() -> u64 {
+    1
+}
+
+pub(super) fn default_page_size() -> u64 {
+    20
 }
 #[derive(Serialize, Deserialize)]
 #[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
@@ -68,23 +78,10 @@ pub struct AffectedResponse {
     pub affected: u64,
 }
 
-pub(crate) fn parse_pagination(page: Option<&str>, size: Option<&str>) -> (u64, u64) {
-    let page = page
-        .and_then(|v| v.parse::<i64>().ok())
-        .filter(|v| *v > 0)
-        .unwrap_or(1) as u64;
-    let size = size
-        .and_then(|v| v.parse::<i64>().ok())
-        .filter(|v| *v > 0)
-        .unwrap_or(20)
-        .min(100) as u64;
-    (page, size)
-}
 impl TryFrom<PaginationQuery> for crate::webhook::config::ConfigPage {
     type Error = crate::webhook::config::ConfigError;
     fn try_from(query: PaginationQuery) -> Result<Self, Self::Error> {
-        let (page, size) = parse_pagination(query.page.as_deref(), query.page_size.as_deref());
-        Self::new(page, size)
+        Self::new(query.page, query.page_size)
     }
 }
 

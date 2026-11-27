@@ -200,10 +200,10 @@ fn message_updates_and_config_pagination_are_converted_before_use_cases() {
         assert!(decode::<endpoints::UpdateMessage>(value).is_err());
     }
     let page = crate::webhook::config::ConfigPage::try_from(
-        parse_query::<endpoints::ListConfigs>("page=0&pageSize=999").unwrap(),
+        parse_query::<endpoints::ListConfigs>("").unwrap(),
     )
     .unwrap();
-    assert_eq!((page.page(), page.size(), page.offset()), (1, 100, 0));
+    assert_eq!((page.page(), page.size(), page.offset()), (1, 20, 0));
     assert!(
         crate::webhook::config::ConfigPage::try_from(
             parse_query::<endpoints::ListConfigs>("page=9223372036854775807&pageSize=100").unwrap()
@@ -480,14 +480,14 @@ fn common_envelopes_and_json_limits_are_transport_independent() {
 #[test]
 fn query_inputs_are_converted_to_types_without_a_string_roundtrip() {
     let request = parse_query::<endpoints::ListMessages>(
-        "status=%20read%20&level=HIGH&query=%20hello%20&pageSize=999",
+        "status=%20read%20&level=HIGH&query=%20hello%20&pageSize=100",
     )
     .unwrap();
     let map = serde_json::to_value(&request).unwrap();
     assert_eq!(map["status"], " read ");
     assert_eq!(map["level"], "HIGH");
     assert_eq!(map["query"], " hello ");
-    assert_eq!(map["pageSize"], "999");
+    assert_eq!(map["pageSize"], 100);
     let query = crate::message::MessageQuery::try_from(request).unwrap();
     assert_eq!(
         query.filters().status,
@@ -521,11 +521,11 @@ fn query_inputs_are_converted_to_types_without_a_string_roundtrip() {
 }
 
 #[test]
-fn query_conversion_preserves_legacy_defaults_aliases_times_and_large_offsets() {
+fn query_conversion_preserves_aliases_times_and_large_offsets() {
     use crate::message::{MessageQuery, ReadStatus};
     use crate::webhook::MessageLevel;
     let raw: ListMessagesQuery = serde_json::from_value(json!({
-        "page":"0", "pageSize":"999", "query":" %hello_ ", "status":" read ",
+        "page":1, "pageSize":100, "query":" %hello_ ", "status":" read ",
         "level":"HIGH", "pinned":"T", "webhookConfigId":"2",
         "from":"2026-01-01T01:00:00+01:00", "to":"2026-01-02T00:00:00Z"
     }))
@@ -561,20 +561,12 @@ fn query_conversion_preserves_legacy_defaults_aliases_times_and_large_offsets() 
             Some(expected)
         );
     }
-    for input in [
-        "",
-        "page=0&pageSize=0",
-        "page=-1&pageSize=-1",
-        "page=bad&pageSize=bad",
-        "page=9223372036854775808&pageSize=9223372036854775808",
-    ] {
-        let query =
-            MessageQuery::try_from(parse_query::<endpoints::ListMessages>(input).unwrap()).unwrap();
-        assert_eq!(
-            (query.page(), query.page_size(), query.offset()),
-            (1, 20, 0)
-        );
-    }
+    let query =
+        MessageQuery::try_from(parse_query::<endpoints::ListMessages>("").unwrap()).unwrap();
+    assert_eq!(
+        (query.page(), query.page_size(), query.offset()),
+        (1, 20, 0)
+    );
     let query = MessageQuery::try_from(
         parse_query::<endpoints::ListMessages>("page=9007199254740994&pageSize=1").unwrap(),
     )
@@ -593,6 +585,32 @@ fn query_conversion_preserves_legacy_defaults_aliases_times_and_large_offsets() 
             MessageQuery::try_from(parse_query::<endpoints::ListMessages>(input).unwrap()).is_err(),
             "{input}"
         );
+    }
+}
+
+#[test]
+fn offset_pagination_rejects_explicit_invalid_parameters_for_both_lists() {
+    for input in [
+        "page=0",
+        "page=-1",
+        "page=bad",
+        "page=",
+        "pageSize=0",
+        "pageSize=-1",
+        "pageSize=bad",
+        "pageSize=",
+        "pageSize=101",
+        "page=18446744073709551616",
+        "page=9223372036854775807&pageSize=100",
+    ] {
+        let messages = parse_query::<endpoints::ListMessages>(input).and_then(|query| {
+            crate::message::MessageQuery::try_from(query).map_err(ApiFailure::from)
+        });
+        let configs = parse_query::<endpoints::ListConfigs>(input).and_then(|query| {
+            crate::webhook::config::ConfigPage::try_from(query).map_err(ApiFailure::from)
+        });
+        assert_eq!(messages.err().unwrap().status, 400, "{input}");
+        assert_eq!(configs.err().unwrap().status, 400, "{input}");
     }
 }
 

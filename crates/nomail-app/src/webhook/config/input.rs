@@ -1,53 +1,57 @@
 //! Validated business inputs. Plaintext credentials are deliberately not Debug/Serialize.
 use super::{ConfigError, ConfigResult};
-use crate::{auth::check_length, webhook::PlatformConfig};
+use crate::{error::validate_input, webhook::PlatformConfig};
+use garde::Validate;
+
+const MAX_NAME_LENGTH: usize = 100;
+const MAX_DESCRIPTION_LENGTH: usize = 500;
 
 /// Positive configuration identity, independent of URL syntax.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct ConfigId(i64);
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Validate)]
+#[garde(transparent)]
+pub struct ConfigId(#[garde(range(min = 1))] i64);
 impl ConfigId {
     pub fn new(value: i64) -> ConfigResult<Self> {
-        if value <= 0 {
-            return Err(ConfigError::InvalidInput(
-                "invalid webhook config id".into(),
-            ));
-        }
-        Ok(Self(value))
+        let id = Self(value);
+        id.validate()
+            .map_err(|_| ConfigError::InvalidInput("invalid webhook config id".into()))?;
+        Ok(id)
     }
     pub fn get(self) -> i64 {
         self.0
     }
 }
 
+#[derive(Validate)]
 pub struct CreateConfig {
+    #[garde(length(chars, min = 1, max = MAX_NAME_LENGTH))]
     pub(super) name: String,
-    pub(super) platform: PlatformConfig,
+    #[garde(length(chars, max = MAX_DESCRIPTION_LENGTH))]
     pub(super) description: String,
+    #[garde(custom(validate_platform))]
+    pub(super) platform: PlatformConfig,
 }
 impl CreateConfig {
     pub fn new(name: String, platform: PlatformConfig, description: String) -> ConfigResult<Self> {
-        for (field, value, limit, required) in [
-            ("name", name.as_str(), 100, true),
-            ("description", description.as_str(), 500, false),
-        ] {
-            check_length(value, field, limit, required).map_err(ConfigError::InvalidInput)?;
-        }
-        platform
-            .validate()
-            .map_err(|error| ConfigError::InvalidInput(error.to_string()))?;
-        Ok(Self {
+        let input = Self {
             name,
             platform,
             description,
-        })
+        };
+        validate_input(&input).map_err(ConfigError::InvalidInput)?;
+        Ok(input)
     }
 }
 
-#[derive(Default)]
+/// Missing fields are kept; a supplied platform is a complete replacement.
+#[derive(Default, Validate)]
 pub struct UpdateConfig {
+    #[garde(length(chars, min = 1, max = MAX_NAME_LENGTH))]
     pub(super) name: Option<String>,
-    pub(super) platform: Option<PlatformConfig>,
+    #[garde(length(chars, max = MAX_DESCRIPTION_LENGTH))]
     pub(super) description: Option<String>,
+    #[garde(inner(custom(validate_platform)))]
+    pub(super) platform: Option<PlatformConfig>,
 }
 impl UpdateConfig {
     pub fn new(
@@ -55,28 +59,21 @@ impl UpdateConfig {
         platform: Option<PlatformConfig>,
         description: Option<String>,
     ) -> ConfigResult<Self> {
-        // Missing means keep; platform is always a complete replacement.
-        for (field, value, limit) in [
-            ("name", name.as_deref(), 100),
-            ("description", description.as_deref(), 500),
-        ] {
-            if let Some(value) = value {
-                check_length(value, field, limit, field == "name")
-                    .map_err(ConfigError::InvalidInput)?;
-            }
-        }
-        if let Some(value) = &platform {
-            value
-                .validate()
-                .map_err(|error| ConfigError::InvalidInput(error.to_string()))?;
-        }
-        Ok(Self {
+        let input = Self {
             name,
             platform,
             description,
-        })
+        };
+        validate_input(&input).map_err(ConfigError::InvalidInput)?;
+        Ok(input)
     }
     pub fn is_empty(&self) -> bool {
         self.name.is_none() && self.platform.is_none() && self.description.is_none()
     }
+}
+
+fn validate_platform(platform: &PlatformConfig, _: &()) -> garde::Result {
+    platform
+        .validate()
+        .map_err(|error| garde::Error::new(error.to_string()))
 }

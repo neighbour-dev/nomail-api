@@ -298,10 +298,12 @@ test('Workers API on real local D1 and Durable Objects', { timeout: 180_000 }, a
     assert.equal(list.items[0].summary, 'hello 世界');
     assert.equal(list.items[0].source, undefined);
     assert.equal(localSql(`SELECT summary FROM notify_messages WHERE id='${created.messageId}';`)[0].summary, 'hello 世界');
-    const normalizedList = await api('GET', '/api/messages?query=%20%E4%B8%96%E7%95%8C%20&status=%20unread%20&level=URGENT&pinned=F&page=0&pageSize=999', undefined, token);
+    const normalizedList = await api('GET', '/api/messages?query=%20%E4%B8%96%E7%95%8C%20&status=%20unread%20&level=URGENT&pinned=F&page=1&pageSize=100', undefined, token);
     assert.equal(normalizedList.total, 1);
     assert.equal(normalizedList.page, 1);
     assert.equal(normalizedList.pageSize, 100);
+    await api('GET', '/api/messages?page=0', undefined, token, 400);
+    await api('GET', '/api/webhook/configs?pageSize=101', undefined, token, 400);
     for (const [content, expected] of [
       ['中'.repeat(30), '中'.repeat(30)],
       ['😀'.repeat(31), '😀'.repeat(29) + '…'],

@@ -1,4 +1,5 @@
 //! Wire syntax is interpreted once, then use cases receive validated types.
+use super::common::{default_page, default_page_size};
 use crate::message::{
     BatchMessages, MessageError, MessageFilters, MessageQuery, MessageResult, ReadStatus,
 };
@@ -7,15 +8,17 @@ use crate::webhook::MessageLevel;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-#[derive(Default, Deserialize, Serialize)]
+#[derive(Deserialize, Serialize)]
 #[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "openapi", schemars(rename = "ListQuery"))]
 #[serde(rename_all = "camelCase")]
 pub struct ListMessagesQuery {
-    #[cfg_attr(feature = "openapi", schemars(with = "Option<u64>"))]
-    pub page: Option<String>,
-    #[cfg_attr(feature = "openapi", schemars(with = "Option<u64>"))]
-    pub page_size: Option<String>,
+    #[serde(default = "default_page")]
+    #[cfg_attr(feature = "openapi", schemars(range(min = 1)))]
+    pub page: u64,
+    #[serde(default = "default_page_size")]
+    #[cfg_attr(feature = "openapi", schemars(range(min = 1, max = crate::pagination::MAX_PAGE_SIZE)))]
+    pub page_size: u64,
     #[serde(flatten)]
     pub filters: MessageFilterQuery,
 }
@@ -69,9 +72,7 @@ impl TryFrom<MessageFilterQuery> for MessageFilters {
             .map(|value| {
                 value
                     .parse::<i64>()
-                    .ok()
-                    .filter(|id| *id > 0)
-                    .ok_or_else(|| MessageError::InvalidInput("invalid webhookConfigId".into()))
+                    .map_err(|_| MessageError::InvalidInput("invalid webhookConfigId".into()))
             })
             .transpose()?;
         let pinned = optional(q.pinned.as_deref())
@@ -98,8 +99,7 @@ impl TryFrom<ListMessagesQuery> for MessageQuery {
     type Error = MessageError;
     fn try_from(q: ListMessagesQuery) -> MessageResult<Self> {
         let filters = q.filters.try_into()?;
-        let (page, size) = super::parse_pagination(q.page.as_deref(), q.page_size.as_deref());
-        Self::new(filters, page, size)
+        Self::new(filters, q.page, q.page_size)
     }
 }
 

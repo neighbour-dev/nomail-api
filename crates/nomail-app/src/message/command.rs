@@ -1,4 +1,5 @@
 use super::{MessageError, MessageResult};
+use garde::Validate;
 use std::str::FromStr;
 use uuid::Uuid;
 
@@ -45,27 +46,31 @@ pub struct BatchMessages {
     pub(super) ids: Vec<Uuid>,
     pub(super) action: BatchAction,
 }
-impl BatchMessages {
-    fn check_count(count: usize) -> MessageResult<()> {
-        if !(1..=100).contains(&count) {
-            return Err(MessageError::InvalidInput(
-                "ids must contain 1 to 100 items".into(),
-            ));
-        }
-        Ok(())
+
+#[derive(Validate)]
+#[garde(transparent)]
+struct BatchIds<'a, T>(#[garde(length(min = 1, max = 100))] &'a [T]);
+
+impl<T> BatchIds<'_, T> {
+    fn validate_count(&self) -> MessageResult<()> {
+        self.validate()
+            .map_err(|_| MessageError::InvalidInput("ids must contain 1 to 100 items".into()))
     }
+}
+
+impl BatchMessages {
     fn build(mut ids: Vec<Uuid>, action: BatchAction) -> Self {
         ids.sort_unstable();
         ids.dedup();
         Self { ids, action }
     }
     pub fn new(ids: Vec<Uuid>, action: BatchAction) -> MessageResult<Self> {
-        Self::check_count(ids.len())?;
+        BatchIds(&ids).validate_count()?;
         Ok(Self::build(ids, action))
     }
     /// Preserve input error order: count before UUIDs, UUIDs before action.
     pub fn parse(ids: Vec<String>, action: &str) -> MessageResult<Self> {
-        Self::check_count(ids.len())?;
+        BatchIds(&ids).validate_count()?;
         let ids = ids
             .into_iter()
             .map(|id| {

@@ -12,7 +12,7 @@ mod view;
 
 pub use claims::Claims;
 pub use error::{AuthError, AuthResult};
-pub use input::{InitializeAccount, Login, UpdateAccount, check_length};
+pub use input::{InitializeAccount, Login, UpdateAccount};
 pub use model::*;
 pub use repository::*;
 pub use runtime::AuthRuntime;

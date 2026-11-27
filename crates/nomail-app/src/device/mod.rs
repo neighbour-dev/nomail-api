@@ -7,6 +7,7 @@ pub use model::{Device, DeviceInfo, DeviceInput, DeviceSession};
 
 use crate::{auth::AuthContext, push::Channel};
 use chrono::{DateTime, Utc};
+use garde::Validate;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, Deserialize, Serialize)]
@@ -30,37 +31,53 @@ impl Default for PushPreferences {
     }
 }
 
+#[derive(Validate)]
 pub struct PushRegistration {
+    #[garde(skip)]
     pub channel: Channel,
+    #[garde(
+        if(cond = self.channel == Channel::Apns, length(bytes, min = 2, max = 512), custom(validate_apns)),
+        if(cond = self.channel == Channel::Fcm, length(bytes, min = 1, max = 4096), custom(validate_fcm))
+    )]
     pub token: String,
 }
 
 impl PushRegistration {
     fn new(channel: Channel, token: String) -> DeviceResult<Self> {
-        let token = match channel {
-            Channel::Apns => {
-                if !(2..=512).contains(&token.len())
-                    || !token.len().is_multiple_of(2)
-                    || !token.bytes().all(|b| b.is_ascii_hexdigit())
-                {
-                    return Err(DeviceError::InvalidInput(
-                        "invalid APNs device token".into(),
-                    ));
+        let mut input = Self { channel, token };
+        input.validate().map_err(|_| {
+            DeviceError::InvalidInput(
+                match channel {
+                    Channel::Apns => "invalid APNs device token",
+                    Channel::Fcm => "invalid FCM registration token",
                 }
-                token.to_ascii_lowercase()
-            }
-            Channel::Fcm => {
-                if !(1..=4096).contains(&token.len())
-                    || !token.bytes().all(|b| b.is_ascii_graphic())
-                {
-                    return Err(DeviceError::InvalidInput(
-                        "invalid FCM registration token".into(),
-                    ));
-                }
-                token
-            }
-        };
-        Ok(Self { channel, token })
+                .into(),
+            )
+        })?;
+        if channel == Channel::Apns {
+            input.token.make_ascii_lowercase();
+        }
+        Ok(input)
+    }
+}
+
+fn validate_apns(token: &str, _: &()) -> garde::Result {
+    if token.len().is_multiple_of(2) && token.bytes().all(|b| b.is_ascii_hexdigit()) {
+        Ok(())
+    } else {
+        Err(garde::Error::new(
+            "must contain complete hexadecimal byte pairs",
+        ))
+    }
+}
+
+fn validate_fcm(token: &str, _: &()) -> garde::Result {
+    if token.bytes().all(|b| b.is_ascii_graphic()) {
+        Ok(())
+    } else {
+        Err(garde::Error::new(
+            "must contain only visible ASCII characters",
+        ))
     }
 }
 
@@ -152,9 +169,47 @@ impl<S: DeviceStore> DeviceService<S> {
     }
 }
 
+#[derive(Validate)]
+#[garde(transparent)]
+struct DeviceId<'a>(#[garde(length(chars, min = 1, max = 128))] &'a str);
+
 pub(crate) fn validate_id(identifier: &str) -> Result<(), String> {
-    if identifier.is_empty() || identifier.chars().count() > 128 {
-        return Err("invalid deviceId".into());
+    DeviceId(identifier)
+        .validate()
+        .map_err(|_| "invalid deviceId".into())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Channel, DeviceError, PushRegistration};
+
+    #[test]
+    fn push_registration_uses_channel_specific_token_rules() {
+        let apns = PushRegistration::new(Channel::Apns, "AF01".into()).unwrap();
+        assert_eq!(apns.token, "af01");
+        let fcm = PushRegistration::new(Channel::Fcm, "AbC:_-".into()).unwrap();
+        assert_eq!(fcm.token, "AbC:_-");
+
+        for (channel, token, expected) in [
+            (Channel::Apns, "a".repeat(513), "invalid APNs device token"),
+            (Channel::Apns, "abc".into(), "invalid APNs device token"),
+            (Channel::Apns, "gg".into(), "invalid APNs device token"),
+            (
+                Channel::Fcm,
+                String::new(),
+                "invalid FCM registration token",
+            ),
+            (
+                Channel::Fcm,
+                "x".repeat(4097),
+                "invalid FCM registration token",
+            ),
+            (Channel::Fcm, "a b".into(), "invalid FCM registration token"),
+        ] {
+            assert!(matches!(
+                PushRegistration::new(channel, token),
+                Err(DeviceError::InvalidInput(message)) if message == expected
+            ));
+        }
     }
-    Ok(())
 }

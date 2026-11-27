@@ -1,5 +1,7 @@
 use super::*;
+use crate::error::validate_input;
 use chrono::{DateTime, Duration, Utc};
+use garde::Validate;
 
 pub struct AuthService<S, R> {
     pub store: S,
@@ -14,8 +16,6 @@ impl<S: AuthStore, R: AuthRuntime> AuthService<S, R> {
         Ok(hex::encode(bytes))
     }
     async fn hash_password(&self, password: &str) -> AuthResult<String> {
-        crate::security::validate_password(password)
-            .map_err(|message| AuthError::InvalidInput(message.into()))?;
         let mut salt = [0; 16];
         self.runtime.random_bytes(&mut salt)?;
         self.runtime.hash_password(password, salt).await
@@ -40,7 +40,7 @@ impl<S: AuthStore, R: AuthRuntime> AuthService<S, R> {
         if self.store.has_accounts().await? {
             return Err(AuthError::Conflict("account already initialized"));
         }
-        request.validate().map_err(AuthError::InvalidInput)?;
+        validate_input(&request).map_err(AuthError::InvalidInput)?;
         let hash = self.hash_password(&request.password).await?;
         self.store
             .initialize_account_if_empty(InitialAccountWrite {
@@ -70,7 +70,7 @@ impl<S: AuthStore, R: AuthRuntime> AuthService<S, R> {
     }
     pub async fn login(&self, request: Login, meta: RequestMeta) -> AuthResult<SessionTokens> {
         token::validate_config(&self.config)?;
-        request.validate().map_err(AuthError::InvalidInput)?;
+        validate_input(&request).map_err(AuthError::InvalidInput)?;
         let account =
             Self::active_account(self.store.account_by_username(&request.username).await?)?;
         self.verify_password(&request.password, &account.password_hash)
@@ -98,8 +98,9 @@ impl<S: AuthStore, R: AuthRuntime> AuthService<S, R> {
         meta: RequestMeta,
     ) -> AuthResult<SessionTokens> {
         token::validate_config(&self.config)?;
-        check_length(refresh_token, "refreshToken", usize::MAX, true)
-            .map_err(AuthError::InvalidInput)?;
+        input::RefreshToken(refresh_token)
+            .validate()
+            .map_err(|_| AuthError::InvalidInput("invalid refreshToken".into()))?;
         let now = self.runtime.now();
         let refresh = self.random_token()?;
         let grant = self
@@ -115,8 +116,9 @@ impl<S: AuthStore, R: AuthRuntime> AuthService<S, R> {
         self.tokens(grant, refresh, now)
     }
     pub async fn logout(&self, refresh_token: &str) -> AuthResult<()> {
-        check_length(refresh_token, "refreshToken", usize::MAX, true)
-            .map_err(AuthError::InvalidInput)?;
+        input::RefreshToken(refresh_token)
+            .validate()
+            .map_err(|_| AuthError::InvalidInput("invalid refreshToken".into()))?;
         if self
             .store
             .revoke_refresh_token(
@@ -175,7 +177,7 @@ impl<S: AuthStore, R: AuthRuntime> AuthService<S, R> {
         user_id: i64,
         request: UpdateAccount,
     ) -> AuthResult<AccountInfo> {
-        request.validate().map_err(AuthError::InvalidInput)?;
+        validate_input(&request).map_err(AuthError::InvalidInput)?;
         let account = Self::active_account(self.store.account_by_id(user_id).await?)?;
         self.verify_password(&request.current_password, &account.password_hash)
             .await?;
@@ -205,9 +207,11 @@ impl<S: AuthStore, R: AuthRuntime> AuthService<S, R> {
     }
     /// Privileged local operation; no public password-reset HTTP endpoint.
     pub async fn reset_account(&self, username: Option<String>, password: &str) -> AuthResult<()> {
-        if let Some(name) = &username {
-            check_length(name, "username", 64, true).map_err(AuthError::InvalidInput)?;
-        }
+        validate_input(&input::ResetAccount {
+            username: username.as_deref(),
+            password,
+        })
+        .map_err(AuthError::InvalidInput)?;
         let hash = self.hash_password(password).await?;
         let account = self
             .store

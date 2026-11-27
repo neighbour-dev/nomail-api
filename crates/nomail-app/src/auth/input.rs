@@ -1,80 +1,62 @@
-use crate::device::{DeviceInput, validate_id};
+use crate::device::DeviceInput;
+use garde::Validate;
 
-pub fn check_length(value: &str, name: &str, max: usize, required: bool) -> Result<(), String> {
-    if (required && value.is_empty()) || value.chars().count() > max {
-        Err(format!("invalid {name}"))
-    } else {
-        Ok(())
-    }
-}
+const MAX_USERNAME_LENGTH: usize = 64;
+
+#[derive(Validate)]
+#[garde(transparent)]
+pub(super) struct RefreshToken<'a>(#[garde(length(bytes, min = 1))] pub &'a str);
 
 /// First-account credentials. Deliberately not Debug/Serialize.
+#[derive(Validate)]
 pub struct InitializeAccount {
+    #[garde(length(chars, min = 1, max = MAX_USERNAME_LENGTH))]
     pub username: String,
+    #[garde(custom(validate_password))]
     pub password: String,
-}
-impl InitializeAccount {
-    pub(super) fn validate(&self) -> Result<(), String> {
-        check_length(&self.username, "username", 64, true)?;
-        crate::security::validate_password(&self.password).map_err(String::from)
-    }
 }
 
 /// Application credentials and device registration, independent of wire fields.
 /// Deliberately not Debug/Serialize: contains a plaintext password.
+#[derive(Validate)]
 pub struct Login {
+    #[garde(length(chars, min = 1, max = MAX_USERNAME_LENGTH))]
     pub username: String,
+    #[garde(length(bytes, min = 1))]
     pub password: String,
+    #[garde(dive)]
     pub device: DeviceInput,
 }
-impl Login {
-    pub(super) fn validate(&self) -> Result<(), String> {
-        check_length(&self.username, "username", 64, true)?;
-        check_length(&self.password, "password", usize::MAX, true)?;
-        let device = &self.device;
-        validate_id(&device.device_id)?;
-        if ![
-            "ios", "android", "macos", "windows", "linux", "web", "unknown",
-        ]
-        .contains(&device.platform.as_str())
-        {
-            return Err("unsupported platform".into());
-        }
-        if !["phone", "tablet", "desktop", "web", "unknown"].contains(&device.device_type.as_str())
-        {
-            return Err("unsupported deviceType".into());
-        }
-        for (name, value, max) in [
-            ("deviceName", &device.device_name, 128),
-            ("manufacturer", &device.manufacturer, 128),
-            ("model", &device.model, 128),
-            ("osVersion", &device.os_version, 64),
-            ("appVersion", &device.app_version, 64),
-            ("appBuild", &device.app_build, 64),
-            ("locale", &device.locale, 32),
-            ("timeZone", &device.time_zone, 64),
-        ] {
-            check_length(value, name, max, false)?;
-        }
-        Ok(())
-    }
-}
+
 /// Empty optional replacements retain the existing account, as before.
+#[derive(Validate)]
 pub struct UpdateAccount {
+    #[garde(length(bytes, min = 1))]
     pub current_password: String,
+    #[garde(length(chars, max = MAX_USERNAME_LENGTH))]
     pub username: String,
+    #[garde(custom(|password, _| validate_replacement(password, &self.username)))]
     pub new_password: String,
 }
-impl UpdateAccount {
-    pub(super) fn validate(&self) -> Result<(), String> {
-        check_length(&self.current_password, "currentPassword", usize::MAX, true)?;
-        check_length(&self.username, "username", 64, false)?;
-        if self.username.is_empty() && self.new_password.is_empty() {
-            return Err("username or newPassword is required".into());
-        }
-        if !self.new_password.is_empty() {
-            crate::security::validate_password(&self.new_password).map_err(String::from)?;
-        }
-        Ok(())
+
+#[derive(Validate)]
+pub(super) struct ResetAccount<'a> {
+    #[garde(length(chars, min = 1, max = MAX_USERNAME_LENGTH))]
+    pub username: Option<&'a str>,
+    #[garde(custom(validate_password))]
+    pub password: &'a str,
+}
+
+fn validate_password(password: &str, _: &()) -> garde::Result {
+    crate::security::validate_password(password).map_err(garde::Error::new)
+}
+
+fn validate_replacement(password: &str, username: &str) -> garde::Result {
+    if !password.is_empty() {
+        return validate_password(password, &());
     }
+    if username.is_empty() {
+        return Err(garde::Error::new("username or newPassword is required"));
+    }
+    Ok(())
 }

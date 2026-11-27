@@ -334,6 +334,14 @@ async fn shared_flow_uses_one_clock_token_policy_metadata_and_revocation_policy(
     service.runtime.seconds.set(1301);
     service.authenticate(&result.access_token).await.unwrap();
     assert_eq!(service.store.touches.get(), 1);
+    assert!(matches!(
+        service.refresh("", RequestMeta::default()).await,
+        Err(AuthError::InvalidInput(message)) if message == "invalid refreshToken"
+    ));
+    assert!(matches!(
+        service.logout("").await,
+        Err(AuthError::InvalidInput(message)) if message == "invalid refreshToken"
+    ));
     let rotated = service
         .refresh(
             &result.refresh_token,

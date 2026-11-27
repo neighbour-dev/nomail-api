@@ -14,5 +14,9 @@ pub use crate::{
 };
 pub use policy::*;
 
+pub(crate) fn validate_input(input: &impl garde::Validate<Context = ()>) -> Result<(), String> {
+    input.validate().map_err(|report| report.to_string())
+}
+
 #[cfg(test)]
 mod tests;
