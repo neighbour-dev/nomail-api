@@ -1,23 +1,19 @@
 //! Shared message use cases. Storage and HTTP are platform adapters.
 mod command;
-mod cursor;
 mod error;
 mod event;
 mod model;
 mod query;
 mod repository;
 mod service;
-mod view;
 
 pub use command::{BatchAction, BatchMessages, UpdateMessage};
-pub use cursor::*;
 pub use error::{MessageError, MessageResult};
 pub use event::MessageAccepted;
 pub use model::*;
 pub use query::*;
 pub use repository::*;
 pub use service::MessageService;
-pub use view::MessagePreview;
 
 #[cfg(test)]
 mod tests;

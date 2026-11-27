@@ -1,7 +1,7 @@
 use super::{DEFAULT_RETENTION_DAYS, MessageAccepted, MessageError, MessageResult};
 use crate::webhook::{
-    EventMetadata, PlatformData, PlatformEvent, Provider, RawHeader, RawWebhook, parse_raw,
-    service::apply_inbox_rules,
+    EventMetadata, MessageLevel, PlatformData, PlatformEvent, Provider, RawHeader, RawWebhook,
+    parse_raw, service::apply_inbox_rules,
 };
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
@@ -102,6 +102,19 @@ impl Message {
 pub struct MessageWithConfig {
     pub message: Message,
     pub config_name: String,
+}
+
+/// Lightweight storage projection; never loads platform JSON or raw payloads.
+pub struct MessagePreview {
+    pub id: Uuid,
+    pub title: String,
+    pub summary: String,
+    pub level: MessageLevel,
+    pub status: String,
+    pub pinned: bool,
+    pub webhook_config_id: i64,
+    pub received_at: DateTime<Utc>,
+    pub expires_at: Option<DateTime<Utc>>,
 }
 
 /// Computed read projection, never a persisted platform snapshot.
