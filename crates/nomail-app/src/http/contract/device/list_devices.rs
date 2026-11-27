@@ -1,31 +1,38 @@
-//! Device management request and response shapes.
+use super::endpoint;
+use crate::http::{Environment, HttpResult, dispatch::EndpointCall};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
-pub struct RegisterPushRequest {
-    /// Channel used by the relay; not inferred from the token or login platform.
-    pub channel: PushChannel,
-    /// APNs hexadecimal device token or case-sensitive FCM registration token.
-    pub device_token: String,
+endpoint! {
+    ListDevices {
+        method: Get,
+        path: "/api/device",
+        auth: Bearer,
+        operation_id: "listDevices",
+        tag: "Device",
+        summary: "设备列表",
+        request: (),
+        query: (),
+        response: Vec<DeviceResponse>,
+        body_kind: None,
+        response_kind: Json,
+        has_query: false,
+        path_kind: None,
+    }
 }
 
-#[derive(Deserialize)]
-#[serde(rename_all = "lowercase")]
-#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
-pub enum PushChannel {
-    Apns,
-    Fcm,
-}
-
-impl From<PushChannel> for crate::push::Channel {
-    fn from(channel: PushChannel) -> Self {
-        match channel {
-            PushChannel::Apns => Self::Apns,
-            PushChannel::Fcm => Self::Fcm,
-        }
+impl ListDevices {
+    pub(in crate::http) async fn handle(
+        call: EndpointCall<'_, impl Environment>,
+    ) -> HttpResult<Vec<DeviceResponse>> {
+        Ok(call
+            .services
+            .devices
+            .list(call.actor()?.user_id, call.now())
+            .await?
+            .into_iter()
+            .map(Into::into)
+            .collect())
     }
 }
 

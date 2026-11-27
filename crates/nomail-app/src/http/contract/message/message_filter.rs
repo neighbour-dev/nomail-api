@@ -1,27 +1,8 @@
-//! Wire syntax is interpreted once, then use cases receive validated types.
-use super::common::{default_page, default_page_size};
-use crate::message::{
-    BatchMessages, MessageError, MessageFilters, MessageQuery, MessageResult, ReadStatus,
-};
+use crate::message::{MessageError, MessageFilters, MessageResult, ReadStatus};
 #[cfg(feature = "openapi")]
 use crate::webhook::MessageLevel;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-
-#[derive(Deserialize, Serialize)]
-#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
-#[cfg_attr(feature = "openapi", schemars(rename = "ListQuery"))]
-#[serde(rename_all = "camelCase")]
-pub struct ListMessagesQuery {
-    #[serde(default = "default_page")]
-    #[cfg_attr(feature = "openapi", schemars(range(min = 1)))]
-    pub page: u64,
-    #[serde(default = "default_page_size")]
-    #[cfg_attr(feature = "openapi", schemars(range(min = 1, max = crate::pagination::MAX_PAGE_SIZE)))]
-    pub page_size: u64,
-    #[serde(flatten)]
-    pub filters: MessageFilterQuery,
-}
 
 #[derive(Default, Deserialize, Serialize)]
 #[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
@@ -93,26 +74,5 @@ impl TryFrom<MessageFilterQuery> for MessageFilters {
             from,
             to,
         })
-    }
-}
-impl TryFrom<ListMessagesQuery> for MessageQuery {
-    type Error = MessageError;
-    fn try_from(q: ListMessagesQuery) -> MessageResult<Self> {
-        let filters = q.filters.try_into()?;
-        Self::new(filters, q.page, q.page_size)
-    }
-}
-
-#[derive(Deserialize, Serialize)]
-#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
-#[cfg_attr(feature = "openapi", schemars(rename = "BatchRequest"))]
-pub struct BatchMessagesRequest {
-    pub ids: Vec<String>,
-    pub action: String,
-}
-impl TryFrom<BatchMessagesRequest> for BatchMessages {
-    type Error = MessageError;
-    fn try_from(request: BatchMessagesRequest) -> MessageResult<Self> {
-        Self::parse(request.ids, &request.action)
     }
 }

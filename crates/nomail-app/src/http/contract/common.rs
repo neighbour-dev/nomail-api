@@ -48,17 +48,6 @@ impl<T, U: From<T>> From<crate::pagination::Page<T>> for Page<U> {
         }
     }
 }
-#[derive(Serialize, Deserialize)]
-#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
-#[serde(rename_all = "camelCase")]
-pub struct PaginationQuery {
-    #[serde(default = "default_page")]
-    #[cfg_attr(feature = "openapi", schemars(range(min = 1)))]
-    pub page: u64,
-    #[serde(default = "default_page_size")]
-    #[cfg_attr(feature = "openapi", schemars(range(min = 1, max = crate::pagination::MAX_PAGE_SIZE)))]
-    pub page_size: u64,
-}
 
 pub(super) fn default_page() -> u64 {
     1
@@ -66,59 +55,4 @@ pub(super) fn default_page() -> u64 {
 
 pub(super) fn default_page_size() -> u64 {
     20
-}
-#[derive(Serialize, Deserialize)]
-#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
-pub struct CountResponse {
-    pub count: u64,
-}
-#[derive(Serialize, Deserialize)]
-#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
-pub struct AffectedResponse {
-    pub affected: u64,
-}
-
-impl TryFrom<PaginationQuery> for crate::webhook::config::ConfigPage {
-    type Error = crate::webhook::config::ConfigError;
-    fn try_from(query: PaginationQuery) -> Result<Self, Self::Error> {
-        Self::new(query.page, query.page_size)
-    }
-}
-
-/// NoMail HTTP acknowledgement. Platform controls keep their protocol response.
-#[derive(Serialize, Deserialize)]
-#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
-#[serde(untagged)]
-pub enum ReceiveResponse {
-    Message {
-        #[serde(rename = "messageId")]
-        message_id: uuid::Uuid,
-        duplicate: bool,
-    },
-    Ignored {
-        ignored: bool,
-    },
-}
-#[derive(Serialize, Deserialize, Clone, Copy)]
-#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
-#[serde(rename_all = "lowercase")]
-pub enum HealthStatus {
-    Ok,
-    Error,
-}
-#[derive(Serialize, Deserialize)]
-#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
-pub struct HealthResponse {
-    pub status: HealthStatus,
-    pub db: HealthStatus,
-}
-impl HealthResponse {
-    pub fn database(healthy: bool) -> Self {
-        let status = if healthy {
-            HealthStatus::Ok
-        } else {
-            HealthStatus::Error
-        };
-        Self { status, db: status }
-    }
 }

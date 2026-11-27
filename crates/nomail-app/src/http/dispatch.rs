@@ -1,19 +1,42 @@
-//! The only binding of API operations to community use cases.
+//! Shared HTTP execution before handing off to the matched endpoint.
 use super::{
-    ApiFailure, AuthRequirement, BodyKind, Environment, HealthCheck, HealthResponse, HttpOutcome,
-    HttpRequest, HttpResult, Operation, RealtimeEffect, bearer_token, check_body_length,
-    endpoints as e, parse_json, parse_query, resolve, transport::json, webhook::WebhookReply,
+    ApiFailure, AuthRequirement, BodyKind, Endpoint, Environment, EnvironmentServices, HttpOutcome,
+    HttpRequest, HttpResult, Operation, RequestHead, RouteMatch, bearer_token, check_body_length,
+    endpoints, parse_json, parse_query, resolve,
 };
 use crate::{
     auth::{AuthContext, AuthRuntime},
-    device::DeviceStore,
-    webhook::{HeaderLookup, WebhookRequest},
+    webhook::HeaderLookup,
 };
+use chrono::{DateTime, Utc};
 
-fn actor(context: &Option<AuthContext>) -> HttpResult<&AuthContext> {
-    context
-        .as_ref()
-        .ok_or_else(|| ApiFailure::internal().into())
+pub(super) struct EndpointCall<'a, E: Environment> {
+    pub(super) environment: &'a E,
+    pub(super) services: &'a EnvironmentServices<E>,
+    pub(super) matched: &'a RouteMatch,
+    pub(super) head: &'a RequestHead,
+    pub(super) body: &'a [u8],
+    context: Option<AuthContext>,
+}
+
+impl<E: Environment> EndpointCall<'_, E> {
+    pub(super) fn actor(&self) -> HttpResult<&AuthContext> {
+        self.context
+            .as_ref()
+            .ok_or_else(|| ApiFailure::internal().into())
+    }
+
+    pub(super) fn input<T: Endpoint>(&self) -> HttpResult<T::Request> {
+        Ok(parse_json::<T>(self.body, self.head.get("Content-Type"))?)
+    }
+
+    pub(super) fn query<T: Endpoint>(&self) -> HttpResult<T::Query> {
+        Ok(parse_query::<T>(&self.head.query)?)
+    }
+
+    pub(super) fn now(&self) -> DateTime<Utc> {
+        AuthRuntime::now(&self.services.auth.runtime)
+    }
 }
 
 pub async fn execute(
@@ -24,8 +47,7 @@ pub async fn execute(
     let matched = resolve(&head.method, &head.path)?;
     // Health must work without JWT/encryption/initial-account configuration.
     if matched.route.operation == Operation::Health {
-        let HealthCheck::Database(healthy) = environment.health(head).await?;
-        return json::<e::Health>(HealthResponse::database(healthy));
+        return endpoints::Health::respond(endpoints::Health::handle(environment, head).await?);
     }
     let services = environment.services()?;
     let context = if matched.route.auth == AuthRequirement::Bearer {
@@ -46,282 +68,16 @@ pub async fn execute(
         Vec::new()
     };
     let head = request.head();
-    macro_rules! input {
-        ($endpoint:ty) => {
-            parse_json::<$endpoint>(&body, head.get("Content-Type"))?
-        };
-    }
-    macro_rules! user {
-        () => {
-            actor(&context)?.user_id
-        };
-    }
-    match matched.route.operation {
-        Operation::Health => unreachable!("health is handled before service configuration"),
-        Operation::SetupStatus => json::<e::SetupStatus>(super::SetupStatusResponse {
-            initialized: services.auth.is_initialized().await?,
-        }),
-        Operation::Setup => {
-            services
-                .auth
-                .initialize_account(input!(e::Setup).into())
-                .await?;
-            json::<e::Setup>(())
-        }
-        Operation::Login => json::<e::Login>(
-            services
-                .auth
-                .login(input!(e::Login).into(), head.metadata.clone())
-                .await?
-                .into(),
-        ),
-        Operation::Refresh => json::<e::Refresh>(
-            services
-                .auth
-                .refresh(&input!(e::Refresh).refresh_token, head.metadata.clone())
-                .await?
-                .into(),
-        ),
-        Operation::Logout => {
-            services
-                .auth
-                .logout(&input!(e::Logout).refresh_token)
-                .await?;
-            json::<e::Logout>(())
-        }
-        Operation::GetAccount => {
-            json::<e::GetAccount>(services.auth.account(user!()).await?.into())
-        }
-        Operation::UpdateAccount => json::<e::UpdateAccount>(
-            services
-                .auth
-                .update_account(user!(), input!(e::UpdateAccount).into())
-                .await?
-                .into(),
-        ),
-        Operation::ListDevices => json::<e::ListDevices>(
-            services
-                .devices
-                .list(user!(), AuthRuntime::now(&services.auth.runtime))
-                .await?
-                .into_iter()
-                .map(Into::into)
-                .collect(),
-        ),
-        Operation::RegisterPush => {
-            if !environment.push_enabled() {
-                return Err(ApiFailure::new(503, "push is not configured").into());
-            }
-            let input = input!(e::RegisterPush);
-            services
-                .devices
-                .register_push(
-                    actor(&context)?,
-                    input.channel.into(),
-                    input.device_token,
-                    AuthRuntime::now(&services.auth.runtime),
-                )
-                .await?;
-            json::<e::RegisterPush>(())
-        }
-        Operation::RemovePush => {
-            services
-                .devices
-                .remove_push(actor(&context)?, AuthRuntime::now(&services.auth.runtime))
-                .await?;
-            json::<e::RemovePush>(())
-        }
-        Operation::GetPushPreferences => json::<e::GetPushPreferences>(
-            services
-                .devices
-                .store
-                .push_preferences(actor(&context)?.device_id)
-                .await?
-                .into(),
-        ),
-        Operation::SetPushPreferences => {
-            services
-                .devices
-                .store
-                .set_push_preferences(
-                    actor(&context)?,
-                    input!(e::SetPushPreferences).into(),
-                    AuthRuntime::now(&services.auth.runtime),
-                )
-                .await?;
-            json::<e::SetPushPreferences>(())
-        }
-        Operation::KickDevice => {
-            services
-                .devices
-                .revoke_session(
-                    user!(),
-                    matched.parameter()?,
-                    AuthRuntime::now(&services.auth.runtime),
-                )
-                .await?;
-            json::<e::KickDevice>(())
-        }
-        Operation::DeleteDevice => {
-            services
-                .devices
-                .delete(user!(), matched.parameter()?)
-                .await?;
-            json::<e::DeleteDevice>(())
-        }
-        Operation::ListConfigs => json::<e::ListConfigs>(
-            services
-                .configs
-                .list(
-                    user!(),
-                    parse_query::<e::ListConfigs>(&head.query)?.try_into()?,
-                )
-                .await?
-                .into(),
-        ),
-        Operation::CreateConfig => json::<e::CreateConfig>(
-            services
-                .configs
-                .create(user!(), input!(e::CreateConfig).try_into()?)
-                .await?
-                .into(),
-        ),
-        Operation::GetConfig => json::<e::GetConfig>(
-            services
-                .configs
-                .get(user!(), matched.config_id()?)
-                .await?
-                .into(),
-        ),
-        Operation::UpdateConfig => json::<e::UpdateConfig>(
-            services
-                .configs
-                .update(
-                    user!(),
-                    matched.config_id()?,
-                    input!(e::UpdateConfig).try_into()?,
-                )
-                .await?
-                .into(),
-        ),
-        Operation::DeleteConfig => {
-            services
-                .configs
-                .delete(user!(), matched.config_id()?)
-                .await?;
-            json::<e::DeleteConfig>(())
-        }
-        Operation::EnableConfig => json::<e::EnableConfig>(
-            services
-                .configs
-                .enabled(
-                    user!(),
-                    matched.config_id()?,
-                    input!(e::EnableConfig).enabled,
-                )
-                .await?
-                .into(),
-        ),
-        Operation::ReceiveWebhook => {
-            let outcome = services
-                .ingestion
-                .receive(
-                    matched.parameter()?,
-                    &WebhookRequest {
-                        headers: head,
-                        body: &body,
-                    },
-                    environment.push_enabled(),
-                )
-                .await?;
-            match WebhookReply::from(outcome) {
-                WebhookReply::Control(response) => Ok(HttpOutcome::response(
-                    response.status,
-                    response.content_type,
-                    response.body,
-                )),
-                WebhookReply::Acknowledgement { response, created } => {
-                    let mut outcome = json::<e::ReceiveWebhook>(response)?;
-                    if let Some((user_id, event)) = created {
-                        outcome.events.push(RealtimeEffect { user_id, event });
-                    }
-                    Ok(outcome)
-                }
-            }
-        }
-        Operation::ListMessages => json::<e::ListMessages>(
-            services
-                .messages
-                .list(
-                    user!(),
-                    parse_query::<e::ListMessages>(&head.query)?.try_into()?,
-                )
-                .await?
-                .into(),
-        ),
-        Operation::CursorMessages => json::<e::CursorMessages>(
-            services
-                .messages
-                .cursor(
-                    user!(),
-                    parse_query::<e::CursorMessages>(&head.query)?.try_into()?,
-                )
-                .await?
-                .into(),
-        ),
-        Operation::UnreadCount => json::<e::UnreadCount>(super::CountResponse {
-            count: services.messages.unread_count(user!()).await?,
-        }),
-        Operation::StreamMessages => {
-            let context = actor(&context)?;
-            Ok(HttpOutcome::subscribe(context.user_id, context.expires_at))
-        }
-        Operation::BatchMessages => json::<e::BatchMessages>(super::AffectedResponse {
-            affected: services
-                .messages
-                .batch(
-                    user!(),
-                    input!(e::BatchMessages).try_into()?,
-                    AuthRuntime::now(&services.auth.runtime),
-                )
-                .await?,
-        }),
-        Operation::GetMessage => json::<e::GetMessage>(
-            services
-                .messages
-                .get(user!(), matched.message_id()?)
-                .await?
-                .into(),
-        ),
-        Operation::UpdateMessage => json::<e::UpdateMessage>(
-            services
-                .messages
-                .update(
-                    user!(),
-                    matched.message_id()?,
-                    input!(e::UpdateMessage).try_into()?,
-                    AuthRuntime::now(&services.auth.runtime),
-                )
-                .await?
-                .into(),
-        ),
-        Operation::DeleteMessage => {
-            services
-                .messages
-                .delete(
-                    user!(),
-                    matched.message_id()?,
-                    AuthRuntime::now(&services.auth.runtime),
-                )
-                .await?;
-            json::<e::DeleteMessage>(())
-        }
-        Operation::RawMessage => json::<e::RawMessage>(
-            services
-                .messages
-                .raw(user!(), matched.message_id()?)
-                .await?
-                .into(),
-        ),
-    }
+    matched
+        .route
+        .operation
+        .handle(EndpointCall {
+            environment,
+            services: &services,
+            matched: &matched,
+            head,
+            body: &body,
+            context,
+        })
+        .await
 }

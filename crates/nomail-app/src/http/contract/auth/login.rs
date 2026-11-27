@@ -1,26 +1,37 @@
-//! Authentication request/response JSON shapes and application conversions.
+use super::endpoint;
+use super::get_account::AccountResponse;
+use crate::http::{Environment, HttpResult, dispatch::EndpointCall};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-#[derive(Deserialize)]
-#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
-pub struct SetupRequest {
-    pub username: String,
-    pub password: String,
+endpoint! {
+    Login {
+        method: Post,
+        path: "/api/auth/login",
+        auth: Public,
+        operation_id: "login",
+        tag: "Auth",
+        summary: "登录",
+        request: LoginRequest,
+        query: (),
+        response: TokenResponse,
+        body_kind: Json,
+        response_kind: Json,
+        has_query: false,
+        path_kind: None,
+    }
 }
 
-#[derive(Serialize, Deserialize)]
-#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
-pub struct SetupStatusResponse {
-    pub initialized: bool,
-}
-
-impl From<SetupRequest> for crate::auth::InitializeAccount {
-    fn from(request: SetupRequest) -> Self {
-        Self {
-            username: request.username,
-            password: request.password,
-        }
+impl Login {
+    pub(in crate::http) async fn handle(
+        call: EndpointCall<'_, impl Environment>,
+    ) -> HttpResult<TokenResponse> {
+        Ok(call
+            .services
+            .auth
+            .login(call.input::<Self>()?.into(), call.head.metadata.clone())
+            .await?
+            .into())
     }
 }
 
@@ -49,31 +60,6 @@ pub struct LoginRequest {
     pub locale: String,
     #[serde(default)]
     pub time_zone: String,
-}
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
-pub struct RefreshRequest {
-    pub refresh_token: String,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
-pub struct AccountUpdateRequest {
-    pub current_password: String,
-    #[serde(default)]
-    pub username: String,
-    #[serde(default)]
-    pub new_password: String,
-}
-
-#[derive(Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
-pub struct AccountResponse {
-    pub id: i64,
-    pub username: String,
 }
 
 /// Deliberately not Debug: contains bearer credentials.
@@ -109,23 +95,7 @@ impl From<LoginRequest> for crate::auth::Login {
         }
     }
 }
-impl From<AccountUpdateRequest> for crate::auth::UpdateAccount {
-    fn from(request: AccountUpdateRequest) -> Self {
-        Self {
-            current_password: request.current_password,
-            username: request.username,
-            new_password: request.new_password,
-        }
-    }
-}
-impl From<crate::auth::AccountInfo> for AccountResponse {
-    fn from(account: crate::auth::AccountInfo) -> Self {
-        Self {
-            id: account.id,
-            username: account.username,
-        }
-    }
-}
+
 impl From<crate::auth::SessionTokens> for TokenResponse {
     fn from(tokens: crate::auth::SessionTokens) -> Self {
         Self {

@@ -1,8 +1,37 @@
 //! Public online event protocol. Connections/fanout/timers remain adapters.
+use super::endpoint;
+use crate::http::{Environment, HttpOutcome, HttpResult, dispatch::EndpointCall};
 use crate::message::MessageAccepted;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+
+endpoint! {
+    StreamMessages {
+        method: Get,
+        path: "/api/messages/stream",
+        auth: Bearer,
+        operation_id: "streamMessages",
+        tag: "Messages",
+        summary: "在线 SSE 事件流",
+        request: (),
+        query: (),
+        response: (),
+        body_kind: None,
+        response_kind: Sse,
+        has_query: false,
+        path_kind: None,
+    }
+}
+
+impl StreamMessages {
+    pub(in crate::http) async fn handle(
+        call: EndpointCall<'_, impl Environment>,
+    ) -> HttpResult<HttpOutcome> {
+        let context = call.actor()?;
+        Ok(HttpOutcome::subscribe(context.user_id, context.expires_at))
+    }
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]

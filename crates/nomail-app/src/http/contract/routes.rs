@@ -1,7 +1,4 @@
-use super::super::ApiFailure;
-#[cfg(feature = "openapi")]
-use super::super::openapi;
-use super::*;
+use super::super::{ApiFailure, Environment, HttpOutcome, HttpResult, dispatch::EndpointCall};
 use percent_encoding::{NON_ALPHANUMERIC, percent_decode_str, utf8_percent_encode};
 use serde::{Serialize, de::DeserializeOwned};
 
@@ -77,67 +74,139 @@ pub trait Endpoint {
     const OPERATION: Operation;
 }
 
-// This is the ONLY list of paths, methods, authentication, body/response kinds
-// and associated DTO types. Enum, bindings metadata and OpenAPI all use it.
+// Each endpoint owns its route metadata and DTOs. OpenAPI reads the same route as dispatch.
+macro_rules! endpoint {
+    (
+        $name:ident {
+            method: $method:ident,
+            path: $path:literal,
+            auth: $auth:ident,
+            operation_id: $id:literal,
+            tag: $tag:literal,
+            summary: $summary:literal,
+            request: $request:ty,
+            query: $query_type:ty,
+            response: $result:ty,
+            body_kind: $body:ident,
+            response_kind: $response:ident,
+            has_query: $query:literal,
+            path_kind: $param:ident $(,)?
+        }
+    ) => {
+        pub struct $name;
+
+        impl $crate::http::Endpoint for $name {
+            type Request = $request;
+            type Query = $query_type;
+            type Response = $result;
+            const OPERATION: $crate::http::Operation = $crate::http::Operation::$name;
+        }
+
+        impl $name {
+            pub(in crate::http) const ROUTE: $crate::http::Route = $crate::http::Route {
+                operation: $crate::http::Operation::$name,
+                operation_id: $id,
+                method: $crate::http::Method::$method,
+                path: $path,
+                auth: $crate::http::AuthRequirement::$auth,
+                body: $crate::http::BodyKind::$body,
+                response: $crate::http::ResponseKind::$response,
+                has_query: $query,
+                path_kind: $crate::http::PathKind::$param,
+                tag: $tag,
+                summary: $summary,
+                #[cfg(feature = "openapi")]
+                request_schema: $crate::http::openapi::request_schema::<$request>,
+                #[cfg(feature = "openapi")]
+                query_schema: $crate::http::openapi::request_schema::<$query_type>,
+                #[cfg(feature = "openapi")]
+                response_schema: $crate::http::openapi::response_schema::<
+                    $crate::http::EndpointResponse<Self>,
+                >,
+            };
+
+            endpoint!(@respond $response, $result);
+        }
+    };
+    (@respond Json, $result:ty) => {
+        pub(in crate::http) fn respond(
+            data: $result,
+        ) -> $crate::http::HttpResult<$crate::http::HttpOutcome> {
+            $crate::http::transport::json::<Self>(data)
+        }
+    };
+    (@respond Sse, $result:ty) => {
+        endpoint!(@passthrough);
+    };
+    (@respond Webhook, $result:ty) => {
+        endpoint!(@passthrough);
+    };
+    (@passthrough) => {
+        pub(in crate::http) fn respond(
+            outcome: $crate::http::HttpOutcome,
+        ) -> $crate::http::HttpResult<$crate::http::HttpOutcome> {
+            Ok(outcome)
+        }
+    };
+}
+pub(super) use endpoint;
+
+// Explicit inventory; generates the enum, static routes and compile-time handler bindings.
 macro_rules! endpoints {
-    ($($name:ident => ($id:literal,$method:ident,$path:literal,$auth:ident,$body:ident,$response:ident,$query:literal,$param:ident,$request:ty,$query_type:ty,$result:ty,$tag:literal,$summary:literal)),* $(,)?) => {
+    (Health in $health:ident; $($name:ident in $($module:ident)::+),* $(,)?) => {
         #[derive(Clone,Copy,Debug,PartialEq,Eq)]
         #[repr(usize)]
-        pub enum Operation {$($name),*}
+        pub enum Operation { Health, $($name),* }
         impl Operation {
-            pub const ALL:&'static[Self]=&[$(Self::$name),*];
+            pub const ALL:&'static[Self]=&[Self::Health, $(Self::$name),*];
             pub fn route(self)->&'static Route {&ROUTES[self as usize]}
+
+            pub(in crate::http) async fn handle(self, call: EndpointCall<'_, impl Environment>) -> HttpResult<HttpOutcome> {
+                match self {
+                    Self::Health => unreachable!("health is dispatched before service configuration"),
+                    $(Self::$name => endpoints::$name::respond(endpoints::$name::handle(call).await?),)*
+                }
+            }
         }
         pub mod endpoints {
-            use super::*;
-            $(pub struct $name;
-            impl Endpoint for $name {
-                type Request=$request;type Query=$query_type;type Response=$result;
-                const OPERATION:Operation=Operation::$name;
-            })*
+            pub use super::super::$health::Health;
+            $(pub use super::super::$($module)::+::$name;)*
         }
-        pub static ROUTES:&[Route]=&[$(Route {
-            operation:Operation::$name,operation_id:$id,method:Method::$method,path:$path,
-            auth:AuthRequirement::$auth,body:BodyKind::$body,response:ResponseKind::$response,
-            has_query:$query,path_kind:PathKind::$param,tag:$tag,summary:$summary,
-            #[cfg(feature="openapi")] request_schema:openapi::request_schema::<$request>,
-            #[cfg(feature="openapi")] query_schema:openapi::request_schema::<$query_type>,
-            #[cfg(feature="openapi")] response_schema:openapi::response_schema::<ApiResponse<$result>>,
-        }),*];
+        pub static ROUTES:&[Route]=&[endpoints::Health::ROUTE, $(endpoints::$name::ROUTE),*];
     }
 }
 endpoints! {
-    Health => ("health",Get,"/api/health",Public,None,Json,false,None,(),(),HealthResponse,"Health","健康检查"),
-    SetupStatus => ("setupStatus",Get,"/api/auth/setup",Public,None,Json,false,None,(),(),SetupStatusResponse,"Auth","查询账号初始化状态"),
-    Setup => ("setup",Post,"/api/auth/setup",Public,Json,Json,false,None,SetupRequest,(),(),"Auth","首次初始化账号；无密钥保护，仅账号表为空时允许"),
-    Login => ("login",Post,"/api/auth/login",Public,Json,Json,false,None,LoginRequest,(),TokenResponse,"Auth","登录"),
-    Refresh => ("refreshToken",Post,"/api/auth/refresh-token",Public,Json,Json,false,None,RefreshRequest,(),TokenResponse,"Auth","轮换刷新令牌"),
-    Logout => ("logout",Post,"/api/auth/logout",Public,Json,Json,false,None,RefreshRequest,(),(),"Auth","退出登录"),
-    GetAccount => ("getAccount",Get,"/api/auth/account",Bearer,None,Json,false,None,(),(),AccountResponse,"Auth","获取账号"),
-    UpdateAccount => ("updateAccount",Patch,"/api/auth/account",Bearer,Json,Json,false,None,AccountUpdateRequest,(),AccountResponse,"Auth","修改账号"),
-    ListDevices => ("listDevices",Get,"/api/device",Bearer,None,Json,false,None,(),(),Vec<DeviceResponse>,"Device","设备列表"),
-    RegisterPush => ("registerPushToken",Put,"/api/device/push/token",Bearer,Json,Json,false,None,RegisterPushRequest,(),(),"Device","上报或更新当前登录设备的推送 Token"),
-    RemovePush => ("removePushToken",Delete,"/api/device/push/token",Bearer,None,Json,false,None,(),(),(),"Device","删除当前登录设备的推送 Token"),
-    GetPushPreferences => ("getPushPreferences",Get,"/api/device/push/preferences",Bearer,None,Json,false,None,(),(),PushPreferences,"Device","读取当前设备的推送设置"),
-    SetPushPreferences => ("setPushPreferences",Put,"/api/device/push/preferences",Bearer,Json,Json,false,None,PushPreferences,(),(),"Device","更新当前设备的推送总开关和等级开关"),
-    KickDevice => ("kickDevice",Delete,"/api/device/{deviceId}/session",Bearer,None,Json,false,DeviceId,(),(),(),"Device","撤销设备会话"),
-    DeleteDevice => ("deleteDevice",Delete,"/api/device/{deviceId}",Bearer,None,Json,false,DeviceId,(),(),(),"Device","删除设备"),
-    ListConfigs => ("listWebhookConfigs",Get,"/api/webhook/configs",Bearer,None,Json,true,None,(),PaginationQuery,Page<ConfigResponse>,"Webhook Configs","接收配置列表"),
-    CreateConfig => ("createWebhookConfig",Post,"/api/webhook/configs",Bearer,Json,Json,false,None,CreateConfigRequest,(),ConfigResponse,"Webhook Configs","创建接收配置"),
-    GetConfig => ("getWebhookConfig",Get,"/api/webhook/configs/{id}",Bearer,None,Json,false,ConfigId,(),(),ConfigResponse,"Webhook Configs","配置详情"),
-    UpdateConfig => ("updateWebhookConfig",Patch,"/api/webhook/configs/{id}",Bearer,Json,Json,false,ConfigId,UpdateConfigRequest,(),ConfigResponse,"Webhook Configs","修改接收配置"),
-    DeleteConfig => ("deleteWebhookConfig",Delete,"/api/webhook/configs/{id}",Bearer,None,Json,false,ConfigId,(),(),(),"Webhook Configs","删除接收配置"),
-    EnableConfig => ("enableWebhookConfig",Patch,"/api/webhook/configs/{id}/enabled",Bearer,Json,Json,false,ConfigId,EnabledRequest,(),ConfigResponse,"Webhook Configs","启停接收配置"),
-    ReceiveWebhook => ("receiveWebhook",Post,"/api/webhook/{key}",Webhook,Raw,Webhook,false,WebhookKey,Vec<u8>,(),ReceiveResponse,"Webhook","接收平台消息或控制请求"),
-    ListMessages => ("listMessages",Get,"/api/messages",Bearer,None,Json,true,None,(),ListMessagesQuery,Page<MessageListItem>,"Messages","消息列表"),
-    CursorMessages => ("cursorMessages",Get,"/api/messages/cursor",Bearer,None,Json,true,None,(),CursorMessagesQuery,MessageCursorResponse,"Messages","消息游标查询：默认/历史降序，新增升序；非可靠同步日志"),
-    UnreadCount => ("unreadCount",Get,"/api/messages/unread-count",Bearer,None,Json,false,None,(),(),CountResponse,"Messages","未读数量"),
-    StreamMessages => ("streamMessages",Get,"/api/messages/stream",Bearer,None,Sse,false,None,(),(),(),"Messages","在线 SSE 事件流"),
-    BatchMessages => ("batchMessages",Post,"/api/messages/batch",Bearer,Json,Json,false,None,BatchMessagesRequest,(),AffectedResponse,"Messages","批量修改消息"),
-    GetMessage => ("getMessage",Get,"/api/messages/{id}",Bearer,None,Json,false,MessageId,(),(),MessageDetail,"Messages","消息详情"),
-    UpdateMessage => ("updateMessage",Patch,"/api/messages/{id}",Bearer,Json,Json,false,MessageId,UpdateMessageRequest,(),MessageDetail,"Messages","修改消息状态"),
-    DeleteMessage => ("deleteMessage",Delete,"/api/messages/{id}",Bearer,None,Json,false,MessageId,(),(),(),"Messages","删除消息"),
-    RawMessage => ("rawMessage",Get,"/api/messages/{id}/raw",Bearer,None,Json,false,MessageId,(),(),MessageRawResponse,"Messages","读取存储的请求头、原始 payload 字符串及 contentType"),
+    Health in health;
+    SetupStatus in auth::setup_status,
+    Setup in auth::setup,
+    Login in auth::login,
+    Refresh in auth::refresh,
+    Logout in auth::logout,
+    GetAccount in auth::get_account,
+    UpdateAccount in auth::update_account,
+    ListDevices in device::list_devices,
+    RegisterPush in device::register_push,
+    RemovePush in device::remove_push,
+    GetPushPreferences in device::get_push_preferences,
+    SetPushPreferences in device::set_push_preferences,
+    KickDevice in device::kick_device,
+    DeleteDevice in device::delete_device,
+    ListConfigs in webhook::list_configs,
+    CreateConfig in webhook::create_config,
+    GetConfig in webhook::get_config,
+    UpdateConfig in webhook::update_config,
+    DeleteConfig in webhook::delete_config,
+    EnableConfig in webhook::enable_config,
+    ReceiveWebhook in webhook::receive_webhook,
+    ListMessages in message::list_messages,
+    CursorMessages in message::cursor_messages,
+    UnreadCount in message::unread_count,
+    StreamMessages in message::stream_messages,
+    BatchMessages in message::batch_messages,
+    GetMessage in message::get_message,
+    UpdateMessage in message::update_message,
+    DeleteMessage in message::delete_message,
+    RawMessage in message::raw_message,
 }
 
 pub struct RouteMatch {

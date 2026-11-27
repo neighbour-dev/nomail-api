@@ -31,7 +31,7 @@ crates/nomail-workers/    Workers、D1、WASM 运行时与 Durable Objects
 
 - **修改平台协议：**在 Core 对应平台目录修改验签、解密、解析与测试；不要加入账号、数据库、系统时钟或开源版收件箱策略。
 - **修改业务：**在 App 实现，两端共用。存储接口表达原子操作，不要把刷新令牌消费、所有权检查或并发局部更新拆成无保护的 CRUD。
-- **新增接口：**在 App `http/contract/` 集中定义请求/响应 DTO，并在 `http/contract/routes.rs` 关联路由；`http/dispatch.rs` 转换业务输入/结果并绑定用例。业务和存储不使用 HTTP DTO，不向两端添加 `Operation` 分支或逐接口 Handler。
+- **新增接口：**在 App `http/contract/` 对应的业务目录下为每个 HTTP 操作创建一个文件（例如 `http/contract/auth/login.rs`）。在同一文件中用 `endpoint!` 声明路由及 DTO 类型，并定义 HTTP handler 和接口专用的 DTO；相同的结构复用 DTO。在 `http/contract/routes.rs` 的清单中添加接口类型，由清单生成路由表和 handler 分发。业务和存储不使用 HTTP DTO，不向两端添加 `Operation` 分支或逐接口 Handler。
 - **修改部署：**两端仅处理请求、响应、存储、执行能力与实时连接，不重新实现业务规则。
 - **新增接入平台：**Core 协议支持与产品开放是两个步骤，还需核对接收配置、凭据模型、公开接口和两端存储测试。
 

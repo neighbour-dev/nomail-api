@@ -1,5 +1,8 @@
 use super::common::default_page_size;
-use super::{MessageFilterQuery, MessageListItem};
+use super::endpoint;
+use super::list_messages::MessageListItem;
+use super::message_filter::MessageFilterQuery;
+use crate::http::{Environment, HttpResult, dispatch::EndpointCall};
 use crate::message::{
     MessageCursorPage, MessageCursorQuery, MessageError, MessagePosition, MessageWindow,
 };
@@ -7,6 +10,37 @@ use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+
+endpoint! {
+    CursorMessages {
+        method: Get,
+        path: "/api/messages/cursor",
+        auth: Bearer,
+        operation_id: "cursorMessages",
+        tag: "Messages",
+        summary: "消息游标查询：默认/历史降序，新增升序；非可靠同步日志",
+        request: (),
+        query: CursorMessagesQuery,
+        response: MessageCursorResponse,
+        body_kind: None,
+        response_kind: Json,
+        has_query: true,
+        path_kind: None,
+    }
+}
+
+impl CursorMessages {
+    pub(in crate::http) async fn handle(
+        call: EndpointCall<'_, impl Environment>,
+    ) -> HttpResult<MessageCursorResponse> {
+        Ok(call
+            .services
+            .messages
+            .cursor(call.actor()?.user_id, call.query::<Self>()?.try_into()?)
+            .await?
+            .into())
+    }
+}
 
 /// Receipt-order pagination, not a change log. Latest/before are descending;
 /// after is ascending. Keep filters unchanged when continuing a query.
