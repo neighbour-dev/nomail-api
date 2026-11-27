@@ -1,5 +1,5 @@
 //! Explicit HTTP/JSON contract; no dependency on the private relay repository.
-use super::{Channel, Job};
+use super::{Channel, Finish, Job};
 use chrono::DateTime;
 use serde::{Deserialize, Serialize};
 use url::Url;
@@ -10,6 +10,7 @@ pub const TOKEN_SETTING: &str = "NOMAIL_PUSH_TOKEN";
 pub const MAX_REPLY_BYTES: usize = 16 * 1024;
 pub const TIMEOUT_SECONDS: u64 = 5;
 const DELIVERIES: &str = "/v1/caller/deliveries";
+const STATUS_WINDOW: i64 = 24 * 60 * 60;
 
 #[derive(Clone)]
 pub struct RelayConfig {
@@ -137,6 +138,34 @@ pub(super) enum Decision {
     Rejected,
     Retry(i64),
     AuthorizationBlocked(i64),
+}
+
+impl Decision {
+    pub(super) fn finish(&self, job: &Job, now: i64) -> Finish {
+        match *self {
+            Self::Accepted => Finish::Reschedule {
+                accepted: true,
+                next_at: now + 30,
+                accepted_deadline: Some(now + STATUS_WINDOW),
+            },
+            Self::Poll => Finish::Reschedule {
+                accepted: true,
+                next_at: now + 60,
+                accepted_deadline: None,
+            },
+            Self::Retry(retry_after) | Self::AuthorizationBlocked(retry_after) => {
+                let backoff = (5_i64 << job.attempt.saturating_sub(1).min(6)).min(300);
+                let jitter = i64::from(job.delivery_id.as_bytes()[15] % 5);
+                Finish::Reschedule {
+                    accepted: job.accepted,
+                    next_at: now + (backoff + jitter).max(retry_after.min(STATUS_WINDOW)),
+                    accepted_deadline: None,
+                }
+            }
+            Self::Done | Self::Rejected => Finish::Remove,
+            Self::InvalidTarget => Finish::InvalidTarget,
+        }
+    }
 }
 
 pub(super) fn decision(job: &Job, reply: Option<Reply>, now: i64) -> Decision {

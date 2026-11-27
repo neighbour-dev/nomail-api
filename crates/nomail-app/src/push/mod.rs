@@ -15,7 +15,6 @@ pub fn notification_title(content: &MessageContent) -> String {
 }
 
 pub const SUBMIT_WINDOW: i64 = 10 * 60;
-const STATUS_WINDOW: i64 = 24 * 60 * 60;
 const LEASE: i64 = 60;
 
 #[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -103,37 +102,12 @@ pub async fn drain(
         let result = transport.request(job.request()).await;
         let now = now();
         let decision = relay::decision(&job, result, now);
-        let finish = match decision {
-            Decision::Accepted => Finish::Reschedule {
-                accepted: true,
-                next_at: now + 30,
-                accepted_deadline: Some(now + STATUS_WINDOW),
-            },
-            Decision::Poll => Finish::Reschedule {
-                accepted: true,
-                next_at: now + 60,
-                accepted_deadline: None,
-            },
-            Decision::Retry(retry_after) | Decision::AuthorizationBlocked(retry_after) => {
-                if matches!(decision, Decision::AuthorizationBlocked(_)) {
-                    authorization_blocked += 1;
-                }
-                let backoff = (5_i64 << job.attempt.saturating_sub(1).min(6)).min(300);
-                let jitter = i64::from(job.delivery_id.as_bytes()[15] % 5);
-                Finish::Reschedule {
-                    accepted: job.accepted,
-                    next_at: now + (backoff + jitter).max(retry_after.min(STATUS_WINDOW)),
-                    accepted_deadline: None,
-                }
-            }
-            Decision::Done => Finish::Remove,
-            Decision::InvalidTarget => Finish::InvalidTarget,
-            Decision::Rejected => {
-                rejected += 1;
-                Finish::Remove
-            }
-        };
-        store.finish(&job, finish).await?;
+        match decision {
+            Decision::AuthorizationBlocked(_) => authorization_blocked += 1,
+            Decision::Rejected => rejected += 1,
+            _ => (),
+        }
+        store.finish(&job, decision.finish(&job, now)).await?;
     }
     Ok(BatchReport {
         rejected,

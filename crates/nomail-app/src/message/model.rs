@@ -1,7 +1,7 @@
 use super::{DEFAULT_RETENTION_DAYS, MessageAccepted, MessageError, MessageResult};
 use crate::webhook::{
     EventMetadata, MessageLevel, PlatformData, PlatformEvent, Provider, RawHeader, RawWebhook,
-    parse_raw, service::apply_inbox_rules,
+    inbox_rules::apply_inbox_rules, parse_raw,
 };
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};

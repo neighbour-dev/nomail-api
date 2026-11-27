@@ -6,6 +6,32 @@ use garde::Validate;
 const MAX_NAME_LENGTH: usize = 100;
 const MAX_DESCRIPTION_LENGTH: usize = 500;
 
+pub struct ConfigPage {
+    page: u64,
+    size: u64,
+    offset: u64,
+}
+
+impl ConfigPage {
+    pub fn new(page: u64, size: u64) -> ConfigResult<Self> {
+        let offset = crate::pagination::checked_offset(page, size)
+            .map_err(|message| ConfigError::InvalidInput(message.into()))?;
+        Ok(Self { page, size, offset })
+    }
+
+    pub fn page(&self) -> u64 {
+        self.page
+    }
+
+    pub fn size(&self) -> u64 {
+        self.size
+    }
+
+    pub fn offset(&self) -> u64 {
+        self.offset
+    }
+}
+
 /// Positive configuration identity, independent of URL syntax.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Validate)]
 #[garde(transparent)]

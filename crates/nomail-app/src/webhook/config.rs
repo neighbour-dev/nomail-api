@@ -2,7 +2,7 @@ mod error;
 mod input;
 mod service;
 pub use error::{ConfigError, ConfigResult};
-pub use input::{ConfigId, CreateConfig, UpdateConfig};
+pub use input::{ConfigId, ConfigPage, CreateConfig, UpdateConfig};
 pub use service::*;
 
 #[cfg(test)]

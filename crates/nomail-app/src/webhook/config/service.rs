@@ -1,5 +1,6 @@
 use super::{
-    ConfigError, ConfigId, ConfigRecord, ConfigResult, ConfigView, CreateConfig, UpdateConfig,
+    ConfigError, ConfigId, ConfigPage, ConfigRecord, ConfigResult, ConfigView, CreateConfig,
+    UpdateConfig,
 };
 use crate::{
     pagination::Page,
@@ -33,27 +34,6 @@ pub enum ConfigMutation {
     Patch(ConfigPatch),
     Enabled(bool),
     Delete,
-}
-pub struct ConfigPage {
-    page: u64,
-    size: u64,
-    offset: u64,
-}
-impl ConfigPage {
-    pub fn page(&self) -> u64 {
-        self.page
-    }
-    pub fn size(&self) -> u64 {
-        self.size
-    }
-    pub fn offset(&self) -> u64 {
-        self.offset
-    }
-    pub fn new(page: u64, size: u64) -> ConfigResult<Self> {
-        let offset = crate::pagination::checked_offset(page, size)
-            .map_err(|message| ConfigError::InvalidInput(message.into()))?;
-        Ok(Self { page, size, offset })
-    }
 }
 #[allow(async_fn_in_trait)]
 pub trait WebhookConfigStore {
@@ -110,7 +90,6 @@ impl<S: WebhookConfigStore, R: WebhookConfigRuntime> WebhookConfigService<S, R> 
         })
     }
     pub async fn list(&self, user_id: i64, query: ConfigPage) -> ConfigResult<Page<ConfigView>> {
-        let ConfigPage { page, size, .. } = query;
         let (items, total) = self.store.list_owned(user_id, &query).await?;
         Ok(Page {
             items: items
@@ -118,8 +97,8 @@ impl<S: WebhookConfigStore, R: WebhookConfigRuntime> WebhookConfigService<S, R> 
                 .map(|record| self.view(record))
                 .collect::<ConfigResult<_>>()?,
             total,
-            page,
-            page_size: size,
+            page: query.page(),
+            page_size: query.size(),
         })
     }
     pub async fn get(&self, user_id: i64, id: ConfigId) -> ConfigResult<ConfigView> {
