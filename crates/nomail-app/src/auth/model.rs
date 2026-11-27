@@ -57,3 +57,18 @@ impl RequestMeta {
         }
     }
 }
+
+/// Public account details returned by authentication use cases.
+pub struct AccountInfo {
+    pub id: i64,
+    pub username: String,
+}
+
+/// Login and refresh result. Deliberately not Debug/Serialize: contains bearer credentials.
+pub struct SessionTokens {
+    pub access_token: String,
+    pub access_token_expires_at: DateTime<Utc>,
+    pub refresh_token: String,
+    pub refresh_token_expires_at: DateTime<Utc>,
+    pub user: AccountInfo,
+}

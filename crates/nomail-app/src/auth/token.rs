@@ -1,6 +1,18 @@
-use super::{ACCESS_TTL, AuthConfig, AuthError, AuthResult, Claims};
+use super::{ACCESS_TTL, AuthConfig, AuthError, AuthResult};
 use chrono::{DateTime, Utc};
 use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation};
+use serde::{Deserialize, Serialize};
+
+/// JWT payload, independent of the HTTP request and response types.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Claims {
+    pub user_id: i64,
+    pub session_id: i64,
+    pub sub: String,
+    pub iss: String,
+    pub iat: i64,
+    pub exp: i64,
+}
 
 pub fn issue(
     config: &AuthConfig,
