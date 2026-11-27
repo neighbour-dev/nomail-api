@@ -1,7 +1,8 @@
 use super::endpoint;
 use crate::http::{Environment, HttpResult, dispatch::EndpointCall};
-use crate::message::{BatchMessages as BatchCommand, MessageError, MessageResult};
+use crate::message::{BatchAction, BatchMessages as BatchCommand, MessageError, MessageResult};
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 endpoint! {
     BatchMessages {
@@ -49,7 +50,29 @@ pub struct BatchMessagesRequest {
 impl TryFrom<BatchMessagesRequest> for BatchCommand {
     type Error = MessageError;
     fn try_from(request: BatchMessagesRequest) -> MessageResult<Self> {
-        Self::parse(request.ids, &request.action)
+        // Reject oversized requests before parsing UUIDs; report UUID errors before action errors.
+        Self::validate_count(&request.ids)?;
+        let ids = request
+            .ids
+            .iter()
+            .map(|id| {
+                Uuid::parse_str(id)
+                    .map_err(|_| MessageError::InvalidInput("invalid message id".into()))
+            })
+            .collect::<MessageResult<Vec<_>>>()?;
+        let action = match request.action.as_str() {
+            "mark_read" => BatchAction::MarkRead,
+            "mark_unread" => BatchAction::MarkUnread,
+            "pin" => BatchAction::Pin,
+            "unpin" => BatchAction::Unpin,
+            "delete" => BatchAction::Delete,
+            _ => {
+                return Err(MessageError::InvalidInput(
+                    "unsupported batch action".into(),
+                ));
+            }
+        };
+        Self::new(ids, action)
     }
 }
 

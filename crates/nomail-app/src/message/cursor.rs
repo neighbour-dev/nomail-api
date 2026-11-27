@@ -1,4 +1,5 @@
-use super::{MessageFilters, MessagePreview, MessageQuery, MessageResult};
+use super::{MessageError, MessageFilters, MessagePreview, MessageResult};
+use crate::pagination::PageSize;
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
@@ -30,16 +31,18 @@ impl MessageWindow {
 }
 
 pub struct MessageCursorQuery {
-    // Reuse filter validation, without exposing offset pagination to storage.
     filters: MessageFilters,
     window: MessageWindow,
     limit: u64,
 }
 impl MessageCursorQuery {
     pub fn new(filters: MessageFilters, window: MessageWindow, limit: u64) -> MessageResult<Self> {
-        let validated = MessageQuery::new(filters, 1, limit)?;
+        let filters = filters.checked()?;
+        PageSize(limit)
+            .check()
+            .map_err(|message| MessageError::InvalidInput(message.into()))?;
         Ok(Self {
-            filters: validated.filters().clone(),
+            filters,
             window,
             limit,
         })

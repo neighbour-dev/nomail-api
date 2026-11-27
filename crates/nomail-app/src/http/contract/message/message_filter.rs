@@ -4,6 +4,16 @@ use crate::webhook::MessageLevel;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
+pub(super) fn parse_read_status(value: &str) -> MessageResult<ReadStatus> {
+    match value {
+        "read" => Ok(ReadStatus::Read),
+        "unread" => Ok(ReadStatus::Unread),
+        _ => Err(MessageError::InvalidInput(
+            "status must be unread or read".into(),
+        )),
+    }
+}
+
 #[derive(Default, Deserialize, Serialize)]
 #[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
@@ -40,7 +50,7 @@ impl TryFrom<MessageFilterQuery> for MessageFilters {
     type Error = MessageError;
     fn try_from(q: MessageFilterQuery) -> MessageResult<Self> {
         let status = trimmed(q.status.as_deref())
-            .map(ReadStatus::parse)
+            .map(parse_read_status)
             .transpose()?;
         let level = trimmed(q.level.as_deref())
             .map(|value| {

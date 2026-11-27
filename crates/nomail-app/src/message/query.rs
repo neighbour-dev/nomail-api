@@ -15,15 +15,6 @@ impl ReadStatus {
             Self::Unread => "unread",
         }
     }
-    pub fn parse(value: &str) -> MessageResult<Self> {
-        match value {
-            "read" => Ok(Self::Read),
-            "unread" => Ok(Self::Unread),
-            _ => Err(MessageError::InvalidInput(
-                "status must be unread or read".into(),
-            )),
-        }
-    }
 }
 
 #[derive(Clone, Debug, Default, Validate)]
@@ -51,6 +42,24 @@ fn validate_from(from: &DateTime<Utc>, to: Option<DateTime<Utc>>) -> garde::Resu
     Ok(())
 }
 
+impl MessageFilters {
+    pub(super) fn checked(mut self) -> MessageResult<Self> {
+        self.validate().map_err(|report| {
+            let message = if garde::select!(report, webhook_config_id).next().is_some() {
+                "invalid webhookConfigId"
+            } else {
+                "from must not be after to"
+            };
+            MessageError::InvalidInput(message.into())
+        })?;
+        self.text = self.text.and_then(|text| {
+            let text = text.trim();
+            (!text.is_empty()).then(|| text.to_owned())
+        });
+        Ok(self)
+    }
+}
+
 /// Validated, read-only query. Storage sees types, not HTTP strings or syntax.
 #[derive(Clone, Debug)]
 pub struct MessageQuery {
@@ -60,21 +69,10 @@ pub struct MessageQuery {
     offset: u64,
 }
 impl MessageQuery {
-    pub fn new(mut filters: MessageFilters, page: u64, page_size: u64) -> MessageResult<Self> {
-        filters.validate().map_err(|report| {
-            let message = if garde::select!(report, webhook_config_id).next().is_some() {
-                "invalid webhookConfigId"
-            } else {
-                "from must not be after to"
-            };
-            MessageError::InvalidInput(message.into())
-        })?;
+    pub fn new(filters: MessageFilters, page: u64, page_size: u64) -> MessageResult<Self> {
+        let filters = filters.checked()?;
         let offset = crate::pagination::checked_offset(page, page_size)
             .map_err(|message| MessageError::InvalidInput(message.into()))?;
-        filters.text = filters.text.and_then(|text| {
-            let text = text.trim();
-            (!text.is_empty()).then(|| text.to_owned())
-        });
         Ok(Self {
             filters,
             page,

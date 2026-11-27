@@ -65,7 +65,9 @@ pub struct DeviceInput {
 }
 
 fn validate_id(value: &str, _: &()) -> garde::Result {
-    super::validate_id(value).map_err(garde::Error::new)
+    super::DeviceId::new(value)
+        .map(|_| ())
+        .map_err(|error| garde::Error::new(error.to_string()))
 }
 
 fn validate_platform(value: &str, _: &()) -> garde::Result {

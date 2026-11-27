@@ -412,6 +412,15 @@ fn path_ids_are_parsed_into_business_types_without_a_string_roundtrip() {
     assert_eq!(matched.config_id().unwrap_err().status, 500);
     let matched = resolve("GET", "/api/webhook/configs/1").unwrap();
     assert_eq!(matched.message_id().unwrap_err().status, 500);
+
+    let matched = resolve("DELETE", "/api/device/phone%20one/session").unwrap();
+    assert_eq!(matched.device_id().unwrap().as_str(), "phone one");
+    let matched = resolve("DELETE", &format!("/api/device/{}", "a".repeat(129))).unwrap();
+    let error = matched.device_id().err().unwrap();
+    assert_eq!(
+        (error.status, error.message.as_str()),
+        (400, "invalid deviceId")
+    );
 }
 
 #[test]

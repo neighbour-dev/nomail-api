@@ -21,18 +21,31 @@ impl<T> Page<T> {
 pub(crate) const MAX_PAGE_SIZE: u64 = 100;
 
 #[derive(Validate)]
+#[garde(transparent)]
+pub(crate) struct PageSize(#[garde(range(min = 1, max = MAX_PAGE_SIZE))] pub(crate) u64);
+
+impl PageSize {
+    pub(crate) fn check(self) -> Result<(), &'static str> {
+        self.validate().map_err(|_| "invalid pagination")
+    }
+}
+
+#[derive(Validate)]
 struct Pagination {
     #[garde(range(min = 1))]
     page: u64,
-    #[garde(range(min = 1, max = MAX_PAGE_SIZE))]
-    page_size: u64,
+    #[garde(dive)]
+    page_size: PageSize,
 }
 
 /// Check numeric query bounds and compute a database-safe offset.
 pub(crate) fn checked_offset(page: u64, page_size: u64) -> Result<u64, &'static str> {
-    Pagination { page, page_size }
-        .validate()
-        .map_err(|_| "invalid pagination")?;
+    Pagination {
+        page,
+        page_size: PageSize(page_size),
+    }
+    .validate()
+    .map_err(|_| "invalid pagination")?;
     (page - 1)
         .checked_mul(page_size)
         .filter(|offset| *offset <= i64::MAX as u64)

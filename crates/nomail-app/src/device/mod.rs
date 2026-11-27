@@ -113,6 +113,21 @@ pub struct DeviceService<S> {
 }
 
 impl<S: DeviceStore> DeviceService<S> {
+    pub async fn push_preferences(&self, actor: &AuthContext) -> DeviceResult<PushPreferences> {
+        self.store.push_preferences(actor.device_id).await
+    }
+
+    pub async fn set_push_preferences(
+        &self,
+        actor: &AuthContext,
+        preferences: PushPreferences,
+        now: DateTime<Utc>,
+    ) -> DeviceResult<()> {
+        self.store
+            .set_push_preferences(actor, preferences, now)
+            .await
+    }
+
     pub async fn list(&self, user_id: i64, now: DateTime<Utc>) -> DeviceResult<Vec<DeviceInfo>> {
         let mut items = Vec::new();
         for row in self.store.devices(user_id).await? {
@@ -139,18 +154,16 @@ impl<S: DeviceStore> DeviceService<S> {
     pub async fn revoke_session(
         &self,
         user_id: i64,
-        identifier: &str,
+        identifier: DeviceId<'_>,
         now: DateTime<Utc>,
     ) -> DeviceResult<()> {
-        validate_id(identifier).map_err(DeviceError::InvalidInput)?;
         self.store
-            .revoke_device_session(user_id, identifier, now)
+            .revoke_device_session(user_id, identifier.as_str(), now)
             .await
     }
 
-    pub async fn delete(&self, user_id: i64, identifier: &str) -> DeviceResult<()> {
-        validate_id(identifier).map_err(DeviceError::InvalidInput)?;
-        self.store.delete_device(user_id, identifier).await
+    pub async fn delete(&self, user_id: i64, identifier: DeviceId<'_>) -> DeviceResult<()> {
+        self.store.delete_device(user_id, identifier.as_str()).await
     }
 
     pub async fn register_push(
@@ -169,14 +182,22 @@ impl<S: DeviceStore> DeviceService<S> {
     }
 }
 
+/// A validated device identifier borrowed from its input.
 #[derive(Validate)]
 #[garde(transparent)]
-struct DeviceId<'a>(#[garde(length(chars, min = 1, max = 128))] &'a str);
+pub struct DeviceId<'a>(#[garde(length(chars, min = 1, max = 128))] &'a str);
 
-pub(crate) fn validate_id(identifier: &str) -> Result<(), String> {
-    DeviceId(identifier)
-        .validate()
-        .map_err(|_| "invalid deviceId".into())
+impl<'a> DeviceId<'a> {
+    pub fn new(identifier: &'a str) -> DeviceResult<Self> {
+        let id = Self(identifier);
+        id.validate()
+            .map_err(|_| DeviceError::InvalidInput("invalid deviceId".into()))?;
+        Ok(id)
+    }
+
+    pub fn as_str(&self) -> &'a str {
+        self.0
+    }
 }
 
 #[cfg(test)]

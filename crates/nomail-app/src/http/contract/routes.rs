@@ -234,12 +234,21 @@ impl RouteMatch {
         uuid::Uuid::parse_str(self.raw_parameter()?)
             .map_err(|_| ApiFailure::bad("invalid message id"))
     }
+    pub fn device_id(&self) -> Result<crate::device::DeviceId<'_>, ApiFailure> {
+        if self.route.path_kind != PathKind::DeviceId {
+            return Err(ApiFailure::internal());
+        }
+        crate::device::DeviceId::new(self.raw_parameter()?)
+            .map_err(|error| ApiFailure::from_domain(&error))
+    }
     /// Text parameters and compatibility access. Dispatch uses typed accessors
     /// for IDs so validated values never need to be parsed again by use cases.
     pub fn parameter(&self) -> Result<&str, ApiFailure> {
         let value = self.raw_parameter()?;
         match self.route.path_kind {
-            PathKind::DeviceId => crate::device::validate_id(value).map_err(ApiFailure::bad)?,
+            PathKind::DeviceId => {
+                self.device_id()?;
+            }
             PathKind::ConfigId => {
                 self.config_id()?;
             }

@@ -1,6 +1,5 @@
 use super::endpoint;
 use super::get_push_preferences::PushPreferences;
-use crate::device::DeviceStore;
 use crate::http::{Environment, HttpResult, dispatch::EndpointCall};
 
 endpoint! {
@@ -27,7 +26,6 @@ impl SetPushPreferences {
     ) -> HttpResult<()> {
         call.services
             .devices
-            .store
             .set_push_preferences(call.actor()?, call.input::<Self>()?.into(), call.now())
             .await?;
         Ok(())

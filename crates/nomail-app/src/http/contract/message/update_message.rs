@@ -53,7 +53,7 @@ impl TryFrom<UpdateMessageRequest> for crate::message::UpdateMessage {
             request
                 .status
                 .as_deref()
-                .map(crate::message::ReadStatus::parse)
+                .map(super::message_filter::parse_read_status)
                 .transpose()?,
             request.pinned,
         )

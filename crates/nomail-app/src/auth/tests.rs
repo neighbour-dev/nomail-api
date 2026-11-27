@@ -394,7 +394,11 @@ async fn shared_flow_uses_one_clock_token_policy_metadata_and_revocation_policy(
         .await
         .unwrap();
     device_service
-        .revoke_session(11, "phone", service.runtime.now())
+        .revoke_session(
+            11,
+            crate::device::DeviceId::new("phone").unwrap(),
+            service.runtime.now(),
+        )
         .await
         .unwrap();
     assert!(matches!(
@@ -412,7 +416,10 @@ async fn shared_flow_uses_one_clock_token_policy_metadata_and_revocation_policy(
         )
         .await
         .unwrap();
-    device_service.delete(11, "phone").await.unwrap();
+    device_service
+        .delete(11, crate::device::DeviceId::new("phone").unwrap())
+        .await
+        .unwrap();
     assert!(matches!(
         service.authenticate(&login.access_token).await,
         Err(AuthError::Unauthorized)

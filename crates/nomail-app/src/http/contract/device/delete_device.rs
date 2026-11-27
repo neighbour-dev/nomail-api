@@ -25,7 +25,7 @@ impl DeleteDevice {
     ) -> HttpResult<()> {
         call.services
             .devices
-            .delete(call.actor()?.user_id, call.matched.parameter()?)
+            .delete(call.actor()?.user_id, call.matched.device_id()?)
             .await?;
         Ok(())
     }

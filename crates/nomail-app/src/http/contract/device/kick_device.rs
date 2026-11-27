@@ -25,7 +25,7 @@ impl KickDevice {
     ) -> HttpResult<()> {
         call.services
             .devices
-            .revoke_session(call.actor()?.user_id, call.matched.parameter()?, call.now())
+            .revoke_session(call.actor()?.user_id, call.matched.device_id()?, call.now())
             .await?;
         Ok(())
     }

@@ -715,6 +715,8 @@ fn typed_query_construction_validates_invariants_without_wire_strings() {
         webhook_config_id: Some(2),
         ..Default::default()
     };
+    let cursor = MessageCursorQuery::new(filters.clone(), MessageWindow::Latest, 20).unwrap();
+    assert_eq!(cursor.filters().text.as_deref(), Some("%hello_"));
     let query = MessageQuery::new(filters, 2, 20).unwrap();
     assert_eq!(query.offset(), 20);
     assert_eq!(query.page(), 2);
@@ -745,6 +747,14 @@ fn typed_query_construction_validates_invariants_without_wire_strings() {
         )
         .is_err()
     );
+    let invalid = MessageFilters {
+        webhook_config_id: Some(0),
+        ..Default::default()
+    };
+    assert!(matches!(
+        MessageCursorQuery::new(invalid, MessageWindow::Latest, 0),
+        Err(MessageError::InvalidInput(message)) if message == "invalid webhookConfigId"
+    ));
 }
 
 #[test]

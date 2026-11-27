@@ -1,5 +1,4 @@
 use super::endpoint;
-use crate::device::DeviceStore;
 use crate::device::PushPreferences as Preferences;
 use crate::http::{Environment, HttpResult, dispatch::EndpointCall};
 use serde::{Deserialize, Serialize};
@@ -29,8 +28,7 @@ impl GetPushPreferences {
         Ok(call
             .services
             .devices
-            .store
-            .push_preferences(call.actor()?.device_id)
+            .push_preferences(call.actor()?)
             .await?
             .into())
     }
